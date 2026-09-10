@@ -2,20 +2,28 @@
 
 デスクトップの `fighters-navi` フォルダ。
 
-## 公開（デプロイ）— ここが変わりました
+## 公開URL
 
-PWA化（ホーム画面アイコン・オフライン起動）に伴い、**`index.html` 単体ではなくフォルダごと**デプロイしてください。
+**https://hamlocomoco1717-droid.github.io/fighters-navi/**
 
-**必須ファイル（サイト直下に置く）**
+GitHub Pages でホスティング（`hamlocomoco1717-droid/fighters-navi` リポジトリの `main` ブランチ）。
+`git push` すると GitHub Pages が自動で再ビルド（約1分）。ビルドコマンド不要の静的サイト。
+
+- 旧URL `fighters-navi2026.netlify.app` … Netlify の無料クレジット枯渇でデプロイ停止。GitHub Pages へ移行済み。
+- Firebase のバックエンドは共通なので、URLが変わってもデータはそのまま。
+
+## デプロイの仕組み
+
+必須ファイル（すべてリポジトリ直下）：
 | ファイル | 役割 |
 |---|---|
 | `index.html` | アプリ本体 |
 | `manifest.webmanifest` | PWA 設定（アプリ名・アイコン・起動画面） |
-| `sw.js` | Service Worker（オフライン起動用。**サイト直下**必須） |
+| `sw.js` | Service Worker（オフライン起動用） |
 | `icon.svg` | アプリアイコン |
+| `.nojekyll` | GitHub Pages が中身をそのまま配信するための空ファイル |
 
-**Netlify Drop の場合**：`fighters-navi` フォルダを https://app.netlify.com/drop（または既存サイトの Deploys → ドラッグ）に**フォルダごと**ドロップ。URL（`fighters-navi2026.netlify.app`）は変わりません。
-→ `README.md` や `*.json` サンプルも一緒に公開されますが実害はありません（消したい場合は必須4ファイルだけ別フォルダにまとめてドロップ）。
+すべて相対パスなので、GitHub Pages のサブパス（`/fighters-navi/`）配信でもそのまま動作。
 
 ## スマホでホーム画面に追加
 
