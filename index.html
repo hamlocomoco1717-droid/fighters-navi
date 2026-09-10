@@ -2161,8 +2161,8 @@ function renderGameDetail(g) {
             controlBar
             + liveSituationHtml
             + '<div class="banner" style="margin:0 0 10px;">守備中（' + (li + 1) + "回" + liveHalfChar(d, true) + "）<br>"
-              + '<span style="font-size:11.5px;">相手チームの得点は下の＋で入力。自チームの攻撃に戻るには「次の回 ▶」か、上のスコアボードで回を選んでください。</span></div>'
-            + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次の回 ▶ へ進む</button>'
+              + '<span style="font-size:11.5px;">相手チームの得点は下の＋で入力。終わったら「次へ ▶」で自チームの攻撃に進みます。</span></div>'
+            + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次へ ▶ 自チームの攻撃へ</button>'
             + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
             + undoBtnHtml
             + '<hr class="rule" style="margin:14px 0;">';
@@ -2200,9 +2200,9 @@ function renderGameDetail(g) {
 
     liveHtml = '<div class="section-title">⚾ 試合中モード（スマホ向け）' + (UI.liveTakeover ? "<span style=\"font-weight:400;font-size:12px;color:var(--ink-muted);\">　保存済みの試合を編集中</span>" : "") + "</div>"
       + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">'
-      + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + (li <= 0 || !iHoldLive ? " disabled" : "") + ">◀ 前の回</button>"
-      + '<span class="display" style="font-size:20px;min-width:64px;text-align:center;">' + (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone) + "</span>"
-      + '<button class="btn btn-sm" data-action="live-inning" data-delta="1"' + (iHoldLive ? "" : " disabled") + ">次の回 ▶</button>"
+      + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + ((li <= 0 && liveOnTop(d)) || !iHoldLive ? " disabled" : "") + ">◀ 前へ</button>"
+      + '<span class="display" style="font-size:20px;min-width:70px;text-align:center;">' + (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone) + "</span>"
+      + '<button class="btn btn-sm" data-action="live-inning" data-delta="1"' + (iHoldLive ? "" : " disabled") + ">次へ ▶</button>"
       + "</div>"
       + liveBatterHtml
       + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
@@ -2212,7 +2212,7 @@ function renderGameDetail(g) {
       + '<div class="mono" style="text-align:center;font-size:14px;margin-top:12px;color:var(--ink-muted);">合計 &nbsp;'
         + esc(topLabel) + ' <b style="color:var(--ink);font-size:18px;">' + sum(d.innings.top) + "</b> &nbsp;-&nbsp; "
         + '<b style="color:var(--ink);font-size:18px;">' + sum(d.innings.bottom) + "</b> " + esc(bottomLabel) + "</div>"
-      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。3アウトになったら相手の得点を下の＋で入れ、「次の回 ▶」で進めてください。ずれたら走者の「×」か「↩ ひとつ取り消す」で修正。すべて即保存・全員に同期。</p>';
+      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。3アウトで自動的に次の半回（表→裏→次の回の表…）へ。相手の得点は下の＋で入れ、「次へ ▶」で進めます。ずれたら走者の「×」か「↩ ひとつ取り消す」で修正。すべて即保存・全員に同期。</p>';
   }
 
   var canEditInnings = UI.isNewUnsavedGame || UI.gameMetaEditMode;
@@ -2771,6 +2771,48 @@ function liveInningLabel(d, li) {
   var n = (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone);
   return UI.liveHalfDone ? n + "・守備" : n;
 }
+/* いま「表」を表示しているか（守備状態も加味） */
+function liveOnTop(d) {
+  var away = d && d.venue === "away";
+  return away ? !UI.liveHalfDone : !!UI.liveHalfDone;
+}
+/* 半回を1つ進める：表→同じ回の裏／裏→次の回の表。アウト・走者はリセット。永続化は呼び出し側で */
+function liveAdvanceHalf() {
+  var d = UI.draftGame;
+  if (!d) return;
+  var away = d.venue === "away";
+  var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
+  if (liveOnTop(d)) {
+    UI.liveInning = inn;
+    UI.liveHalfDone = away ? true : false;      /* 裏へ */
+  } else {
+    UI.liveInning = inn + 1;
+    UI.liveHalfDone = away ? false : true;      /* 次の回の表へ */
+  }
+  UI.liveOuts = 0;
+  UI.liveBases = [null, null, null];
+  ["top", "bottom"].forEach(function (s) {
+    if (!Array.isArray(d.innings[s])) d.innings[s] = [];
+    while (d.innings[s].length <= UI.liveInning) d.innings[s].push(0);
+  });
+}
+/* 半回を1つ戻す：裏→同じ回の表／表→前の回の裏（1回表より前へは行かない） */
+function liveRetreatHalf() {
+  var d = UI.draftGame;
+  if (!d) return;
+  var away = d.venue === "away";
+  var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
+  if (liveOnTop(d)) {
+    if (inn <= 0) return;
+    UI.liveInning = inn - 1;
+    UI.liveHalfDone = away ? true : false;      /* 前の回の裏へ */
+  } else {
+    UI.liveInning = inn;
+    UI.liveHalfDone = away ? false : true;      /* 同じ回の表へ */
+  }
+  UI.liveOuts = 0;
+  UI.liveBases = [null, null, null];
+}
 /* 走者の短い表示名（背番号があれば背番号、無ければ氏名先頭2文字） */
 function liveRunnerShort(d, rid) {
   if (!rid || !d) return "";
@@ -2927,10 +2969,8 @@ function liveCommitAtbat(resultKey, dirCode) {
   UI.liveBases = play.bases.map(function (x) { return x === "B" ? rid : x; });
   UI.liveOuts = snapOuts + play.outs;
   if (UI.liveOuts >= 3) {
-    UI.liveOuts = 0;
-    UI.liveBases = [null, null, null];
-    UI.liveHalfDone = true;
-    showToast("3アウト・チェンジ");
+    liveAdvanceHalf();
+    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
@@ -2958,16 +2998,14 @@ function liveManualOut() {
   };
   UI.liveOuts = (UI.liveOuts || 0) + 1;
   if (UI.liveOuts >= 3) {
-    UI.liveOuts = 0;
-    UI.liveBases = [null, null, null];
-    UI.liveHalfDone = true;
-    showToast("3アウト・チェンジ");
+    liveAdvanceHalf();
+    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
   persistDraft();
 }
-/* この回の攻撃を3アウト扱いで終了（アウト・走者をリセットして攻守交代待ちにする。回は「次の回 ▶」で進める） */
+/* この回の攻撃を3アウト扱いで終了し、半回を1つ進める（表→裏／裏→次の回の表） */
 function liveEndHalf() {
   var d = UI.draftGame;
   if (!d) return;
@@ -2977,9 +3015,7 @@ function liveEndHalf() {
     type: "endhalf", snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
     snapBases: liveBasesArr().slice(), snapInning: inn, snapHalfDone: !!UI.liveHalfDone
   };
-  UI.liveOuts = 0;
-  UI.liveBases = [null, null, null];
-  UI.liveHalfDone = true;
+  liveAdvanceHalf();
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
   persistDraft();
@@ -3730,21 +3766,9 @@ function onAppClick(e) {
     if (!UI.draftGame || UI.readOnly) return;
     if ((UI.isNewUnsavedGame || UI.liveTakeover) && !liveGuardControl(UI.draftGame)) return;
     var liDelta = parseInt(el.getAttribute("data-delta"), 10) || 0;
-    var liCur = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
-    var liNext = Math.max(0, liCur + liDelta);
-    UI.liveInning = liNext;
-    UI.liveOuts = 0;
-    UI.liveBases = [null, null, null];
-    UI.liveHalfDone = false;
-    if (liDelta > 0) {
-      ["top", "bottom"].forEach(function (s) {
-        if (!Array.isArray(UI.draftGame.innings[s])) UI.draftGame.innings[s] = [];
-        while (UI.draftGame.innings[s].length <= liNext) UI.draftGame.innings[s].push(0);
-      });
-      persistDraft(null);
-    } else {
-      renderApp();
-    }
+    if (liDelta > 0) liveAdvanceHalf();
+    else liveRetreatHalf();
+    persistDraft(null);
   } else if (action === "live-batter-result") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!liveIHoldControl(UI.draftGame)) { showToast("入力担当ではありません。「入力を引き継ぐ」を押してください", true); return; }
@@ -3772,8 +3796,9 @@ function onAppClick(e) {
     liveEndHalf();
   } else if (action === "live-resume-half") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
-    UI.liveHalfDone = false;
-    renderApp();
+    if (!liveGuardControl(UI.draftGame)) return;
+    liveRetreatHalf();
+    persistDraft(null);
   } else if (action === "live-clear-base") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!liveGuardControl(UI.draftGame)) return;
