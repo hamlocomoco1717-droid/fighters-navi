@@ -2095,13 +2095,18 @@ function renderGameDetail(g) {
       }).join("");
       var liveMiniSb = (function () {
         var sbN = Math.max(inningCount, li + 1, 1);
-        var sbTap = function (sk) {
-          return iHoldLive ? ' data-action="live-goto-inning" data-inning="' + sk + '" title="' + (sk + 1) + '回へ移動" style="cursor:pointer;' : ' style="';
+        var batH = weAreAway ? "表" : "裏";   /* 自チームが攻撃する側 */
+        var fldH = weAreAway ? "裏" : "表";   /* 自チームが守備の側（相手の攻撃） */
+        var sbTap = function (sk, half) {
+          if (!iHoldLive) return ' style="';
+          var hl = half === "field" ? fldH : batH;
+          return ' data-action="live-goto-inning" data-inning="' + sk + '" data-half="' + half + '"'
+            + ' title="' + (sk + 1) + "回" + hl + 'へ移動" style="cursor:pointer;';
         };
-        var sbCells = function (arr) {
+        var sbCells = function (arr, half) {
           var s = "";
           for (var sk = 0; sk < sbN; sk++) {
-            s += "<td" + sbTap(sk) + 'padding:3px 0;text-align:center;font-family:\'Roboto Mono\',monospace;font-size:12px;'
+            s += "<td" + sbTap(sk, half) + 'padding:3px 0;text-align:center;font-family:\'Roboto Mono\',monospace;font-size:12px;'
               + (sk === li ? "background:var(--accent-soft);font-weight:700;color:var(--ink);" : "color:var(--ink-muted);") + '">'
               + n0(arr[sk]) + "</td>";
           }
@@ -2109,12 +2114,12 @@ function renderGameDetail(g) {
         };
         var sbHead = "";
         for (var sk = 0; sk < sbN; sk++) {
-          sbHead += "<th" + sbTap(sk) + 'padding:2px 0;font-size:10px;font-weight:600;'
+          sbHead += "<th" + sbTap(sk, "bat") + 'padding:2px 0;font-size:10px;font-weight:600;'
             + (sk === li ? "background:var(--accent-soft);color:var(--ink);" : "color:var(--ink-muted);") + '">' + (sk + 1) + "</th>";
         }
         var sbRow = function (arr, label, ours) {
           return '<tr><td style="padding:3px 4px;font-size:11px;font-weight:700;white-space:nowrap;' + (ours ? "color:var(--accent);" : "color:var(--ink-muted);") + '">' + label + "</td>"
-            + sbCells(arr || []) + '<td style="padding:3px 0;text-align:center;font-family:\'Roboto Mono\',monospace;font-size:13px;font-weight:700;">' + sum(arr) + "</td></tr>";
+            + sbCells(arr || [], ours ? "bat" : "field") + '<td style="padding:3px 0;text-align:center;font-family:\'Roboto Mono\',monospace;font-size:13px;font-weight:700;">' + sum(arr) + "</td></tr>";
         };
         return '<div class="table-scroll" style="margin-bottom:10px;"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
           + '<thead><tr><th style="width:40px;"></th>' + sbHead + '<th style="width:28px;padding:2px 0;font-size:10px;color:var(--ink-muted);">計</th></tr></thead><tbody>'
@@ -2155,10 +2160,10 @@ function renderGameDetail(g) {
           liveBatterHtml =
             controlBar
             + liveSituationHtml
-            + '<div class="banner" style="margin:0 0 10px;">3アウト・チェンジ（' + (li + 1) + "回）<br>"
-              + '<span style="font-size:11.5px;">相手の得点があれば下の＋で入力し、自チームの攻撃に戻るときは「次の回 ▶」を押してください。</span></div>'
+            + '<div class="banner" style="margin:0 0 10px;">守備中（' + (li + 1) + "回" + liveHalfChar(d, true) + "）<br>"
+              + '<span style="font-size:11.5px;">相手チームの得点は下の＋で入力。自チームの攻撃に戻るには「次の回 ▶」か、上のスコアボードで回を選んでください。</span></div>'
             + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次の回 ▶ へ進む</button>'
-            + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回の攻撃を続ける（3アウトを取り消さず継続）</button>'
+            + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
             + undoBtnHtml
             + '<hr class="rule" style="margin:14px 0;">';
         } else {
@@ -2196,7 +2201,7 @@ function renderGameDetail(g) {
     liveHtml = '<div class="section-title">⚾ 試合中モード（スマホ向け）' + (UI.liveTakeover ? "<span style=\"font-weight:400;font-size:12px;color:var(--ink-muted);\">　保存済みの試合を編集中</span>" : "") + "</div>"
       + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">'
       + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + (li <= 0 || !iHoldLive ? " disabled" : "") + ">◀ 前の回</button>"
-      + '<span class="display" style="font-size:20px;min-width:64px;text-align:center;">' + (li + 1) + "回" + (UI.liveHalfDone ? "" : ((d.venue === "away") ? "表" : "裏")) + "</span>"
+      + '<span class="display" style="font-size:20px;min-width:64px;text-align:center;">' + (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone) + "</span>"
       + '<button class="btn btn-sm" data-action="live-inning" data-delta="1"' + (iHoldLive ? "" : " disabled") + ">次の回 ▶</button>"
       + "</div>"
       + liveBatterHtml
@@ -2756,11 +2761,15 @@ function liveBasesLabel() {
   if (b[2]) on.push("三");
   return on.length ? on.join("・") + "塁" : "走者なし";
 }
-/* 「3回表」など。攻撃中は 先攻=表 / 後攻=裏。攻守交代待ちは「3回・攻守交代」 */
+/* 「3回表」など。自チーム攻撃中は 先攻=表 / 後攻=裏。守備（相手の攻撃）は反対の半分＋「守備」 */
+function liveHalfChar(d, fielding) {
+  var away = d && d.venue === "away";
+  var batTop = away; /* away = 自チームが表を攻撃 */
+  return (fielding ? !batTop : batTop) ? "表" : "裏";
+}
 function liveInningLabel(d, li) {
-  var n = (li + 1) + "回";
-  if (UI.liveHalfDone) return n + "・攻守交代";
-  return n + ((d && d.venue === "away") ? "表" : "裏");
+  var n = (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone);
+  return UI.liveHalfDone ? n + "・守備" : n;
 }
 /* 走者の短い表示名（背番号があれば背番号、無ければ氏名先頭2文字） */
 function liveRunnerShort(d, rid) {
@@ -3779,11 +3788,13 @@ function onAppClick(e) {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!liveGuardControl(UI.draftGame)) return;
     var giN = parseInt(el.getAttribute("data-inning"), 10);
-    if (isNaN(giN) || giN < 0 || giN === UI.liveInning) return;
+    var giField = el.getAttribute("data-half") === "field";
+    if (isNaN(giN) || giN < 0) return;
+    if (giN === UI.liveInning && giField === !!UI.liveHalfDone) return;
     UI.liveInning = giN;
     UI.liveOuts = 0;
     UI.liveBases = [null, null, null];
-    UI.liveHalfDone = false;
+    UI.liveHalfDone = giField;
     ["top", "bottom"].forEach(function (s) {
       if (!Array.isArray(UI.draftGame.innings[s])) UI.draftGame.innings[s] = [];
       while (UI.draftGame.innings[s].length <= giN) UI.draftGame.innings[s].push(0);
