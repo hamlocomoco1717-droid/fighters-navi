@@ -2091,8 +2091,35 @@ function renderGameDetail(g) {
           + baseNames[bi] + " " + esc(brow ? playerName(brow.playerId) : "走者")
           + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外す">×</button></span>';
       }).join("");
+      var liveMiniSb = (function () {
+        var sbN = Math.max(inningCount, li + 1, 1);
+        var sbCells = function (arr) {
+          var s = "";
+          for (var sk = 0; sk < sbN; sk++) {
+            s += '<td style="padding:3px 0;text-align:center;font-family:\'Roboto Mono\',monospace;font-size:12px;'
+              + (sk === li ? "background:var(--accent-soft);font-weight:700;color:var(--ink);" : "color:var(--ink-muted);") + '">'
+              + n0(arr[sk]) + "</td>";
+          }
+          return s;
+        };
+        var sbHead = "";
+        for (var sk = 0; sk < sbN; sk++) {
+          sbHead += '<th style="padding:2px 0;font-size:10px;font-weight:600;'
+            + (sk === li ? "background:var(--accent-soft);color:var(--ink);" : "color:var(--ink-muted);") + '">' + (sk + 1) + "</th>";
+        }
+        var sbRow = function (arr, label, ours) {
+          return '<tr><td style="padding:3px 4px;font-size:11px;font-weight:700;white-space:nowrap;' + (ours ? "color:var(--accent);" : "color:var(--ink-muted);") + '">' + label + "</td>"
+            + sbCells(arr || []) + '<td style="padding:3px 0;text-align:center;font-family:\'Roboto Mono\',monospace;font-size:13px;font-weight:700;">' + sum(arr) + "</td></tr>";
+        };
+        return '<div class="table-scroll" style="margin-bottom:10px;"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
+          + '<thead><tr><th style="width:40px;"></th>' + sbHead + '<th style="width:28px;padding:2px 0;font-size:10px;color:var(--ink-muted);">計</th></tr></thead><tbody>'
+          + sbRow(d.innings.top, weAreAway ? "自" : "相手", weAreAway)
+          + sbRow(d.innings.bottom, weAreAway ? "相手" : "自", !weAreAway)
+          + "</tbody></table></div>";
+      })();
       var liveSituationHtml =
-        '<div style="background:var(--scoreboard-bg);border-radius:10px;padding:10px 12px;margin-bottom:' + (runnerLegend ? "8" : "12") + 'px;display:flex;align-items:center;gap:12px;color:#E9EDF7;">'
+        liveMiniSb
+        + '<div style="background:var(--scoreboard-bg);border-radius:10px;padding:10px 12px;margin-bottom:' + (runnerLegend ? "8" : "12") + 'px;display:flex;align-items:center;gap:12px;color:#E9EDF7;">'
           + '<div style="flex:1;min-width:0;">'
             + '<div style="font-family:\'Roboto Mono\',monospace;font-size:16px;font-weight:600;color:#E8C56C;">' + esc(liveInningLabel(d, li)) + "</div>"
             + '<div style="font-size:11px;margin-top:5px;color:#B9C4E0;">アウト ' + outDots + "</div>"
