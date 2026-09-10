@@ -2080,27 +2080,26 @@ function renderGameDetail(g) {
       var outsNow = UI.liveOuts || 0;
       var outDots = "";
       for (var oi = 0; oi < 3; oi++) {
-        outDots += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 2px;vertical-align:middle;border:1px solid var(--loss);background:' + (oi < outsNow ? "var(--loss)" : "transparent") + ';"></span>';
+        outDots += '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 2px;vertical-align:middle;border:1px solid #5A6A9C;background:' + (oi < outsNow ? "#E8C56C" : "transparent") + ';"></span>';
       }
       var basesNow = liveBasesArr();
       var baseNames = ["一塁", "二塁", "三塁"];
-      var baseChips = basesNow.map(function (rr, bi) {
-        var brow = rr ? d.batting.filter(function (b) { return b._rid === rr; })[0] : null;
-        return '<div style="flex:1;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:' + (brow ? "var(--accent-soft)" : "var(--surface-2)") + ';">'
-          + '<div style="font-size:10px;color:var(--ink-muted);">' + baseNames[bi] + "</div>"
-          + (brow
-            ? '<div style="font-size:12px;font-weight:600;">' + esc(playerName(brow.playerId))
-              + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外す">×</button></div>'
-            : '<div style="font-size:12px;color:var(--ink-muted);">－</div>')
-          + "</div>";
+      var runnerLegend = basesNow.map(function (rr, bi) {
+        if (!rr) return "";
+        var brow = d.batting.filter(function (b) { return b._rid === rr; })[0];
+        return '<span style="display:inline-flex;align-items:center;gap:3px;background:var(--accent-soft);border-radius:6px;padding:2px 4px 2px 7px;font-size:11.5px;font-weight:600;">'
+          + baseNames[bi] + " " + esc(brow ? playerName(brow.playerId) : "走者")
+          + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外す">×</button></span>';
       }).join("");
       var liveSituationHtml =
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
-          + '<span style="font-size:13px;font-weight:700;">' + (li + 1) + "回</span>"
-          + '<span style="font-size:12px;color:var(--ink-muted);">アウト ' + outDots + "</span>"
-          + '<span style="font-size:12px;color:var(--ink-muted);">' + esc(liveBasesLabel()) + "</span>"
+        '<div style="background:var(--scoreboard-bg);border-radius:10px;padding:10px 12px;margin-bottom:' + (runnerLegend ? "8" : "12") + 'px;display:flex;align-items:center;gap:12px;color:#E9EDF7;">'
+          + '<div style="flex:1;min-width:0;">'
+            + '<div style="font-family:\'Roboto Mono\',monospace;font-size:16px;font-weight:600;color:#E8C56C;">' + esc(liveInningLabel(d, li)) + "</div>"
+            + '<div style="font-size:11px;margin-top:5px;color:#B9C4E0;">アウト ' + outDots + "</div>"
+          + "</div>"
+          + liveDiamondSvg(basesNow)
         + "</div>"
-        + '<div style="display:flex;gap:6px;margin-bottom:12px;">' + baseChips + "</div>";
+        + (runnerLegend ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">' + runnerLegend + "</div>" : "");
       var scorerNameNow = getScorerName();
       var exitTakeoverBtn = UI.liveTakeover
         ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="margin-left:auto;">終了</button>' : "";
@@ -2138,7 +2137,7 @@ function renderGameDetail(g) {
               + '<span style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">今の打者</span>'
               + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
             + "</div>"
-            + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回に記録"
+            + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
               + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (needDirNow ? " → 方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
             + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>"
             + (needDirNow
@@ -2165,7 +2164,7 @@ function renderGameDetail(g) {
     liveHtml = '<div class="section-title">⚾ 試合中モード（スマホ向け）' + (UI.liveTakeover ? "<span style=\"font-weight:400;font-size:12px;color:var(--ink-muted);\">　保存済みの試合を編集中</span>" : "") + "</div>"
       + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">'
       + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + (li <= 0 || !iHoldLive ? " disabled" : "") + ">◀ 前の回</button>"
-      + '<span class="display" style="font-size:20px;min-width:56px;text-align:center;">' + (li + 1) + "回</span>"
+      + '<span class="display" style="font-size:20px;min-width:64px;text-align:center;">' + (li + 1) + "回" + (UI.liveHalfDone ? "" : ((d.venue === "away") ? "表" : "裏")) + "</span>"
       + '<button class="btn btn-sm" data-action="live-inning" data-delta="1"' + (iHoldLive ? "" : " disabled") + ">次の回 ▶</button>"
       + "</div>"
       + liveBatterHtml
@@ -2724,6 +2723,29 @@ function liveBasesLabel() {
   if (b[1]) on.push("二");
   if (b[2]) on.push("三");
   return on.length ? on.join("・") + "塁" : "走者なし";
+}
+/* 「3回表」など。攻撃中は 先攻=表 / 後攻=裏。攻守交代待ちは「3回・攻守交代」 */
+function liveInningLabel(d, li) {
+  var n = (li + 1) + "回";
+  if (UI.liveHalfDone) return n + "・攻守交代";
+  return n + ((d && d.venue === "away") ? "表" : "裏");
+}
+/* 野球場テイストのダイヤモンド（占有塁を金色で表示）。占有: bases[0..2] が truthy */
+function liveDiamondSvg(bases) {
+  var occ = [!!bases[0], !!bases[1], !!bases[2]];
+  var gold = "#E8C56C", dim = "#2C3B66", line = "#42538A";
+  function base(cx, cy, on) {
+    return '<rect x="' + (cx - 6) + '" y="' + (cy - 6) + '" width="12" height="12" rx="1.5"'
+      + ' transform="rotate(45 ' + cx + ' ' + cy + ')"'
+      + ' fill="' + (on ? gold : dim) + '" stroke="' + line + '" stroke-width="1.5"/>';
+  }
+  return '<svg width="90" height="76" viewBox="0 0 78 66" aria-hidden="true" style="flex:none;margin-left:4px;">'
+    + '<polygon points="39,50 62,30 39,10 16,30" fill="none" stroke="' + line + '" stroke-width="1.5"/>'
+    + base(62, 30, occ[0])   /* 一塁 */
+    + base(39, 10, occ[1])   /* 二塁 */
+    + base(16, 30, occ[2])   /* 三塁 */
+    + '<path d="M33,50 h12 v6 l-6,4 -6,-4 z" fill="' + dim + '" stroke="' + line + '" stroke-width="1.5"/>'
+    + "</svg>";
 }
 /* 打席結果から、塁上の動き・アウト・生還数を求める。
    bases は [一,二,三] の走者ID（空きは null）。戻り値の bases 内の "B" は打者。 */
