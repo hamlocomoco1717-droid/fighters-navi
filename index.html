@@ -2078,7 +2078,7 @@ function renderGameDetail(g) {
         var cs = isPend ? "" : (lc === "red" ? "color:var(--loss);border-color:var(--loss);"
           : lc === "green" ? "color:var(--win);border-color:var(--win);"
           : "color:var(--ink-muted);");
-        return '<button class="btn btn-sm' + (isPend ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:10px 2px;font-size:12.5px;' + cs + '">' + esc(liveResultShort(r.key)) + "</button>";
+        return '<button class="btn btn-sm' + (isPend ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:12px 1px;font-size:15px;font-weight:700;justify-content:center;text-align:center;white-space:nowrap;' + cs + '">' + esc(liveResultShort(r.key)) + "</button>";
       }).join("");
       var dirOrder = ATBAT_DIRECTIONS;
       if (pend === "H2" || pend === "H3" || pend === "HR") {
@@ -2086,8 +2086,8 @@ function renderGameDetail(g) {
         dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       }
       var dirBtns = dirOrder.map(function (dd) {
-        return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:10px 2px;font-size:13px;' + liveDirColorStyle(dd.code) + '">' + dd.code + "</button>";
-      }).join("") + '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="" style="padding:10px 2px;font-size:12px;color:var(--ink-muted);">方向なし</button>';
+        return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:12px 1px;font-size:18px;font-weight:700;justify-content:center;text-align:center;' + liveDirColorStyle(dd.code) + '">' + dd.code + "</button>";
+      }).join("") + '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="" style="padding:12px 1px;font-size:12px;justify-content:center;text-align:center;color:var(--ink-muted);">方向なし</button>';
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
       var outsNow = UI.liveOuts || 0;
@@ -2979,9 +2979,21 @@ function liveCommitAtbat(resultKey, dirCode) {
 
   var play = liveResolvePlay(resultKey, snapBases);
   var endsHalf = (snapOuts + play.outs) >= 3;
-  var runsThisPlay = (play.outs > 0 && endsHalf) ? 0 : play.runs;
-  var autoRbi = (resultKey === "ROE") ? 0 : runsThisPlay;
   var manualRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
+  /* アウトになる打球（ゴロ・フライ・ライナー・野選）で打点を手入力したとき＝
+     進塁打／犠飛などで走者が生還したケース。3塁側から手入力分の走者を生還させる。
+     手入力の打点はユーザーが「還った」と明示しているので、3アウト目でも得点として扱う */
+  var forcedRuns = 0;
+  if ((resultKey === "GO" || resultKey === "FLY" || resultKey === "LINE" || resultKey === "FC") && manualRbi > 0) {
+    var nb2 = play.bases.slice();
+    for (var bp = 2; bp >= 0 && forcedRuns < manualRbi; bp--) {
+      if (nb2[bp] && nb2[bp] !== "B") { nb2[bp] = null; forcedRuns++; }
+    }
+    play.bases = nb2;
+    play.runs += forcedRuns;
+  }
+  var runsThisPlay = (play.outs > 0 && endsHalf) ? forcedRuns : play.runs;
+  var autoRbi = (resultKey === "ROE") ? 0 : runsThisPlay;
   var rbi = manualRbi > 0 ? manualRbi : autoRbi;
 
   var token = baseToken + (rbi > 0 ? ATBAT_CIRCLED.charAt(Math.min(rbi, 9) - 1) : "");
