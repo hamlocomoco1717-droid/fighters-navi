@@ -2086,7 +2086,7 @@ function renderGameDetail(g) {
         dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       }
       var dirBtns = dirOrder.map(function (dd) {
-        return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:10px 2px;font-size:13px;">' + dd.code + "</button>";
+        return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:10px 2px;font-size:13px;' + liveDirColorStyle(dd.code) + '">' + dd.code + "</button>";
       }).join("") + '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="" style="padding:10px 2px;font-size:12px;color:var(--ink-muted);">方向なし</button>';
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
@@ -2684,6 +2684,19 @@ var LIVE_RESULT_COLOR = {
   BB: "green", HBP: "green",
   GO: "gray", FLY: "gray", LINE: "gray", FC: "gray", ROE: "gray", DP: "gray", SAC: "gray"
 };
+/* 打球方向ボタンの色分け: 投=赤 / 捕=青 / 内野=黄 / 外野=緑 */
+var LIVE_DIR_COLOR = {
+  "投": "red", "捕": "blue",
+  "一": "yellow", "二": "yellow", "三": "yellow", "遊": "yellow",
+  "左": "green", "中": "green", "右": "green"
+};
+function liveDirColorStyle(code) {
+  var c = LIVE_DIR_COLOR[code];
+  return c === "red" ? "color:var(--loss);border-color:var(--loss);"
+    : c === "blue" ? "color:var(--info);border-color:var(--info);"
+    : c === "yellow" ? "color:var(--tie);border-color:var(--tie);"
+    : c === "green" ? "color:var(--win);border-color:var(--win);" : "";
+}
 function liveResultShort(key) { return LIVE_RESULT_SHORT[key] || key; }
 function resetLiveInput() {
   UI.liveBatterRid = null;
