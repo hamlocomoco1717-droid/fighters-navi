@@ -2427,13 +2427,13 @@ function renderGameDetail(g) {
 
   return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る")) + "</button></div></div>"
     + (liveHtml ? '<div class="card">' + liveHtml + "</div>" : "")
-    + (liveEntryHtml ? '<div class="card">' + liveEntryHtml + "</div>" : "")
     + '<div class="card">' + metaHtml + "</div>"
     + '<div class="card">' + scoreboardHtml + "</div>"
     + (highlightsHtml ? '<div class="card">' + highlightsHtml + "</div>" : "")
     + '<div class="card">' + battingHtml + "</div>"
     + '<div class="card">' + posHtml + "</div>"
     + '<div class="card">' + pitchingHtml + "</div>"
+    + (liveEntryHtml ? '<div class="card">' + liveEntryHtml + "</div>" : "")
     + footer;
 }
 
@@ -3670,11 +3670,8 @@ function onAppClick(e) {
     liveUndoAtbat();
   } else if (action === "enter-live-takeover") {
     if (!UI.draftGame || UI.readOnly || UI.isNewUnsavedGame) return;
-    resetLiveInput();
-    UI.liveTakeover = true;
-    UI.liveInning = null;
-    if (!liveControlHolder(UI.draftGame)) liveClaimControl(UI.draftGame);
-    persistDraft();
+    UI.confirmDialog = { message: "試合中モードで入力するには暗証番号を入力してください。", action: "do-enter-live-takeover", requiresPin: true, okLabel: "開始する" };
+    renderApp();
   } else if (action === "exit-live-takeover") {
     if (UI.draftGame && UI.draftGame.liveControl && UI.draftGame.liveControl.deviceId === getDeviceId()) {
       UI.draftGame.liveControl = null;
@@ -3906,6 +3903,17 @@ function onAppClick(e) {
       UI.positionEditMode = true;
       UI.confirmDialog = null;
       renderApp();
+    } else if (cd.action === "do-enter-live-takeover") {
+      UI.confirmDialog = null;
+      if (UI.draftGame && !UI.readOnly && !UI.isNewUnsavedGame) {
+        resetLiveInput();
+        UI.liveTakeover = true;
+        UI.liveInning = null;
+        if (!liveControlHolder(UI.draftGame)) liveClaimControl(UI.draftGame);
+        persistDraft();
+      } else {
+        renderApp();
+      }
     } else if (cd.action === "reset-data-1") {
       UI.confirmDialog = { message: "最終確認です。全データを削除して初期化します。よろしいですか？", action: "reset-data-2" };
       renderApp();
