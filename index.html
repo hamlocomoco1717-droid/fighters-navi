@@ -2077,7 +2077,12 @@ function renderGameDetail(g) {
           : "color:var(--ink-muted);");
         return '<button class="btn btn-sm' + (isPend ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:10px 2px;font-size:12.5px;' + cs + '">' + esc(liveResultShort(r.key)) + "</button>";
       }).join("");
-      var dirBtns = ATBAT_DIRECTIONS.map(function (dd) {
+      var dirOrder = ATBAT_DIRECTIONS;
+      if (pend === "H2" || pend === "H3" || pend === "HR") {
+        var ofFirst = ["左", "中", "右", "投", "捕", "一", "二", "三", "遊"];
+        dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
+      }
+      var dirBtns = dirOrder.map(function (dd) {
         return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:10px 2px;font-size:13px;">' + dd.code + "</button>";
       }).join("") + '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="" style="padding:10px 2px;font-size:12px;color:var(--ink-muted);">方向なし</button>';
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
