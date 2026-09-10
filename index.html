@@ -2069,7 +2069,7 @@ function renderGameDetail(g) {
       var pend = UI.livePendingResult;
       var pendRt = pend ? ATBAT_RESULT_TYPES.filter(function (r) { return r.key === pend; })[0] : null;
       var needDirNow = !!(pendRt && pendRt.needsDir);
-      var resultBtns = ATBAT_RESULT_TYPES.map(function (r) {
+      var resultBtns = ATBAT_RESULT_TYPES.filter(function (r) { return r.key !== "H1IN"; }).map(function (r) {
         var isPend = pend === r.key;
         var lc = LIVE_RESULT_COLOR[r.key];
         var cs = isPend ? "" : (lc === "red" ? "color:var(--loss);border-color:var(--loss);"
