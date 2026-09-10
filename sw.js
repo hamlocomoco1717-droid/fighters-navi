@@ -1,5 +1,5 @@
 /* Fighters navi — service worker (オフライン起動用) */
-var CACHE = "fighters-navi-v2";
+var CACHE = "fighters-navi-v3";
 var SHELL = [
   "./",
   "./index.html",
