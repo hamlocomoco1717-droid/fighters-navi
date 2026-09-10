@@ -1,0 +1,16 @@
+{
+  "name": "Fighters navi",
+  "short_name": "Fighters",
+  "description": "ファイターズ スコアブック",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15224A",
+  "theme_color": "#15224A",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

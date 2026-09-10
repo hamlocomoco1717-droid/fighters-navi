@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "scorebook": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

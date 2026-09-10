@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-06",
+  "opponent": "済生病院",
+  "venue": "home",
+  "tournament": "練習試合",
+  "note": "写真から取り込み。回別得点は要確認。打撃は atbatsIkz に ikz.jp 式記号で追記可（例 8.H/1, 6.OG, 90.HR/4, B）",
+  "innings": {
+    "top":    [1, 1, 5, 0, 1, 6, 1],
+    "bottom": [0, 0, 1, 2, 1, 0, 0]
+  },
+  "lineup": [
+    { "name": "荒井",     "posByInning": ["中堅手","中堅手","中堅手","中堅手","中堅手","中堅手","中堅手"], "atbatsIkz": [], "stats": {} },
+    { "name": "加藤",     "posByInning": ["左翼手","左翼手","左翼手","左翼手","左翼手","左翼手","左翼手"], "atbatsIkz": [], "stats": {} },
+    { "name": "星",       "posByInning": ["遊撃手","遊撃手","遊撃手","遊撃手","投手","投手","投手"], "atbatsIkz": [], "stats": {} },
+    { "name": "藤澤",     "posByInning": ["一塁手","一塁手","一塁手","一塁手","一塁手","一塁手","一塁手"], "atbatsIkz": [], "stats": {} },
+    { "name": "大内",     "posByInning": ["三塁手","三塁手","三塁手","三塁手","捕手","捕手","捕手"], "atbatsIkz": [], "stats": {} },
+    { "name": "木村",     "posByInning": ["捕手","捕手","捕手","捕手","遊撃手","遊撃手","遊撃手"], "atbatsIkz": [], "stats": {} },
+    { "name": "渡辺（亮）", "posByInning": ["二塁手","二塁手","二塁手","二塁手","二塁手","二塁手","二塁手"], "atbatsIkz": [], "stats": {} },
+    { "name": "峯田（仁）", "posByInning": ["投手","投手","投手","投手","三塁手","三塁手","三塁手"], "atbatsIkz": [], "stats": {} },
+    { "name": "設楽",     "posByInning": ["右翼手","右翼手","右翼手","右翼手","右翼手","右翼手","右翼手"], "atbatsIkz": [], "stats": {} }
+  ],
+  "pitchers": [
+    { "name": "峯田（仁）", "ip": "4.0", "r": 7, "er": 0, "bb": 0, "so": 0, "decision": "L" },
+    { "name": "星",       "ip": "3.0", "r": 8, "er": 0, "bb": 0, "so": 0, "decision": "" }
+  ]
+}
