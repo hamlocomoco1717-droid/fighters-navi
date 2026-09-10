@@ -719,6 +719,8 @@ var UI = {
   liveLog: [],
   liveOuts: 0,
   liveBases: [null, null, null],
+  /* 3アウトが入り「攻守交代待ち」（次の回 ▶ を押すまで打席入力を止める） */
+  liveHalfDone: false,
   /* 保存済みの試合を「試合中モード」で開いている（＝新規追加ではない） */
   liveTakeover: false
 };
@@ -2117,33 +2119,46 @@ function renderGameDetail(g) {
             : '<input id="live-scorer-name" placeholder="あなたの名前を入力" maxlength="20" style="flex:1;min-width:0;font-size:13px;">')
           + exitTakeoverBtn
           + "</div>";
-        liveBatterHtml =
-          controlBar
-          + liveSituationHtml
-          + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
-            + '<span style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">今の打者</span>'
-            + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
-          + "</div>"
-          + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回に記録"
-            + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (needDirNow ? " → 方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
-          + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>"
-          + (needDirNow
-            ? '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:6px;">' + dirBtns + "</div>"
-            : "")
-          + '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">'
-            + '<span style="font-size:12px;color:var(--ink-muted);">打点</span>'
-            + '<button class="btn btn-sm" data-action="live-rbi" data-delta="-1" style="min-width:38px;">－</button>'
-            + '<span class="mono" style="font-size:18px;font-weight:700;min-width:18px;text-align:center;">' + liveRbi + "</span>"
-            + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1" style="min-width:38px;">＋</button>'
-            + '<span style="font-size:10.5px;color:var(--ink-muted);">0なら自動</span>'
-            + (pend ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="margin-left:auto;">選び直す</button>' : "")
-          + "</div>"
-          + '<div style="display:flex;gap:6px;margin-top:10px;">'
-            + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
-            + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ 攻守交代</button>'
-          + "</div>"
-          + '<button class="btn btn-sm" data-action="live-undo" style="margin-top:8px;width:100%;color:var(--loss);">↩ ひとつ取り消す' + (undoN ? "（" + undoN + "）" : "") + "</button>"
-          + '<hr class="rule" style="margin:14px 0;">';
+        var undoBtnHtml = '<button class="btn btn-sm" data-action="live-undo" style="margin-top:8px;width:100%;color:var(--loss);">↩ ひとつ取り消す' + (undoN ? "（" + undoN + "）" : "") + "</button>";
+        if (UI.liveHalfDone) {
+          liveBatterHtml =
+            controlBar
+            + liveSituationHtml
+            + '<div class="banner" style="margin:0 0 10px;">3アウト・チェンジ（' + (li + 1) + "回）<br>"
+              + '<span style="font-size:11.5px;">相手の得点があれば下の＋で入力し、自チームの攻撃に戻るときは「次の回 ▶」を押してください。</span></div>'
+            + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次の回 ▶ へ進む</button>'
+            + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回の攻撃を続ける（3アウトを取り消さず継続）</button>'
+            + undoBtnHtml
+            + '<hr class="rule" style="margin:14px 0;">';
+        } else {
+          liveBatterHtml =
+            controlBar
+            + liveSituationHtml
+            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+              + '<span style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">今の打者</span>'
+              + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
+            + "</div>"
+            + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回に記録"
+              + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (needDirNow ? " → 方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
+            + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>"
+            + (needDirNow
+              ? '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:6px;">' + dirBtns + "</div>"
+              : "")
+            + '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">'
+              + '<span style="font-size:12px;color:var(--ink-muted);">打点</span>'
+              + '<button class="btn btn-sm" data-action="live-rbi" data-delta="-1" style="min-width:38px;">－</button>'
+              + '<span class="mono" style="font-size:18px;font-weight:700;min-width:18px;text-align:center;">' + liveRbi + "</span>"
+              + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1" style="min-width:38px;">＋</button>'
+              + '<span style="font-size:10.5px;color:var(--ink-muted);">0なら自動</span>'
+              + (pend ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="margin-left:auto;">選び直す</button>' : "")
+            + "</div>"
+            + '<div style="display:flex;gap:6px;margin-top:10px;">'
+              + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
+              + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
+            + "</div>"
+            + undoBtnHtml
+            + '<hr class="rule" style="margin:14px 0;">';
+        }
       }
     }
 
@@ -2161,7 +2176,7 @@ function renderGameDetail(g) {
       + '<div class="mono" style="text-align:center;font-size:14px;margin-top:12px;color:var(--ink-muted);">合計 &nbsp;'
         + esc(topLabel) + ' <b style="color:var(--ink);font-size:18px;">' + sum(d.innings.top) + "</b> &nbsp;-&nbsp; "
         + '<b style="color:var(--ink);font-size:18px;">' + sum(d.innings.bottom) + "</b> " + esc(bottomLabel) + "</div>"
-      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。ずれたら走者の「×」か「↩ ひとつ取り消す」で修正。相手チームの得点は下の＋－で入力してください。すべて即保存・全員に同期。</p>';
+      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。3アウトになったら相手の得点を下の＋で入れ、「次の回 ▶」で進めてください。ずれたら走者の「×」か「↩ ひとつ取り消す」で修正。すべて即保存・全員に同期。</p>';
   }
 
   var canEditInnings = UI.isNewUnsavedGame || UI.gameMetaEditMode;
@@ -2623,6 +2638,7 @@ function resetLiveInput() {
   UI.liveLog = [];
   UI.liveOuts = 0;
   UI.liveBases = [null, null, null];
+  UI.liveHalfDone = false;
   UI.liveTakeover = false;
 }
 
@@ -2770,6 +2786,7 @@ function liveCommitAtbat(resultKey, dirCode) {
   var snapOuts = UI.liveOuts || 0;
   var snapBases = liveBasesArr().slice();
   var snapInning = inn;
+  var snapHalfDone = !!UI.liveHalfDone;
   var prevRbi = n0(row.rbi);
 
   var play = liveResolvePlay(resultKey, snapBases);
@@ -2799,17 +2816,14 @@ function liveCommitAtbat(resultKey, dirCode) {
   if (UI.liveOuts >= 3) {
     UI.liveOuts = 0;
     UI.liveBases = [null, null, null];
-    UI.liveInning = inn + 1;
-    ["top", "bottom"].forEach(function (s) {
-      if (!Array.isArray(d.innings[s])) d.innings[s] = [];
-      while (d.innings[s].length <= UI.liveInning) d.innings[s].push(0);
-    });
+    UI.liveHalfDone = true;
+    showToast("3アウト・チェンジ");
   }
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push({
     type: "atbat", rid: rid, inn: inn, token: token, rbi: rbi, prevRbi: prevRbi,
-    snapInnings: snapInnings, snapOuts: snapOuts, snapBases: snapBases, snapInning: snapInning
+    snapInnings: snapInnings, snapOuts: snapOuts, snapBases: snapBases, snapInning: snapInning, snapHalfDone: snapHalfDone
   });
 
   var idx = d.batting.findIndex(function (b) { return b._rid === rid; });
@@ -2827,23 +2841,20 @@ function liveManualOut() {
   var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
   var entry = {
     type: "out", snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
-    snapBases: liveBasesArr().slice(), snapInning: inn
+    snapBases: liveBasesArr().slice(), snapInning: inn, snapHalfDone: !!UI.liveHalfDone
   };
   UI.liveOuts = (UI.liveOuts || 0) + 1;
   if (UI.liveOuts >= 3) {
     UI.liveOuts = 0;
     UI.liveBases = [null, null, null];
-    UI.liveInning = inn + 1;
-    ["top", "bottom"].forEach(function (s) {
-      if (!Array.isArray(d.innings[s])) d.innings[s] = [];
-      while (d.innings[s].length <= UI.liveInning) d.innings[s].push(0);
-    });
+    UI.liveHalfDone = true;
+    showToast("3アウト・チェンジ");
   }
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
   persistDraft();
 }
-/* この回の攻撃を終了（3アウト扱い）して次の回へ */
+/* この回の攻撃を3アウト扱いで終了（アウト・走者をリセットして攻守交代待ちにする。回は「次の回 ▶」で進める） */
 function liveEndHalf() {
   var d = UI.draftGame;
   if (!d) return;
@@ -2851,15 +2862,11 @@ function liveEndHalf() {
   var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
   var entry = {
     type: "endhalf", snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
-    snapBases: liveBasesArr().slice(), snapInning: inn
+    snapBases: liveBasesArr().slice(), snapInning: inn, snapHalfDone: !!UI.liveHalfDone
   };
   UI.liveOuts = 0;
   UI.liveBases = [null, null, null];
-  UI.liveInning = inn + 1;
-  ["top", "bottom"].forEach(function (s) {
-    if (!Array.isArray(d.innings[s])) d.innings[s] = [];
-    while (d.innings[s].length <= UI.liveInning) d.innings[s].push(0);
-  });
+  UI.liveHalfDone = true;
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
   persistDraft();
@@ -2886,6 +2893,7 @@ function liveUndoAtbat() {
   UI.liveOuts = last.snapOuts || 0;
   UI.liveBases = Array.isArray(last.snapBases) ? last.snapBases.slice() : [null, null, null];
   if (typeof last.snapInning === "number") UI.liveInning = last.snapInning;
+  UI.liveHalfDone = !!last.snapHalfDone;
   UI.livePendingResult = null;
   UI.livePendingRbi = 0;
   persistDraft();
@@ -3610,6 +3618,7 @@ function onAppClick(e) {
     UI.liveInning = liNext;
     UI.liveOuts = 0;
     UI.liveBases = [null, null, null];
+    UI.liveHalfDone = false;
     if (liDelta > 0) {
       ["top", "bottom"].forEach(function (s) {
         if (!Array.isArray(UI.draftGame.innings[s])) UI.draftGame.innings[s] = [];
@@ -3644,6 +3653,10 @@ function onAppClick(e) {
   } else if (action === "live-end-half") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     liveEndHalf();
+  } else if (action === "live-resume-half") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    UI.liveHalfDone = false;
+    renderApp();
   } else if (action === "live-clear-base") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!liveGuardControl(UI.draftGame)) return;
