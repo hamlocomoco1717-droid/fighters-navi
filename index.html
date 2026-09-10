@@ -2069,7 +2069,10 @@ function renderGameDetail(g) {
       var pend = UI.livePendingResult;
       var pendRt = pend ? ATBAT_RESULT_TYPES.filter(function (r) { return r.key === pend; })[0] : null;
       var needDirNow = !!(pendRt && pendRt.needsDir);
-      var resultBtns = ATBAT_RESULT_TYPES.filter(function (r) { return r.key !== "H1IN"; }).map(function (r) {
+      var anyRunnerOn = liveBasesArr().some(function (x) { return !!x; });
+      var resultBtns = ATBAT_RESULT_TYPES.filter(function (r) {
+        return r.key !== "H1IN" && (r.key !== "DP" || anyRunnerOn);
+      }).map(function (r) {
         var isPend = pend === r.key;
         var lc = LIVE_RESULT_COLOR[r.key];
         var cs = isPend ? "" : (lc === "red" ? "color:var(--loss);border-color:var(--loss);"
@@ -2931,6 +2934,8 @@ function liveResolvePlay(resultKey, bases) {
       break;
     case "DP":
       if (b1) { outs = 2; nb = [null, b2, b3]; }
+      else if (b2) { outs = 2; nb = [b1, null, b3]; }
+      else if (b3) { outs = 2; nb = [b1, b2, null]; }
       else { outs = 1; nb = [b1, b2, b3]; }
       break;
     case "GO": case "FLY": case "LINE": case "SO": default:
