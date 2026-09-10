@@ -2070,7 +2070,12 @@ function renderGameDetail(g) {
       var pendRt = pend ? ATBAT_RESULT_TYPES.filter(function (r) { return r.key === pend; })[0] : null;
       var needDirNow = !!(pendRt && pendRt.needsDir);
       var resultBtns = ATBAT_RESULT_TYPES.map(function (r) {
-        return '<button class="btn btn-sm' + (pend === r.key ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:10px 2px;font-size:12.5px;">' + esc(liveResultShort(r.key)) + "</button>";
+        var isPend = pend === r.key;
+        var lc = LIVE_RESULT_COLOR[r.key];
+        var cs = isPend ? "" : (lc === "red" ? "color:var(--loss);border-color:var(--loss);"
+          : lc === "green" ? "color:var(--win);border-color:var(--win);"
+          : "color:var(--ink-muted);");
+        return '<button class="btn btn-sm' + (isPend ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:10px 2px;font-size:12.5px;' + cs + '">' + esc(liveResultShort(r.key)) + "</button>";
       }).join("");
       var dirBtns = ATBAT_DIRECTIONS.map(function (dd) {
         return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:10px 2px;font-size:13px;">' + dd.code + "</button>";
@@ -2175,18 +2180,17 @@ function renderGameDetail(g) {
               + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
             + "</div>"
             + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
-              + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (needDirNow ? " → 方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
-            + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>"
+              + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
             + (needDirNow
-              ? '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:6px;">' + dirBtns + "</div>"
-              : "")
+              ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 結果を選び直す</button>'
+                + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + dirBtns + "</div>"
+              : '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>")
             + '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">'
               + '<span style="font-size:12px;color:var(--ink-muted);">打点</span>'
               + '<button class="btn btn-sm" data-action="live-rbi" data-delta="-1" style="min-width:38px;">－</button>'
               + '<span class="mono" style="font-size:18px;font-weight:700;min-width:18px;text-align:center;">' + liveRbi + "</span>"
               + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1" style="min-width:38px;">＋</button>'
               + '<span style="font-size:10.5px;color:var(--ink-muted);">0なら自動</span>'
-              + (pend ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="margin-left:auto;">選び直す</button>' : "")
             + "</div>"
             + '<div style="display:flex;gap:6px;margin-top:10px;">'
               + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
@@ -2665,6 +2669,12 @@ var LIVE_RESULT_SHORT = {
   H1: "安打", H1IN: "内安", H2: "二塁打", H3: "三塁打", HR: "本塁打",
   GO: "ゴロ", FLY: "フライ", LINE: "ライナー", FC: "野選", ROE: "失出",
   DP: "併殺", SAC: "犠打", BB: "四球", HBP: "死球", SO: "三振"
+};
+/* 試合中モードの結果ボタンの色分け: red=安打〜本塁打・三振 / green=四球・死球 / gray=それ以外 */
+var LIVE_RESULT_COLOR = {
+  H1: "red", H1IN: "red", H2: "red", H3: "red", HR: "red", SO: "red",
+  BB: "green", HBP: "green",
+  GO: "gray", FLY: "gray", LINE: "gray", FC: "gray", ROE: "gray", DP: "gray", SAC: "gray"
 };
 function liveResultShort(key) { return LIVE_RESULT_SHORT[key] || key; }
 function resetLiveInput() {
