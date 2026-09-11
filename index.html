@@ -2144,8 +2144,9 @@ function renderGameDetail(g) {
               if (!rr) return "";
               var brow = d.batting.filter(function (b) { return b._rid === rr; })[0];
               return '<button class="btn btn-sm" data-action="live-go-out-target" data-base="' + bi + '" style="padding:10px 4px;">'
-                + goBaseLabels[bi] + (brow ? "（" + esc(playerName(brow.playerId)) + "）" : "") + "（野選）</button>";
-            }).join("");
+                + goBaseLabels[bi] + (brow ? "（" + esc(playerName(brow.playerId)) + "）" : "") + "（アウト）</button>";
+            }).join("")
+          + '<button class="btn btn-sm" data-action="live-go-out-target" data-base="safe" style="padding:10px 4px;grid-column:1 / -1;">誰もアウトにならず全員セーフ（野選）</button>';
       }
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
@@ -3086,21 +3087,28 @@ function liveCommitAtbat(resultKey, dirCode, outBaseIdx) {
   var snapHalfDone = !!UI.liveHalfDone;
   var prevRbi = n0(row.rbi);
 
-  var effectiveResultKey = resultKey;
+  /* playKey: 塁上の動き・アウト数の計算に使うキー。tokenKey: 打席セルに残す表記。
+     ゴロで打者以外の走者をアウトにした場合、実際には打者は生きるので塁の動きは
+     野選と同じ式（basesForPlay を野選扱いで解決）を使うが、誰かがアウトになった
+     以上は打席の記録としては「ゴ」のまま残す（＝本当に誰もアウトにならなかった
+     ときだけ「野選」表記にする） */
+  var playKey = resultKey;
+  var tokenKey = resultKey;
   var basesForPlay = snapBases;
   var extraOut = 0;
   if (typeof outBaseIdx === "number" && outBaseIdx >= 0 && outBaseIdx <= 2 && snapBases[outBaseIdx]) {
-    effectiveResultKey = "FC";
+    playKey = "FC";
+    tokenKey = "GO";
     basesForPlay = snapBases.slice();
     basesForPlay[outBaseIdx] = null;
     extraOut = 1;
   }
-  var baseToken = buildAtbatToken(effectiveResultKey, dirCode || "");
+  var baseToken = buildAtbatToken(tokenKey, dirCode || "");
   if (!baseToken) return;
 
   var advanceLevel = UI.livePendingAdvance || 0;
   var manualAdvance = advanceLevel > 0;
-  var play = liveResolvePlay(effectiveResultKey, basesForPlay, advanceLevel);
+  var play = liveResolvePlay(playKey, basesForPlay, advanceLevel);
   play.outs += extraOut;
   var endsHalf = (snapOuts + play.outs) >= 3;
   var manualRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
@@ -3108,7 +3116,7 @@ function liveCommitAtbat(resultKey, dirCode, outBaseIdx) {
      進塁打／犠飛などで走者が生還したケース。「進塁あり」トグルを使っていない場合のみ、
      3塁側から手入力分の走者を生還させる（トグル使用時は liveResolvePlay 側で進塁済み） */
   var forcedRuns = 0;
-  if (!manualAdvance && (effectiveResultKey === "GO" || effectiveResultKey === "FLY" || effectiveResultKey === "LINE" || effectiveResultKey === "FC") && manualRbi > 0) {
+  if (!manualAdvance && (playKey === "GO" || playKey === "FLY" || playKey === "LINE" || playKey === "FC") && manualRbi > 0) {
     var nb2 = play.bases.slice();
     for (var bp = 2; bp >= 0 && forcedRuns < manualRbi; bp--) {
       if (nb2[bp] && nb2[bp] !== "B") { nb2[bp] = null; forcedRuns++; }
@@ -3968,8 +3976,13 @@ function onAppClick(e) {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!UI.livePendingResult) return;
     var goBaseAttr = el.getAttribute("data-base");
-    var goBaseIdx = goBaseAttr === "" ? null : parseInt(goBaseAttr, 10);
-    liveCommitAtbat(UI.livePendingResult, UI.livePendingDir || "", goBaseIdx);
+    var goDir = UI.livePendingDir || "";
+    if (goBaseAttr === "safe") {
+      liveCommitAtbat("FC", goDir);
+    } else {
+      var goBaseIdx = goBaseAttr === "" ? null : parseInt(goBaseAttr, 10);
+      liveCommitAtbat(UI.livePendingResult, goDir, goBaseIdx);
+    }
   } else if (action === "live-cancel-go-out") {
     UI.livePendingDir = null;
     renderApp();
