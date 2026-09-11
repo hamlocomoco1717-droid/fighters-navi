@@ -2118,7 +2118,7 @@ function renderGameDetail(g) {
       var needDirNow = !!(pendRt && pendRt.needsDir);
       var anyRunnerOn = liveBasesArr().some(function (x) { return !!x; });
       var resultBtns = ATBAT_RESULT_TYPES.filter(function (r) {
-        return r.key !== "H1IN" && (r.key !== "DP" || anyRunnerOn);
+        return r.key !== "H1IN" && r.key !== "DP" && r.key !== "FC";
       }).map(function (r) {
         var isPend = pend === r.key;
         var lc = LIVE_RESULT_COLOR[r.key];
