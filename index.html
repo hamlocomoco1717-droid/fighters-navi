@@ -755,6 +755,7 @@ var UI = {
   liveBatterRid: null,
   livePendingResult: null,
   livePendingRbi: 0,
+  livePendingAdvance: false,
   liveLog: [],
   liveOuts: 0,
   liveBases: [null, null, null],
@@ -2244,6 +2245,10 @@ function renderGameDetail(g) {
               + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1" style="min-width:38px;">＋</button>'
               + '<span style="font-size:10.5px;color:var(--ink-muted);">0なら自動</span>'
             + "</div>"
+            + (anyRunnerOn
+              ? '<button class="btn btn-sm' + (UI.livePendingAdvance ? " btn-primary" : "") + '" data-action="live-toggle-advance" style="width:100%;margin-top:8px;">'
+                + (UI.livePendingAdvance ? "✓ 進塁あり" : "進塁あり") + '<span style="font-weight:400;opacity:.8;"> （ゴロ・フライで走者が進む）</span></button>'
+              : "")
             + '<div style="display:flex;gap:6px;margin-top:10px;">'
               + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
               + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
@@ -2746,6 +2751,7 @@ function resetLiveInput() {
   UI.liveBatterRid = null;
   UI.livePendingResult = null;
   UI.livePendingRbi = 0;
+  UI.livePendingAdvance = false;
   UI.liveLog = [];
   UI.liveOuts = 0;
   UI.liveBases = [null, null, null];
@@ -2957,7 +2963,7 @@ function liveSteal(baseIdx) {
 }
 /* 打席結果から、塁上の動き・アウト・生還数を求める。
    bases は [一,二,三] の走者ID（空きは null）。戻り値の bases 内の "B" は打者。 */
-function liveResolvePlay(resultKey, bases) {
+function liveResolvePlay(resultKey, bases, advance) {
   var b1 = bases[0], b2 = bases[1], b3 = bases[2];
   var nb = [null, null, null], runs = 0, outs = 0;
   switch (resultKey) {
@@ -2995,7 +3001,16 @@ function liveResolvePlay(resultKey, bases) {
       else if (b3) { outs = 2; nb = [b1, b2, null]; }
       else { outs = 1; nb = [b1, b2, b3]; }
       break;
-    case "GO": case "FLY": case "LINE": case "SO": default:
+    case "GO": case "FLY":
+      outs = 1;
+      if (advance) {
+        if (b3) runs++;
+        nb = [null, b1, b2];
+      } else {
+        nb = [b1, b2, b3];
+      }
+      break;
+    case "LINE": case "SO": default:
       outs = 1;
       nb = [b1, b2, b3];
       break;
@@ -3021,14 +3036,15 @@ function liveCommitAtbat(resultKey, dirCode) {
   var snapHalfDone = !!UI.liveHalfDone;
   var prevRbi = n0(row.rbi);
 
-  var play = liveResolvePlay(resultKey, snapBases);
+  var manualAdvance = !!UI.livePendingAdvance;
+  var play = liveResolvePlay(resultKey, snapBases, manualAdvance);
   var endsHalf = (snapOuts + play.outs) >= 3;
   var manualRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
   /* アウトになる打球（ゴロ・フライ・ライナー・野選）で打点を手入力したとき＝
-     進塁打／犠飛などで走者が生還したケース。3塁側から手入力分の走者を生還させる。
-     手入力の打点はユーザーが「還った」と明示しているので、3アウト目でも得点として扱う */
+     進塁打／犠飛などで走者が生還したケース。「進塁あり」トグルを使っていない場合のみ、
+     3塁側から手入力分の走者を生還させる（トグル使用時は liveResolvePlay 側で進塁済み） */
   var forcedRuns = 0;
-  if ((resultKey === "GO" || resultKey === "FLY" || resultKey === "LINE" || resultKey === "FC") && manualRbi > 0) {
+  if (!manualAdvance && (resultKey === "GO" || resultKey === "FLY" || resultKey === "LINE" || resultKey === "FC") && manualRbi > 0) {
     var nb2 = play.bases.slice();
     for (var bp = 2; bp >= 0 && forcedRuns < manualRbi; bp--) {
       if (nb2[bp] && nb2[bp] !== "B") { nb2[bp] = null; forcedRuns++; }
@@ -3036,7 +3052,10 @@ function liveCommitAtbat(resultKey, dirCode) {
     play.bases = nb2;
     play.runs += forcedRuns;
   }
-  var runsThisPlay = (play.outs > 0 && endsHalf) ? forcedRuns : play.runs;
+  /* 3アウト目で終わる打球は、「進塁あり」トグルか打点の手入力で明示的に確認された
+     生還だけを得点にする（タイミングプレーの誤カウント防止） */
+  var explicitlyConfirmed = manualAdvance || manualRbi > 0;
+  var runsThisPlay = (play.outs > 0 && endsHalf && !explicitlyConfirmed) ? 0 : play.runs;
   var autoRbi = (resultKey === "ROE") ? 0 : runsThisPlay;
   var rbi = manualRbi > 0 ? manualRbi : autoRbi;
 
@@ -3073,6 +3092,7 @@ function liveCommitAtbat(resultKey, dirCode) {
   UI.liveBatterRid = d.batting[nextIdx] ? d.batting[nextIdx]._rid : null;
   UI.livePendingResult = null;
   UI.livePendingRbi = 0;
+  UI.livePendingAdvance = false;
   persistDraft();
 }
 /* 走塁アウトなど、打席によらないアウトを1つ足す */
@@ -3138,6 +3158,7 @@ function liveUndoAtbat() {
   UI.liveHalfDone = !!last.snapHalfDone;
   UI.livePendingResult = null;
   UI.livePendingRbi = 0;
+  UI.livePendingAdvance = false;
   persistDraft();
 }
 function renderAtbatEditorPanel(b, battingInningCount) {
@@ -3874,6 +3895,9 @@ function onAppClick(e) {
     var lrbiD = parseInt(el.getAttribute("data-delta"), 10) || 0;
     UI.livePendingRbi = Math.max(0, Math.min(4, (UI.livePendingRbi || 0) + lrbiD));
     renderApp();
+  } else if (action === "live-toggle-advance") {
+    UI.livePendingAdvance = !UI.livePendingAdvance;
+    renderApp();
   } else if (action === "live-cancel-pending") {
     UI.livePendingResult = null;
     renderApp();
@@ -4253,6 +4277,7 @@ function onAppChange(e) {
     UI.liveBatterRid = t.value;
     UI.livePendingResult = null;
     UI.livePendingRbi = 0;
+    UI.livePendingAdvance = false;
     renderApp();
     return;
   }
