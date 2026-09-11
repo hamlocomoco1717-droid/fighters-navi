@@ -2127,7 +2127,7 @@ function renderGameDetail(g) {
       }).join("");
       var dirOrder = ATBAT_DIRECTIONS;
       if (pend === "H2" || pend === "H3" || pend === "HR") {
-        var ofFirst = ["左", "中", "右", "投", "捕", "一", "二", "三", "遊"];
+        var ofFirst = ["左", "中", "右", "一", "二", "三", "遊", "投", "捕"];
         dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       }
       var dirBtns = dirOrder.map(function (dd) {
@@ -2633,15 +2633,15 @@ var ATBAT_RESULT_TYPES = [
   { key: "SO", label: "三振", token: "三振", needsDir: false }
 ];
 var ATBAT_DIRECTIONS = [
-  { code: "投", label: "投手(1)" },
-  { code: "捕", label: "捕手(2)" },
   { code: "一", label: "一塁手(3)" },
   { code: "二", label: "二塁手(4)" },
   { code: "三", label: "三塁手(5)" },
   { code: "遊", label: "遊撃手(6)" },
   { code: "左", label: "左翼手(7)" },
   { code: "中", label: "中堅手(8)" },
-  { code: "右", label: "右翼手(9)" }
+  { code: "右", label: "右翼手(9)" },
+  { code: "投", label: "投手(1)" },
+  { code: "捕", label: "捕手(2)" }
 ];
 var ATBAT_CIRCLED = "①②③④⑤⑥⑦⑧⑨";
 function buildAtbatToken(resultKey, dirCode) {
