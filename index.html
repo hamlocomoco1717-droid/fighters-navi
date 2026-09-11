@@ -2126,7 +2126,7 @@ function renderGameDetail(g) {
         return '<button class="btn btn-sm' + (isPend ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:12px 1px;font-size:15px;font-weight:700;justify-content:center;text-align:center;white-space:nowrap;' + cs + '">' + esc(liveResultShort(r.key)) + "</button>";
       }).join("");
       var dirOrder = ATBAT_DIRECTIONS;
-      if (pend === "H2" || pend === "H3" || pend === "HR") {
+      if (pend === "H1" || pend === "H2" || pend === "H3" || pend === "HR") {
         var ofFirst = ["左", "中", "右", "一", "二", "三", "遊", "投", "捕"];
         dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       }
