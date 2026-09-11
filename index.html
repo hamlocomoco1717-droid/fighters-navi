@@ -2164,8 +2164,8 @@ function renderGameDetail(g) {
         var goBasesNow = liveBasesArr();
         var goChip = function (key, label) {
           var isSel = goSel.indexOf(key) !== -1;
-          return '<button class="btn btn-sm' + (isSel ? " btn-primary" : "") + '" data-action="live-go-toggle-out" data-target="' + key + '" style="padding:10px 4px;">'
-            + (isSel ? "✓ " : "") + label + "</button>";
+          return '<button class="btn btn-sm' + (isSel ? " btn-primary" : "") + '" data-action="live-go-toggle-out" data-target="' + key + '" style="padding:10px 4px;text-align:left;font-weight:' + (isSel ? "700" : "400") + ';">'
+            + (isSel ? "☑ " : "☐ ") + label + "</button>";
         };
         goOutTargetBtns = goChip("batter", "打者")
           + goBasesNow.map(function (rr, bi) {
@@ -2174,11 +2174,13 @@ function renderGameDetail(g) {
               return goChip(String(bi), goBaseLabels[bi] + (brow ? "（" + esc(playerNameNum(brow.playerId)) + "）" : ""));
             }).join("");
         var goOutCount = goSel.length;
-        var goOutCommitLabel = goOutCount === 0 ? "誰もアウトにならず全員セーフで記録（野選）"
-          : goOutCount === 1 ? "この内容で記録する（アウト1）"
-          : "この内容で記録する（アウト" + goOutCount + "・併殺扱い）";
-        goOutCommitHtml = '<button class="btn btn-primary btn-sm" data-action="live-go-commit-out" style="width:100%;margin-top:8px;">' + goOutCommitLabel + "</button>"
-          + '<p style="font-size:10.5px;color:var(--ink-muted);margin:4px 0 0;">複数選べます（満塁での併殺など）。何も選ばなければ全員セーフ扱いになります。</p>';
+        var goOutCommitLabel = goOutCount === 0 ? "✔ 全員セーフで記録（野選）"
+          : goOutCount === 1 ? "✔ 選んだ1人をアウトで記録"
+          : "✔ 選んだ" + goOutCount + "人をアウトで記録（併殺）";
+        goOutTargetBtns = '<div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:2px;">実際にアウトになった人にチェック（複数可）</div>'
+          + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:8px;">誰にもチェックしなければ「全員セーフ＝野選」として記録されます</div>'
+          + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + goOutTargetBtns + "</div>";
+        goOutCommitHtml = '<button class="btn btn-primary btn-sm" data-action="live-go-commit-out" style="width:100%;margin-top:8px;font-weight:700;">' + goOutCommitLabel + "</button>";
       }
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
@@ -2289,7 +2291,7 @@ function renderGameDetail(g) {
                 + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + stealPickerBtns + "</div>"
               : showGoOutStep
               ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
-                + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + goOutTargetBtns + "</div>"
+                + goOutTargetBtns
                 + goOutCommitHtml
               : needDirNow
               ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 結果を選び直す</button>'
