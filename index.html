@@ -2142,6 +2142,9 @@ function renderGameDetail(g) {
       if (pend === "H1" || pend === "H2" || pend === "H3" || pend === "HR") {
         var ofFirst = ["左", "中", "右", "一", "二", "三", "遊", "投", "捕"];
         dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
+      } else if (pend === "SAC") {
+        var infOnly = ["一", "二", "三", "遊"];
+        dirOrder = infOnly.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       }
       var dirBtns = dirOrder.map(function (dd) {
         return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:12px 1px;font-size:18px;font-weight:700;justify-content:center;text-align:center;' + liveDirColorStyle(dd.code) + '">' + dd.code + "</button>";
@@ -2679,7 +2682,7 @@ var ATBAT_RESULT_TYPES = [
   { key: "FC", label: "野手選択", suffix: "野", needsDir: true },
   { key: "ROE", label: "相手失策で出塁", suffix: "失", needsDir: true },
   { key: "DP", label: "併殺打", suffix: "併", needsDir: true },
-  { key: "SAC", label: "犠打", suffix: "犠", needsDir: false },
+  { key: "SAC", label: "犠打", suffix: "犠", needsDir: true },
   { key: "BB", label: "四球", token: "四球", needsDir: false },
   { key: "HBP", label: "死球", token: "死球", needsDir: false },
   { key: "SO", label: "三振", token: "三振", needsDir: false }
