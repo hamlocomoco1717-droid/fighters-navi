@@ -756,6 +756,7 @@ var UI = {
   livePendingResult: null,
   livePendingDir: null,
   livePendingGoOuts: [],
+  liveStealPickerOpen: false,
   livePendingRbi: 0,
   livePendingAdvance: 0,
   liveLog: [],
@@ -2126,6 +2127,16 @@ function renderGameDetail(g) {
           : lc === "green" ? "color:var(--win);border-color:var(--win);"
           : "color:var(--ink-muted);");
         return '<button class="btn btn-sm' + (isPend ? " btn-primary" : "") + '" data-action="live-batter-result" data-key="' + r.key + '" style="padding:12px 1px;font-size:15px;font-weight:700;justify-content:center;text-align:center;white-space:nowrap;' + cs + '">' + esc(liveResultShort(r.key)) + "</button>";
+      }).join("")
+        + (anyRunnerOn ? '<button class="btn btn-sm" data-action="live-steal-btn" style="padding:12px 1px;font-size:15px;font-weight:700;justify-content:center;text-align:center;white-space:nowrap;color:var(--win);border-color:var(--win);">盗塁</button>' : "");
+      var stealBaseLabels = ["一塁走者", "二塁走者", "三塁走者"];
+      var stealBasesNow = liveBasesArr();
+      var stealEligibleBases = stealBasesNow.map(function (x, i) { return x && (i === 2 || !stealBasesNow[i + 1]) ? i : -1; }).filter(function (i) { return i !== -1; });
+      var showStealPicker = !!UI.liveStealPickerOpen && anyRunnerOn && stealEligibleBases.length > 0;
+      var stealPickerBtns = stealEligibleBases.map(function (bi) {
+        var brow = d.batting.filter(function (b) { return b._rid === stealBasesNow[bi]; })[0];
+        return '<button class="btn btn-sm" data-action="live-steal-pick" data-base="' + bi + '" style="padding:10px 4px;">'
+          + stealBaseLabels[bi] + (brow ? "（" + esc(playerName(brow.playerId)) + "）" : "") + "</button>";
       }).join("");
       var dirOrder = ATBAT_DIRECTIONS;
       if (pend === "H1" || pend === "H2" || pend === "H3" || pend === "HR") {
@@ -2174,7 +2185,7 @@ function renderGameDetail(g) {
         var brow = d.batting.filter(function (b) { return b._rid === rr; })[0];
         return '<span style="display:inline-flex;align-items:center;gap:2px;background:var(--accent-soft);border-radius:6px;padding:2px 3px 2px 7px;font-size:11.5px;font-weight:600;">'
           + baseNames[bi] + " " + esc(brow ? playerName(brow.playerId) : "走者")
-          + (iHoldLive ? ' <button class="icon-btn" data-action="live-steal" data-base="' + bi + '" title="盗塁で1つ進める" style="width:auto;padding:0 5px;font-size:10px;">盗塁</button>'
+          + (iHoldLive ? ' <button class="icon-btn" data-action="live-steal" data-base="' + bi + '" title="1つ進める（盗塁数には数えません）" style="width:auto;padding:0 5px;font-size:10px;">進塁</button>'
             + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外してアウトを1つ加える（走塁死など）">×</button>' : "")
           + "</span>";
       }).join("");
@@ -2260,8 +2271,13 @@ function renderGameDetail(g) {
               + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
             + "</div>"
             + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
-              + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (showGoOutStep ? " → アウトになったのは？" : needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
-            + (showGoOutStep
+              + (showStealPicker ? '　<b style="color:var(--ink);">盗塁</b> → 走者を選ぶ'
+                : pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (showGoOutStep ? " → アウトになったのは？" : needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
+            + (showStealPicker
+              ? '<button class="btn btn-sm" data-action="live-steal-cancel" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← キャンセル</button>'
+                + '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px;">盗塁したのはどの走者？</div>'
+                + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + stealPickerBtns + "</div>"
+              : showGoOutStep
               ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
                 + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + goOutTargetBtns + "</div>"
                 + goOutCommitHtml
@@ -2788,6 +2804,7 @@ function resetLiveInput() {
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.liveStealPickerOpen = false;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   UI.liveLog = [];
@@ -2965,8 +2982,9 @@ function liveDiamondSvg(bases, d) {
     + lbl(7, 33, "end", bases[2])
     + "</svg>";
 }
-/* 盗塁：指定塁の走者を1つ進める（三塁走者は生還＝1得点）。SB を加算 */
-function liveSteal(baseIdx) {
+/* 走者を1つ進める（三塁走者は生還＝1得点）。creditSb が true のときだけ SB を加算する
+   （走者チップの「進塁」は creditSb なしの単純な訂正・進塁、専用の「盗塁」ボタンは creditSb あり） */
+function liveSteal(baseIdx, creditSb) {
   var d = UI.draftGame;
   if (!d || isNaN(baseIdx) || baseIdx < 0 || baseIdx > 2) return;
   if (!liveGuardControl(d)) return;
@@ -2992,11 +3010,11 @@ function liveSteal(baseIdx) {
   } else {
     nb[baseIdx + 1] = rid;
   }
-  if (row) row.sb = prevSb + 1;
+  if (creditSb && row) row.sb = prevSb + 1;
   UI.liveBases = nb;
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
-  showToast("盗塁を記録しました");
+  showToast(creditSb ? "盗塁を記録しました" : "進塁を記録しました");
   persistDraft();
 }
 /* 走者を「×」で外す＝走塁死としてアウトを1つ加える（3アウトなら攻守交代） */
@@ -3183,6 +3201,7 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.liveStealPickerOpen = false;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   persistDraft();
@@ -3251,6 +3270,7 @@ function liveUndoAtbat() {
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.liveStealPickerOpen = false;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   persistDraft();
@@ -3981,6 +4001,7 @@ function onAppClick(e) {
     if (!lrRt) return;
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.liveStealPickerOpen = false;
     if (lrRt.needsDir) { UI.livePendingResult = lrKey; renderApp(); }
     else { liveCommitAtbat(lrKey, ""); }
   } else if (action === "live-batter-dir") {
@@ -4015,6 +4036,7 @@ function onAppClick(e) {
   } else if (action === "live-cancel-go-out") {
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.liveStealPickerOpen = false;
     renderApp();
   } else if (action === "live-rbi") {
     var lrbiD = parseInt(el.getAttribute("data-delta"), 10) || 0;
@@ -4027,6 +4049,7 @@ function onAppClick(e) {
     UI.livePendingResult = null;
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.liveStealPickerOpen = false;
     renderApp();
   } else if (action === "live-manual-out") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
@@ -4044,7 +4067,20 @@ function onAppClick(e) {
     liveClearBaseOut(parseInt(el.getAttribute("data-base"), 10));
   } else if (action === "live-steal") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
-    liveSteal(parseInt(el.getAttribute("data-base"), 10));
+    liveSteal(parseInt(el.getAttribute("data-base"), 10), false);
+  } else if (action === "live-steal-btn") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    var stealEligible = liveBasesArr().map(function (x, i) { return x && (i === 2 || !liveBasesArr()[i + 1]) ? i : -1; }).filter(function (i) { return i !== -1; });
+    if (stealEligible.length === 0) return;
+    if (stealEligible.length === 1) { liveSteal(stealEligible[0], true); }
+    else { UI.liveStealPickerOpen = true; renderApp(); }
+  } else if (action === "live-steal-pick") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    UI.liveStealPickerOpen = false;
+    liveSteal(parseInt(el.getAttribute("data-base"), 10), true);
+  } else if (action === "live-steal-cancel") {
+    UI.liveStealPickerOpen = false;
+    renderApp();
   } else if (action === "live-goto-inning") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!liveGuardControl(UI.draftGame)) return;
