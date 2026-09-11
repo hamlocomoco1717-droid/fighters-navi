@@ -3065,10 +3065,28 @@ function liveResolvePlay(resultKey, bases, advance) {
       else if (!b3) nb = ["B", b1, b2];
       else { runs = 1; nb = ["B", b1, b2]; }
       break;
-    case "H1": case "H1IN": case "ROE": case "FC":
+    case "H1": case "H1IN": case "FC":
       if (advance >= 2) { runs += (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0); nb = ["B", null, null]; }
       else if (advance === 1) { if (b3) runs++; if (b2) runs++; nb = ["B", null, b1]; }
       else { if (b3) runs++; nb = ["B", b1, b2]; }
+      break;
+    case "ROE":
+      if (advance >= 2) { runs += (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0); nb = ["B", null, null]; }
+      else if (advance === 1) { if (b3) runs++; if (b2) runs++; nb = ["B", null, b1]; }
+      else {
+        /* 敵失は原則フォースの範囲でしか進塁しない：1塁から連続して埋まっている
+           走者だけ、次の塁が空くぶんだけ押し出される（進塁ありトグルで手動調整可） */
+        nb = [null, b2, b3];
+        var roeCarry = b1;
+        for (var roeI = 1; roeI <= 2; roeI++) {
+          if (!roeCarry) break;
+          var roeOcc = nb[roeI];
+          nb[roeI] = roeCarry;
+          roeCarry = roeOcc;
+        }
+        if (roeCarry) runs++;
+        nb[0] = "B";
+      }
       break;
     case "H2":
       if (advance) { runs += (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0); nb = [null, "B", null]; }
