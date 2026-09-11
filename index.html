@@ -2267,8 +2267,9 @@ function renderGameDetail(g) {
       + "</div>"
       + liveBatterHtml
       + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-        + liveSideBlock("top", topLabel, liTop, weAreAway)
-        + liveSideBlock("bottom", bottomLabel, liBot, !weAreAway)
+        + (liveOnTop(d)
+            ? liveSideBlock("top", topLabel, liTop, weAreAway)
+            : liveSideBlock("bottom", bottomLabel, liBot, !weAreAway))
       + "</div>"
       + '<div class="mono" style="text-align:center;font-size:14px;margin-top:12px;color:var(--ink-muted);">合計 &nbsp;'
         + esc(topLabel) + ' <b style="color:var(--ink);font-size:18px;">' + sum(d.innings.top) + "</b> &nbsp;-&nbsp; "
