@@ -2272,6 +2272,7 @@ function renderGameDetail(g) {
             + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
               + '<span style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">今の打者</span>'
               + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
+              + '<button class="btn btn-sm" data-action="live-skip-batter" title="早退などでこの打者を飛ばして次へ" style="white-space:nowrap;padding:6px 8px;font-size:12px;">スキップ</button>'
             + "</div>"
             + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
               + (showStealPicker ? '　<b style="color:var(--ink);">盗塁</b> → 走者を選ぶ'
@@ -4040,6 +4041,19 @@ function onAppClick(e) {
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
   UI.liveStealPickerOpen = false;
+    renderApp();
+  } else if (action === "live-skip-batter") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    var skipIdx = UI.draftGame.batting.findIndex(function (b) { return b._rid === UI.liveBatterRid; });
+    if (skipIdx === -1) return;
+    var skipNext = (skipIdx + 1) % UI.draftGame.batting.length;
+    UI.liveBatterRid = UI.draftGame.batting[skipNext] ? UI.draftGame.batting[skipNext]._rid : null;
+    UI.livePendingResult = null;
+    UI.livePendingDir = null;
+    UI.livePendingGoOuts = [];
+    UI.liveStealPickerOpen = false;
+    UI.livePendingRbi = 0;
+    UI.livePendingAdvance = 0;
     renderApp();
   } else if (action === "live-rbi") {
     var lrbiD = parseInt(el.getAttribute("data-delta"), 10) || 0;
