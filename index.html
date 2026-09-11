@@ -1763,8 +1763,9 @@ function renderAddGameTab() {
     UI.isNewUnsavedGame = false;
   }
   var importCard = UI.readOnly ? "" : ('<div class="card">'
-    + '<div class="section-title">写真から取り込む</div>'
-    + '<p style="color:var(--ink-muted);font-size:12.5px;margin-bottom:8px;">スコアシートの写真をClaudeに読み取ってもらい、返ってきたJSONを取り込むと、その内容で試合が作られます。取り込み後に画面で確認・修正してから保存できます。</p>'
+    + "<details>"
+    + '<summary class="section-title" style="cursor:pointer;">写真から取り込む（上級者向け）</summary>'
+    + '<p style="color:var(--ink-muted);font-size:12.5px;margin:8px 0;">スコアシートの写真をClaudeに読み取ってもらい、返ってきたJSONを取り込むと、その内容で試合が作られます。取り込み後に画面で確認・修正してから保存できます。ふだん使わない人は閉じたままで問題ありません。</p>'
     + '<label style="font-weight:600;font-size:12.5px;color:var(--ink);">① JSONファイルを選ぶ（スマホ向け）</label>'
     + '<input type="file" id="import-file" accept=".json,application/json,text/plain" style="display:block;margin:4px 0 12px;font-size:13px;">'
     + '<label style="font-weight:600;font-size:12.5px;color:var(--ink);">② または JSONを貼り付け</label>'
@@ -1772,6 +1773,7 @@ function renderAddGameTab() {
     + '<button class="btn btn-sm btn-primary" data-action="import-game-json" style="margin-top:8px;">取り込む</button>'
     + '<div id="import-report" style="margin-top:8px;font-size:12.5px;white-space:pre-wrap;"></div>'
     + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:10px;">打席は <code>atbatsIkz</code> に ikz.jp 式の記号で書けます（例 <code>"8.H/1"</code>=中前打・打点1、<code>"6.OG"</code>=遊ゴロ、<code>"90.HR/4"</code>=右超本塁打・打点4、<code>"B"</code>=四球）。打点は末尾の丸数字（③）も可。<code>G</code>=犠打なので凡打は <code>OG/OF/OL</code>。得点・盗塁は <code>stats</code> に。</p>'
+    + "</details>"
     + "</div>");
   return '<div class="page-head"><div><h1>試合を追加</h1><div class="page-lede">新しい試合のスコア・成績を入力します。</div></div></div>'
     + '<div class="card"><div class="empty-state"><div class="display">新しい試合を記録しましょう</div>'
@@ -2462,7 +2464,7 @@ function renderGameDetail(g) {
     : ' <button type="button" class="btn btn-sm" data-action="request-game-meta-edit" style="margin-top:4px;">✎ 編集する</button>');
   var dateFieldHtml = canEditMeta
     ? ('<input type="date" data-draft="date" value="' + esc(d.date || "") + '"' + (UI.readOnly ? " disabled" : "") + ">" + metaEditToggleHtml)
-    : (esc(d.date || "-") + metaEditToggleHtml);
+    : (esc(fmtDate(d.date)) + metaEditToggleHtml);
   var opponentFieldHtml = canEditMeta
     ? ('<input type="text" data-draft="opponent" value="' + esc(d.opponent || "") + '" placeholder="相手チーム名"' + (UI.readOnly ? " disabled" : "") + ">")
     : esc(d.opponent || "-");
