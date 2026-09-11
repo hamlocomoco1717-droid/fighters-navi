@@ -2247,7 +2247,7 @@ function renderGameDetail(g) {
             + "</div>"
             + (anyRunnerOn
               ? '<button class="btn btn-sm' + (UI.livePendingAdvance ? " btn-primary" : "") + '" data-action="live-toggle-advance" style="width:100%;margin-top:8px;">'
-                + (UI.livePendingAdvance ? "✓ 進塁あり" : "進塁あり") + '<span style="font-weight:400;opacity:.8;"> （ゴロ・フライで走者が進む）</span></button>'
+                + (UI.livePendingAdvance ? "✓ 進塁あり" : "進塁あり") + '<span style="font-weight:400;opacity:.8;"> （ゴロ・フライ・安打で走者が多く進む）</span></button>'
               : "")
             + '<div style="display:flex;gap:6px;margin-top:10px;">'
               + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
@@ -2975,13 +2975,12 @@ function liveResolvePlay(resultKey, bases, advance) {
       else { runs = 1; nb = ["B", b1, b2]; }
       break;
     case "H1": case "H1IN": case "ROE": case "FC":
-      if (b3) runs++;
-      nb = ["B", b1, b2];
+      if (advance) { if (b3) runs++; if (b2) runs++; nb = ["B", null, b1]; }
+      else { if (b3) runs++; nb = ["B", b1, b2]; }
       break;
     case "H2":
-      if (b3) runs++;
-      if (b2) runs++;
-      nb = [null, "B", b1];
+      if (advance) { runs += (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0); nb = [null, "B", null]; }
+      else { if (b3) runs++; if (b2) runs++; nb = [null, "B", b1]; }
       break;
     case "H3":
       runs += (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0);
