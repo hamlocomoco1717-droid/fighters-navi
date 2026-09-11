@@ -193,6 +193,17 @@ button { font-family: inherit; }
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  background-repeat: no-repeat;
+  background-color: var(--scoreboard-bg);
+  background-image:
+    linear-gradient(to right, var(--scoreboard-bg) 40%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(to left, var(--scoreboard-bg) 40%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(to right, rgba(232, 197, 108, 0.55) 0%, rgba(232, 197, 108, 0) 100%),
+    linear-gradient(to left, rgba(232, 197, 108, 0.55) 0%, rgba(232, 197, 108, 0) 100%);
+  background-position: left center, right center, left center, right center;
+  background-size: 20px 100%, 20px 100%, 10px 100%, 10px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 .tabs::-webkit-scrollbar { display: none; }
 .tab-btn {
@@ -304,7 +315,21 @@ input[type="number"] { font-family: "Roboto Mono", monospace; }
 .field-row .field { flex: 1 1 140px; min-width: 110px; }
 
 /* tables */
-.table-scroll { overflow-x: auto; border-radius: 8px; }
+.table-scroll {
+  overflow-x: auto;
+  border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+  background-repeat: no-repeat;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(to right, var(--surface) 40%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(to left, var(--surface) 40%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(to right, rgba(120, 120, 120, 0.4) 0%, rgba(120, 120, 120, 0) 100%),
+    linear-gradient(to left, rgba(120, 120, 120, 0.4) 0%, rgba(120, 120, 120, 0) 100%);
+  background-position: left center, right center, left center, right center;
+  background-size: 16px 100%, 16px 100%, 8px 100%, 8px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
 table { border-collapse: collapse; width: 100%; }
 table.stat-table th, table.stat-table td {
   padding: 7px 10px;
@@ -414,7 +439,21 @@ input.cell-input.wide { width: 66px; }
 .game-score { font-family: "Roboto Mono", monospace; font-size: 15px; font-weight: 600; flex-shrink: 0; }
 
 /* mini scoreboard grid */
-.scoreboard-grid { overflow-x: auto; border-radius: 6px; background: var(--scoreboard-bg); }
+.scoreboard-grid {
+  overflow-x: auto;
+  border-radius: 6px;
+  -webkit-overflow-scrolling: touch;
+  background-repeat: no-repeat;
+  background-color: var(--scoreboard-bg);
+  background-image:
+    linear-gradient(to right, var(--scoreboard-bg) 40%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(to left, var(--scoreboard-bg) 40%, rgba(0, 0, 0, 0) 100%),
+    linear-gradient(to right, rgba(232, 197, 108, 0.55) 0%, rgba(232, 197, 108, 0) 100%),
+    linear-gradient(to left, rgba(232, 197, 108, 0.55) 0%, rgba(232, 197, 108, 0) 100%);
+  background-position: left center, right center, left center, right center;
+  background-size: 20px 100%, 20px 100%, 10px 100%, 10px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
 .scoreboard-grid table { background: var(--scoreboard-bg); border-radius: 6px; }
 .scoreboard-grid th, .scoreboard-grid td {
   font-family: "Roboto Mono", monospace;
