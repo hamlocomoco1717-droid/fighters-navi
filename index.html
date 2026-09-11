@@ -2148,7 +2148,7 @@ function renderGameDetail(g) {
         return '<span style="display:inline-flex;align-items:center;gap:2px;background:var(--accent-soft);border-radius:6px;padding:2px 3px 2px 7px;font-size:11.5px;font-weight:600;">'
           + baseNames[bi] + " " + esc(brow ? playerName(brow.playerId) : "走者")
           + (iHoldLive ? ' <button class="icon-btn" data-action="live-steal" data-base="' + bi + '" title="盗塁で1つ進める" style="width:auto;padding:0 5px;font-size:10px;">盗塁</button>'
-            + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外す">×</button>' : "")
+            + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外してアウトを1つ加える（走塁死など）">×</button>' : "")
           + "</span>";
       }).join("");
       var liveMiniSb = (function () {
@@ -2278,7 +2278,7 @@ function renderGameDetail(g) {
       + '<div class="mono" style="text-align:center;font-size:14px;margin-top:12px;color:var(--ink-muted);">合計 &nbsp;'
         + esc(topLabel) + ' <b style="color:var(--ink);font-size:18px;">' + sum(d.innings.top) + "</b> &nbsp;-&nbsp; "
         + '<b style="color:var(--ink);font-size:18px;">' + sum(d.innings.bottom) + "</b> " + esc(bottomLabel) + "</div>"
-      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。3アウトで自動的に次の半回（表→裏→次の回の表…）へ。相手の得点は下の＋で入れ、「次へ ▶」で進めます。ずれたら走者の「×」か「↩ ひとつ取り消す」で修正。すべて即保存・全員に同期。</p>';
+      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。3アウトで自動的に次の半回（表→裏→次の回の表…）へ。相手の得点は下の＋で入れ、「次へ ▶」で進めます。走塁死（タッチアウトなど）は走者の「×」でアウトも加算。単なる入力ミスの取り消しは「↩ ひとつ取り消す」で。すべて即保存・全員に同期。</p>';
   }
 
   var canEditInnings = UI.isNewUnsavedGame || UI.gameMetaEditMode;
@@ -2964,6 +2964,30 @@ function liveSteal(baseIdx) {
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
   showToast("盗塁を記録しました");
+  persistDraft();
+}
+/* 走者を「×」で外す＝走塁死としてアウトを1つ加える（3アウトなら攻守交代） */
+function liveClearBaseOut(baseIdx) {
+  var d = UI.draftGame;
+  if (!d || isNaN(baseIdx) || baseIdx < 0 || baseIdx > 2) return;
+  if (!liveGuardControl(d)) return;
+  var b = liveBasesArr().slice();
+  if (!b[baseIdx]) return;
+  var entry = {
+    type: "clearbaseout",
+    snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
+    snapBases: b.slice(), snapInning: UI.liveInning, snapHalfDone: !!UI.liveHalfDone
+  };
+  var nb = b.slice();
+  nb[baseIdx] = null;
+  UI.liveBases = nb;
+  UI.liveOuts = (UI.liveOuts || 0) + 1;
+  if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
+  UI.liveLog.push(entry);
+  if (UI.liveOuts >= 3) {
+    liveAdvanceHalf();
+    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
+  }
   persistDraft();
 }
 /* 打席結果から、塁上の動き・アウト・生還数を求める。
@@ -3924,11 +3948,7 @@ function onAppClick(e) {
     persistDraft(null);
   } else if (action === "live-clear-base") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
-    if (!liveGuardControl(UI.draftGame)) return;
-    var cbIdx = parseInt(el.getAttribute("data-base"), 10);
-    var cbArr = liveBasesArr();
-    if (cbIdx >= 0 && cbIdx < 3) { cbArr[cbIdx] = null; UI.liveBases = cbArr.slice(); }
-    persistDraft();
+    liveClearBaseOut(parseInt(el.getAttribute("data-base"), 10));
   } else if (action === "live-steal") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     liveSteal(parseInt(el.getAttribute("data-base"), 10));
