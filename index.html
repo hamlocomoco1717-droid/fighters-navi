@@ -2071,6 +2071,9 @@ function renderGameDetail(g) {
         if (n0((d.innings.top || [])[lk]) > 0 || n0((d.innings.bottom || [])[lk]) > 0) lastScored = lk;
       }
       UI.liveInning = lastScored >= 0 ? lastScored : 0;
+      /* まだ誰も得点していない＝試合の最初から入力するときは、必ず1回表から始める。
+         後攻（自チームは裏に攻撃）の場合、表は相手の攻撃なので守備状態からスタートする */
+      if (lastScored < 0) UI.liveHalfDone = (d.venue !== "away");
     }
     var li = UI.liveInning;
     var liTop = n0((d.innings.top || [])[li]);
@@ -2515,9 +2518,9 @@ function renderGameDetail(g) {
     + "</div>");
 
   return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る")) + "</button></div></div>"
-    + (liveHtml ? '<div class="card">' + liveHtml + "</div>" : "")
-    + '<div class="card">' + metaHtml + "</div>"
-    + '<div class="card">' + scoreboardHtml + "</div>"
+    + (liveHtml
+        ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card">' + metaHtml + "</div>")
+        : ('<div class="card">' + metaHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>"))
     + (highlightsHtml ? '<div class="card">' + highlightsHtml + "</div>" : "")
     + '<div class="card">' + battingHtml + "</div>"
     + '<div class="card">' + posHtml + "</div>"
