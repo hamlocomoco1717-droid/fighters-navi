@@ -754,6 +754,7 @@ var UI = {
   /* 試合中モード（打席ごとのワンタップ入力）の作業状態 */
   liveBatterRid: null,
   livePendingResult: null,
+  livePendingDir: null,
   livePendingRbi: 0,
   livePendingAdvance: 0,
   liveLog: [],
@@ -2133,6 +2134,19 @@ function renderGameDetail(g) {
       var dirBtns = dirOrder.map(function (dd) {
         return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:12px 1px;font-size:18px;font-weight:700;justify-content:center;text-align:center;' + liveDirColorStyle(dd.code) + '">' + dd.code + "</button>";
       }).join("") + '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="" style="padding:12px 1px;font-size:12px;justify-content:center;text-align:center;color:var(--ink-muted);">方向なし</button>';
+      var showGoOutStep = pend === "GO" && anyRunnerOn && UI.livePendingDir !== null;
+      var goOutTargetBtns = "";
+      if (showGoOutStep) {
+        var goBaseLabels = ["一塁走者", "二塁走者", "三塁走者"];
+        var goBasesNow = liveBasesArr();
+        goOutTargetBtns = '<button class="btn btn-sm btn-primary" data-action="live-go-out-target" data-base="" style="padding:10px 4px;grid-column:1 / -1;">打者（通常のゴロアウト）</button>'
+          + goBasesNow.map(function (rr, bi) {
+              if (!rr) return "";
+              var brow = d.batting.filter(function (b) { return b._rid === rr; })[0];
+              return '<button class="btn btn-sm" data-action="live-go-out-target" data-base="' + bi + '" style="padding:10px 4px;">'
+                + goBaseLabels[bi] + (brow ? "（" + esc(playerName(brow.playerId)) + "）" : "") + "（野選）</button>";
+            }).join("");
+      }
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
       var outsNow = UI.liveOuts || 0;
@@ -2233,8 +2247,11 @@ function renderGameDetail(g) {
               + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
             + "</div>"
             + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
-              + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
-            + (needDirNow
+              + (pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (showGoOutStep ? " → アウトになったのは？" : needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
+            + (showGoOutStep
+              ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
+                + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + goOutTargetBtns + "</div>"
+              : needDirNow
               ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 結果を選び直す</button>'
                 + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + dirBtns + "</div>"
               : '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>")
@@ -2755,6 +2772,7 @@ function liveResultShort(key) { return LIVE_RESULT_SHORT[key] || key; }
 function resetLiveInput() {
   UI.liveBatterRid = null;
   UI.livePendingResult = null;
+  UI.livePendingDir = null;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   UI.liveLog = [];
@@ -3050,8 +3068,9 @@ function liveResolvePlay(resultKey, bases, advance) {
   }
   return { bases: nb, outs: outs, runs: runs };
 }
-/* 打席結果を現在の打者の「現在の回」に1件追加。集計・アウト・走者・得点を反映し、打順を進める */
-function liveCommitAtbat(resultKey, dirCode) {
+/* 打席結果を現在の打者の「現在の回」に1件追加。集計・アウト・走者・得点を反映し、打順を進める。
+   outBaseIdx を渡すと、その塁の走者を（打者の代わりに）アウトにする野選として記録する */
+function liveCommitAtbat(resultKey, dirCode, outBaseIdx) {
   var d = UI.draftGame;
   if (!d || !Array.isArray(d.batting) || d.batting.length === 0) return;
   if (!liveGuardControl(d)) return;
@@ -3059,8 +3078,6 @@ function liveCommitAtbat(resultKey, dirCode) {
   var row = d.batting.filter(function (b) { return b._rid === rid; })[0];
   if (!row) { row = d.batting[0]; rid = row._rid; }
   var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
-  var baseToken = buildAtbatToken(resultKey, dirCode || "");
-  if (!baseToken) return;
 
   var snapInnings = clone(d.innings);
   var snapOuts = UI.liveOuts || 0;
@@ -3069,16 +3086,29 @@ function liveCommitAtbat(resultKey, dirCode) {
   var snapHalfDone = !!UI.liveHalfDone;
   var prevRbi = n0(row.rbi);
 
+  var effectiveResultKey = resultKey;
+  var basesForPlay = snapBases;
+  var extraOut = 0;
+  if (typeof outBaseIdx === "number" && outBaseIdx >= 0 && outBaseIdx <= 2 && snapBases[outBaseIdx]) {
+    effectiveResultKey = "FC";
+    basesForPlay = snapBases.slice();
+    basesForPlay[outBaseIdx] = null;
+    extraOut = 1;
+  }
+  var baseToken = buildAtbatToken(effectiveResultKey, dirCode || "");
+  if (!baseToken) return;
+
   var advanceLevel = UI.livePendingAdvance || 0;
   var manualAdvance = advanceLevel > 0;
-  var play = liveResolvePlay(resultKey, snapBases, advanceLevel);
+  var play = liveResolvePlay(effectiveResultKey, basesForPlay, advanceLevel);
+  play.outs += extraOut;
   var endsHalf = (snapOuts + play.outs) >= 3;
   var manualRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
   /* アウトになる打球（ゴロ・フライ・ライナー・野選）で打点を手入力したとき＝
      進塁打／犠飛などで走者が生還したケース。「進塁あり」トグルを使っていない場合のみ、
      3塁側から手入力分の走者を生還させる（トグル使用時は liveResolvePlay 側で進塁済み） */
   var forcedRuns = 0;
-  if (!manualAdvance && (resultKey === "GO" || resultKey === "FLY" || resultKey === "LINE" || resultKey === "FC") && manualRbi > 0) {
+  if (!manualAdvance && (effectiveResultKey === "GO" || effectiveResultKey === "FLY" || effectiveResultKey === "LINE" || effectiveResultKey === "FC") && manualRbi > 0) {
     var nb2 = play.bases.slice();
     for (var bp = 2; bp >= 0 && forcedRuns < manualRbi; bp--) {
       if (nb2[bp] && nb2[bp] !== "B") { nb2[bp] = null; forcedRuns++; }
@@ -3125,6 +3155,7 @@ function liveCommitAtbat(resultKey, dirCode) {
   var nextIdx = (idx + 1) % d.batting.length;
   UI.liveBatterRid = d.batting[nextIdx] ? d.batting[nextIdx]._rid : null;
   UI.livePendingResult = null;
+  UI.livePendingDir = null;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   persistDraft();
@@ -3191,6 +3222,7 @@ function liveUndoAtbat() {
   if (typeof last.snapInning === "number") UI.liveInning = last.snapInning;
   UI.liveHalfDone = !!last.snapHalfDone;
   UI.livePendingResult = null;
+  UI.livePendingDir = null;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   persistDraft();
@@ -3919,12 +3951,28 @@ function onAppClick(e) {
     var lrKey = el.getAttribute("data-key");
     var lrRt = ATBAT_RESULT_TYPES.filter(function (r) { return r.key === lrKey; })[0];
     if (!lrRt) return;
+    UI.livePendingDir = null;
     if (lrRt.needsDir) { UI.livePendingResult = lrKey; renderApp(); }
     else { liveCommitAtbat(lrKey, ""); }
   } else if (action === "live-batter-dir") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!UI.livePendingResult) return;
-    liveCommitAtbat(UI.livePendingResult, el.getAttribute("data-dir") || "");
+    var dirChosen = el.getAttribute("data-dir") || "";
+    if (UI.livePendingResult === "GO" && liveBasesArr().some(function (x) { return !!x; })) {
+      UI.livePendingDir = dirChosen;
+      renderApp();
+      return;
+    }
+    liveCommitAtbat(UI.livePendingResult, dirChosen);
+  } else if (action === "live-go-out-target") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    if (!UI.livePendingResult) return;
+    var goBaseAttr = el.getAttribute("data-base");
+    var goBaseIdx = goBaseAttr === "" ? null : parseInt(goBaseAttr, 10);
+    liveCommitAtbat(UI.livePendingResult, UI.livePendingDir || "", goBaseIdx);
+  } else if (action === "live-cancel-go-out") {
+    UI.livePendingDir = null;
+    renderApp();
   } else if (action === "live-rbi") {
     var lrbiD = parseInt(el.getAttribute("data-delta"), 10) || 0;
     UI.livePendingRbi = Math.max(0, Math.min(4, (UI.livePendingRbi || 0) + lrbiD));
@@ -3934,6 +3982,7 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "live-cancel-pending") {
     UI.livePendingResult = null;
+    UI.livePendingDir = null;
     renderApp();
   } else if (action === "live-manual-out") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
