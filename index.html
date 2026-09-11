@@ -755,6 +755,7 @@ var UI = {
   liveBatterRid: null,
   livePendingResult: null,
   livePendingDir: null,
+  livePendingGoOuts: [],
   livePendingRbi: 0,
   livePendingAdvance: 0,
   liveLog: [],
@@ -2136,17 +2137,28 @@ function renderGameDetail(g) {
       }).join("") + '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="" style="padding:12px 1px;font-size:12px;justify-content:center;text-align:center;color:var(--ink-muted);">方向なし</button>';
       var showGoOutStep = pend === "GO" && anyRunnerOn && UI.livePendingDir !== null;
       var goOutTargetBtns = "";
+      var goOutCommitHtml = "";
       if (showGoOutStep) {
+        var goSel = UI.livePendingGoOuts || [];
         var goBaseLabels = ["一塁走者", "二塁走者", "三塁走者"];
         var goBasesNow = liveBasesArr();
-        goOutTargetBtns = '<button class="btn btn-sm btn-primary" data-action="live-go-out-target" data-base="" style="padding:10px 4px;grid-column:1 / -1;">打者（通常のゴロアウト）</button>'
+        var goChip = function (key, label) {
+          var isSel = goSel.indexOf(key) !== -1;
+          return '<button class="btn btn-sm' + (isSel ? " btn-primary" : "") + '" data-action="live-go-toggle-out" data-target="' + key + '" style="padding:10px 4px;">'
+            + (isSel ? "✓ " : "") + label + "</button>";
+        };
+        goOutTargetBtns = goChip("batter", "打者")
           + goBasesNow.map(function (rr, bi) {
               if (!rr) return "";
               var brow = d.batting.filter(function (b) { return b._rid === rr; })[0];
-              return '<button class="btn btn-sm" data-action="live-go-out-target" data-base="' + bi + '" style="padding:10px 4px;">'
-                + goBaseLabels[bi] + (brow ? "（" + esc(playerName(brow.playerId)) + "）" : "") + "（アウト）</button>";
-            }).join("")
-          + '<button class="btn btn-sm" data-action="live-go-out-target" data-base="safe" style="padding:10px 4px;grid-column:1 / -1;">誰もアウトにならず全員セーフ（野選）</button>';
+              return goChip(String(bi), goBaseLabels[bi] + (brow ? "（" + esc(playerName(brow.playerId)) + "）" : ""));
+            }).join("");
+        var goOutCount = goSel.length;
+        var goOutCommitLabel = goOutCount === 0 ? "誰もアウトにならず全員セーフで記録（野選）"
+          : goOutCount === 1 ? "この内容で記録する（アウト1）"
+          : "この内容で記録する（アウト" + goOutCount + "・併殺扱い）";
+        goOutCommitHtml = '<button class="btn btn-primary btn-sm" data-action="live-go-commit-out" style="width:100%;margin-top:8px;">' + goOutCommitLabel + "</button>"
+          + '<p style="font-size:10.5px;color:var(--ink-muted);margin:4px 0 0;">複数選べます（満塁での併殺など）。何も選ばなければ全員セーフ扱いになります。</p>';
       }
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
@@ -2252,6 +2264,7 @@ function renderGameDetail(g) {
             + (showGoOutStep
               ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
                 + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + goOutTargetBtns + "</div>"
+                + goOutCommitHtml
               : needDirNow
               ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 結果を選び直す</button>'
                 + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + dirBtns + "</div>"
@@ -2774,6 +2787,7 @@ function resetLiveInput() {
   UI.liveBatterRid = null;
   UI.livePendingResult = null;
   UI.livePendingDir = null;
+  UI.livePendingGoOuts = [];
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   UI.liveLog = [];
@@ -3070,8 +3084,9 @@ function liveResolvePlay(resultKey, bases, advance) {
   return { bases: nb, outs: outs, runs: runs };
 }
 /* 打席結果を現在の打者の「現在の回」に1件追加。集計・アウト・走者・得点を反映し、打順を進める。
-   outBaseIdx を渡すと、その塁の走者を（打者の代わりに）アウトにする野選として記録する */
-function liveCommitAtbat(resultKey, dirCode, outBaseIdx) {
+   goOutSpec = { batter: bool, runners: [塁idx,...] } を渡すと、ゴロで誰が実際に
+   アウトになったか（打者・特定の走者・複数同時＝併殺）を指定して記録できる */
+function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
   var d = UI.draftGame;
   if (!d || !Array.isArray(d.batting) || d.batting.length === 0) return;
   if (!liveGuardControl(d)) return;
@@ -3090,18 +3105,21 @@ function liveCommitAtbat(resultKey, dirCode, outBaseIdx) {
   /* playKey: 塁上の動き・アウト数の計算に使うキー。tokenKey: 打席セルに残す表記。
      ゴロで打者以外の走者をアウトにした場合、実際には打者は生きるので塁の動きは
      野選と同じ式（basesForPlay を野選扱いで解決）を使うが、誰かがアウトになった
-     以上は打席の記録としては「ゴ」のまま残す（＝本当に誰もアウトにならなかった
-     ときだけ「野選」表記にする） */
+     以上は打席の記録としては「ゴ」のまま残す（１人アウトなら「ゴ」、2人以上
+     （満塁での併殺など）は「併」。本当に誰もアウトにならなかったときだけ
+     呼び出し側が resultKey="FC" を渡してくる＝野選表記のまま） */
   var playKey = resultKey;
   var tokenKey = resultKey;
   var basesForPlay = snapBases;
   var extraOut = 0;
-  if (typeof outBaseIdx === "number" && outBaseIdx >= 0 && outBaseIdx <= 2 && snapBases[outBaseIdx]) {
-    playKey = "FC";
-    tokenKey = "GO";
+  if (goOutSpec && (goOutSpec.batter || (goOutSpec.runners && goOutSpec.runners.length))) {
+    var goRunners = (goOutSpec.runners || []).filter(function (i) { return i >= 0 && i <= 2 && snapBases[i]; });
     basesForPlay = snapBases.slice();
-    basesForPlay[outBaseIdx] = null;
-    extraOut = 1;
+    goRunners.forEach(function (i) { basesForPlay[i] = null; });
+    var goTotalOuts = (goOutSpec.batter ? 1 : 0) + goRunners.length;
+    playKey = goOutSpec.batter ? "GO" : "FC";
+    extraOut = goRunners.length;
+    tokenKey = goTotalOuts >= 2 ? "DP" : "GO";
   }
   var baseToken = buildAtbatToken(tokenKey, dirCode || "");
   if (!baseToken) return;
@@ -3164,6 +3182,7 @@ function liveCommitAtbat(resultKey, dirCode, outBaseIdx) {
   UI.liveBatterRid = d.batting[nextIdx] ? d.batting[nextIdx]._rid : null;
   UI.livePendingResult = null;
   UI.livePendingDir = null;
+  UI.livePendingGoOuts = [];
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   persistDraft();
@@ -3231,6 +3250,7 @@ function liveUndoAtbat() {
   UI.liveHalfDone = !!last.snapHalfDone;
   UI.livePendingResult = null;
   UI.livePendingDir = null;
+  UI.livePendingGoOuts = [];
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
   persistDraft();
@@ -3960,6 +3980,7 @@ function onAppClick(e) {
     var lrRt = ATBAT_RESULT_TYPES.filter(function (r) { return r.key === lrKey; })[0];
     if (!lrRt) return;
     UI.livePendingDir = null;
+  UI.livePendingGoOuts = [];
     if (lrRt.needsDir) { UI.livePendingResult = lrKey; renderApp(); }
     else { liveCommitAtbat(lrKey, ""); }
   } else if (action === "live-batter-dir") {
@@ -3972,19 +3993,28 @@ function onAppClick(e) {
       return;
     }
     liveCommitAtbat(UI.livePendingResult, dirChosen);
-  } else if (action === "live-go-out-target") {
+  } else if (action === "live-go-toggle-out") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    var goTarget = el.getAttribute("data-target");
+    if (!Array.isArray(UI.livePendingGoOuts)) UI.livePendingGoOuts = [];
+    var goIdx = UI.livePendingGoOuts.indexOf(goTarget);
+    if (goIdx === -1) UI.livePendingGoOuts.push(goTarget); else UI.livePendingGoOuts.splice(goIdx, 1);
+    renderApp();
+  } else if (action === "live-go-commit-out") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!UI.livePendingResult) return;
-    var goBaseAttr = el.getAttribute("data-base");
+    var goSelNow = Array.isArray(UI.livePendingGoOuts) ? UI.livePendingGoOuts : [];
     var goDir = UI.livePendingDir || "";
-    if (goBaseAttr === "safe") {
+    var goBatterOut = goSelNow.indexOf("batter") !== -1;
+    var goRunnerOuts = goSelNow.filter(function (t) { return t !== "batter"; }).map(function (t) { return parseInt(t, 10); });
+    if (!goBatterOut && goRunnerOuts.length === 0) {
       liveCommitAtbat("FC", goDir);
     } else {
-      var goBaseIdx = goBaseAttr === "" ? null : parseInt(goBaseAttr, 10);
-      liveCommitAtbat(UI.livePendingResult, goDir, goBaseIdx);
+      liveCommitAtbat(UI.livePendingResult, goDir, { batter: goBatterOut, runners: goRunnerOuts });
     }
   } else if (action === "live-cancel-go-out") {
     UI.livePendingDir = null;
+  UI.livePendingGoOuts = [];
     renderApp();
   } else if (action === "live-rbi") {
     var lrbiD = parseInt(el.getAttribute("data-delta"), 10) || 0;
@@ -3996,6 +4026,7 @@ function onAppClick(e) {
   } else if (action === "live-cancel-pending") {
     UI.livePendingResult = null;
     UI.livePendingDir = null;
+  UI.livePendingGoOuts = [];
     renderApp();
   } else if (action === "live-manual-out") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
