@@ -4183,7 +4183,10 @@ function onAppClick(e) {
         resetLiveInput();
         UI.liveTakeover = true;
         UI.liveInning = null;
-        if (!liveControlHolder(UI.draftGame)) liveClaimControl(UI.draftGame);
+        /* 「入力を引き継ぐ」は暗証番号を通した時点で無条件にロックを奪う。
+           他デバイスが保持中でもここで確実に自分のものにする（そうしないと
+           試合中モードの画面がロック中表示のままになり、何も起きないように見える） */
+        liveClaimControl(UI.draftGame);
         persistDraft();
       } else {
         renderApp();
