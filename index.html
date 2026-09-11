@@ -2355,7 +2355,7 @@ function renderGameDetail(g) {
       var isEditingThisRow = canEditAtbats && UI.editingAtbatsRow === b._rid;
       var row = "<tr" + (isEditingThisRow ? ' class="atbat-editing-row"' : "") + ">"
         + '<td class="player-name-cell">' + esc(playerName(b.playerId))
-          + ((UI.readOnly || !UI.isNewUnsavedGame) ? "" :
+          + (!canEditAtbats ? "" :
               ' <button class="icon-btn" data-action="move-brow" data-rid="' + b._rid + '" data-dir="-1"' + (bIdx === 0 ? " disabled" : "") + ' title="打順を1つ上げる">▲</button>'
             + ' <button class="icon-btn" data-action="move-brow" data-rid="' + b._rid + '" data-dir="1"' + (bIdx === d.batting.length - 1 ? " disabled" : "") + ' title="打順を1つ下げる">▼</button>'
             + ' <button class="icon-btn" data-action="rm-brow" data-rid="' + b._rid + '" title="削除">×</button>')
@@ -2384,7 +2384,7 @@ function renderGameDetail(g) {
 
   /* ---- 打順まとめて登録（新規追加中のみ） ---- */
   var bulkLineupHtml = "";
-  if (!UI.readOnly && UI.isNewUnsavedGame) {
+  if (canEditAtbats) {
     var allPlayerOpts = sortPlayersForAdd(STATE.players.filter(function (p) { return usedBatterIds.indexOf(p.id) === -1; }), battingGameCounts())
       .map(function (p) { return '<option value="' + p.id + '">' + (p.number != null && p.number !== "" ? "#" + esc(p.number) + " " : "") + esc(p.name) + "</option>"; }).join("");
     var BULK_SLOTS = 15;
@@ -2416,7 +2416,7 @@ function renderGameDetail(g) {
     + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">犠打</th>"
     + "</tr></thead><tbody>" + battingRows + "</tbody></table></div>"
     + (editingBatter ? renderAtbatEditorPanel(editingBatter, battingInningCount) : "")
-    + ((UI.readOnly || !UI.isNewUnsavedGame) ? "" : '<div class="field-row add-row" style="margin-top:10px;align-items:flex-end;">'
+    + (!canEditAtbats ? "" : '<div class="field-row add-row" style="margin-top:10px;align-items:flex-end;">'
       + '<div class="field" style="flex:1 1 220px;"><label>選手を1人ずつ追加</label><select id="add-batter-select"><option value="">選手を選択…</option>' + battingOptions + "</select></div>"
       + '<button class="btn btn-sm" data-action="add-brow">＋ 追加</button></div>')
     + bulkLineupHtml;
@@ -3960,7 +3960,7 @@ function onAppClick(e) {
     showToast("入力担当になりました");
     persistDraft();
   } else if (action === "copy-prev-lineup") {
-    if (!UI.draftGame || !UI.isNewUnsavedGame) return;
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
     var prevLg = prevGameForDraft();
     if (!prevLg) { showToast("引用できる前回の試合がありません", true); return; }
     if ((UI.draftGame.batting || []).length > 0) {
@@ -3973,7 +3973,7 @@ function onAppClick(e) {
       applyPrevLineup(prevLg);
     }
   } else if (action === "add-brow") {
-    if (!UI.draftGame || !UI.isNewUnsavedGame) return;
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
     var sel = document.getElementById("add-batter-select");
     if (!sel || !sel.value) return;
     var addedPlayer = playerById(sel.value);
@@ -3981,7 +3981,7 @@ function onAppClick(e) {
     UI.draftGame.batting.push({ _rid: uid(), playerId: sel.value, position: defaultPos, posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0 });
     persistDraft();
   } else if (action === "bulk-add-lineup") {
-    if (!UI.draftGame || !UI.isNewUnsavedGame) return;
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
     var bulkSlots = document.querySelectorAll(".bulk-lineup-slot");
     var bulkSeen = {};
     UI.draftGame.batting.forEach(function (b) { bulkSeen[b.playerId] = true; });
@@ -3998,13 +3998,13 @@ function onAppClick(e) {
     if (bulkAdded > 0) persistDraft(bulkAdded + "人を打順に追加しました");
     else { showToast("追加する選手が選ばれていません", true); renderApp(); }
   } else if (action === "rm-brow") {
-    if (!UI.draftGame) return;
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
     var brid = el.getAttribute("data-rid");
     UI.draftGame.batting = UI.draftGame.batting.filter(function (b) { return b._rid !== brid; });
     if (UI.editingAtbatsRow === brid) UI.editingAtbatsRow = null;
     persistDraft();
   } else if (action === "move-brow") {
-    if (!UI.draftGame || !UI.isNewUnsavedGame) return;
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
     var mvRid = el.getAttribute("data-rid");
     var mvDir = parseInt(el.getAttribute("data-dir"), 10);
     var mvArr = UI.draftGame.batting;
