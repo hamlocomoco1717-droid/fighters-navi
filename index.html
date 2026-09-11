@@ -2997,7 +2997,11 @@ function liveResolvePlay(resultKey, bases, advance) {
       nb = [null, b1, b2];
       break;
     case "DP":
-      if (b1) { outs = 2; nb = [null, b2, b3]; }
+      if (b1) {
+        outs = 2;
+        if (advance) { if (b3) runs++; nb = [null, null, b2]; }
+        else { nb = [null, b2, b3]; }
+      }
       else if (b2) { outs = 2; nb = [b1, null, b3]; }
       else if (b3) { outs = 2; nb = [b1, b2, null]; }
       else { outs = 1; nb = [b1, b2, b3]; }
