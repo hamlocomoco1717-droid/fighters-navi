@@ -2322,7 +2322,9 @@ function renderGameDetail(g) {
               + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
             + "</div>"
             + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次へ ▶ 自チームの攻撃へ</button>'
-            + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
+            + (d.venue === "away"
+                ? '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
+                : (li > 0 ? '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">前の回（' + li + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>" : ""))
             + undoBtnHtml
             + endGameBtnHtml
             + '<hr class="rule" style="margin:14px 0;">';
