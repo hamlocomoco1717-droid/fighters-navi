@@ -2215,9 +2215,9 @@ function renderGameDetail(g) {
       /* ---- 守備側（相手の打席）の詳細入力：相手の打者名は追わず、自チームの
          現在の投手成績だけを自動集計する ---- */
       var defResultTypes = [
-        { key: "H1", label: "安打" }, { key: "H2", label: "二塁打" }, { key: "H3", label: "三塁打" },
-        { key: "HR", label: "本塁打" }, { key: "GO", label: "ゴロ" }, { key: "FLY", label: "フライ" },
-        { key: "ROE", label: "エラー" }, { key: "BB", label: "四球" }, { key: "SO", label: "三振" }
+        { key: "GO", label: "ゴロ" }, { key: "FLY", label: "フライ" }, { key: "SO", label: "三振" },
+        { key: "ROE", label: "エラー" }, { key: "BB", label: "四球" }, { key: "H1", label: "安打" },
+        { key: "H2", label: "二塁打" }, { key: "H3", label: "三塁打" }, { key: "HR", label: "本塁打" }
       ];
       var defPitcherOptions = d.pitching.map(function (p) {
         return '<option value="' + p._rid + '"' + (p._rid === UI.liveDefPitcherRid ? " selected" : "") + ">"
