@@ -2291,6 +2291,7 @@ function renderGameDetail(g) {
         return '<span style="display:inline-flex;align-items:center;gap:2px;background:var(--accent-soft);border-radius:6px;padding:2px 3px 2px 7px;font-size:11.5px;font-weight:600;">'
           + baseNames[bi] + " " + esc(brow ? playerNameNum(brow.playerId) : "走者")
           + (iHoldLive ? ' <button class="icon-btn" data-action="live-steal" data-base="' + bi + '" title="1つ進める（盗塁数には数えません）" style="width:auto;padding:0 5px;font-size:10px;">進塁</button>'
+            + ' <button class="icon-btn" data-action="live-retreat" data-base="' + bi + '" title="1つ戻す（進塁のし過ぎなどの訂正用）" style="width:auto;padding:0 5px;font-size:10px;">戻す</button>'
             + ' <button class="icon-btn" data-action="live-clear-base" data-base="' + bi + '" title="この走者を外してアウトを1つ加える（走塁死など）">×</button>' : "")
           + "</span>";
       }).join("");
@@ -3160,6 +3161,30 @@ function liveSteal(baseIdx, creditSb) {
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
   showToast(creditSb ? "盗塁を記録しました" : "進塁を記録しました");
+  persistDraft();
+}
+/* 走者を1つ戻す（進塁のし過ぎなどの訂正用、盗塁の逆）。1塁走者を戻す先の塁は
+   ないので、その場合は走者自体を取り消す（アウトにはしない） */
+function liveRetreatRunner(baseIdx) {
+  var d = UI.draftGame;
+  if (!d || isNaN(baseIdx) || baseIdx < 0 || baseIdx > 2) return;
+  if (!liveGuardControl(d)) return;
+  var b = liveBasesArr().slice();
+  var rid = b[baseIdx];
+  if (!rid) return;
+  if (baseIdx > 0 && b[baseIdx - 1]) { showToast("戻る塁に走者がいます", true); return; }
+  var entry = {
+    type: "retreat",
+    snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
+    snapBases: b.slice(), snapInning: UI.liveInning, snapHalfDone: !!UI.liveHalfDone
+  };
+  var nb = b.slice();
+  nb[baseIdx] = null;
+  if (baseIdx > 0) nb[baseIdx - 1] = rid;
+  UI.liveBases = nb;
+  if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
+  UI.liveLog.push(entry);
+  showToast("走者を戻しました");
   persistDraft();
 }
 /* 走者を「×」で外す＝走塁死としてアウトを1つ加える（3アウトなら攻守交代） */
@@ -4359,6 +4384,9 @@ function onAppClick(e) {
   } else if (action === "live-steal") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     liveSteal(parseInt(el.getAttribute("data-base"), 10), false);
+  } else if (action === "live-retreat") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    liveRetreatRunner(parseInt(el.getAttribute("data-base"), 10));
   } else if (action === "live-steal-btn") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     var stealEligible = liveBasesArr().map(function (x, i) { return x && (i === 2 || !liveBasesArr()[i + 1]) ? i : -1; }).filter(function (i) { return i !== -1; });
