@@ -2150,8 +2150,8 @@ function renderGameDetail(g) {
         var ofFirst = ["左", "中", "右", "一", "二", "三", "遊", "投", "捕"];
         dirOrder = ofFirst.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       } else if (pend === "SAC") {
-        var infOnly = ["一", "二", "三", "遊", "投", "捕"];
-        dirOrder = infOnly.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
+        var sacOrder = ["一", "二", "三", "遊", "投", "捕", "左", "中", "右"];
+        dirOrder = sacOrder.map(function (c) { return ATBAT_DIRECTIONS.filter(function (dd) { return dd.code === c; })[0]; }).filter(Boolean);
       }
       var dirBtns = dirOrder.map(function (dd) {
         return '<button class="btn btn-sm" data-action="live-batter-dir" data-dir="' + dd.code + '" style="padding:12px 1px;font-size:18px;font-weight:700;justify-content:center;text-align:center;' + liveDirColorStyle(dd.code) + '">' + dd.code + "</button>";
@@ -2761,6 +2761,11 @@ function buildAtbatToken(resultKey, dirCode) {
   var rt = ATBAT_RESULT_TYPES.filter(function (r) { return r.key === resultKey; })[0];
   if (!rt) return null;
   if (rt.token) return rt.token;
+  /* 犠打は外野（左中右）を選ぶと、走者を進めるだけの犠打ではなく生還させる
+     犠飛として記録する（打数に含まれる・出塁率には影響しない扱い） */
+  if (resultKey === "SAC" && (dirCode === "左" || dirCode === "中" || dirCode === "右")) {
+    return dirCode + "犠飛";
+  }
   return (dirCode || "") + rt.suffix;
 }
 function stripAtbatRbiMark(tok) {
@@ -2791,6 +2796,7 @@ function classifyAtbatToken(tok) {
   if (base === "四球") return "BB";
   if (base === "死球") return "HBP";
   if (base === "三振") return "SO";
+  if (base.indexOf("犠飛") !== -1) return "SACFLY";
   if (base.indexOf("犠") !== -1) return "SAC";
   var last = base.slice(-1);
   if (last === "本" || base === "本塁打") return "HR";
