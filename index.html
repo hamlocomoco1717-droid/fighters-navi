@@ -759,6 +759,7 @@ var UI = {
   livePendingResult: null,
   livePendingDir: null,
   livePendingGoOuts: [],
+  livePendingSacAdv: null,
   liveStealPickerOpen: false,
   livePendingRbi: 0,
   livePendingAdvance: 0,
@@ -2185,6 +2186,25 @@ function renderGameDetail(g) {
           + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + goOutTargetBtns + "</div>";
         goOutCommitHtml = '<button class="btn btn-primary btn-sm" data-action="live-go-commit-out" style="width:100%;margin-top:8px;font-weight:700;">' + goOutCommitLabel + "</button>";
       }
+      var showSacAdvStep = pend === "SAC" && UI.livePendingDir !== null && Array.isArray(UI.livePendingSacAdv);
+      var sacAdvTargetBtns = "";
+      var sacAdvCommitHtml = "";
+      if (showSacAdvStep) {
+        var sacSel = UI.livePendingSacAdv || [];
+        var sacBaseLabels = ["一塁走者", "二塁走者", "三塁走者"];
+        var sacBasesNow2 = liveBasesArr();
+        sacAdvTargetBtns = sacBasesNow2.map(function (rr, bi) {
+          if (!rr) return "";
+          var brow = d.batting.filter(function (b) { return b._rid === rr; })[0];
+          var isSel = sacSel.indexOf(bi) !== -1;
+          return '<button class="btn btn-sm' + (isSel ? " btn-primary" : "") + '" data-action="live-sac-toggle-adv" data-base="' + bi + '" style="padding:10px 4px;text-align:left;font-weight:' + (isSel ? "700" : "400") + ';">'
+            + (isSel ? "☑ " : "☐ ") + sacBaseLabels[bi] + (brow ? "（" + esc(playerNameNum(brow.playerId)) + "）" : "") + "</button>";
+        }).join("");
+        sacAdvTargetBtns = '<div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:2px;">実際に進塁した走者にチェック</div>'
+          + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:8px;">外すとその走者は元の塁に残ります（打者は必ずアウト）</div>'
+          + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + sacAdvTargetBtns + "</div>";
+        sacAdvCommitHtml = '<button class="btn btn-primary btn-sm" data-action="live-sac-commit-adv" style="width:100%;margin-top:8px;font-weight:700;">✔ この通りに記録</button>';
+      }
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
       var advanceToggleHtml = anyRunnerOn ? (function () {
         var advLv = UI.livePendingAdvance || 0;
@@ -2368,7 +2388,7 @@ function renderGameDetail(g) {
             + "</div>"
             + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
               + (showStealPicker ? '　<b style="color:var(--ink);">盗塁</b> → 走者を選ぶ'
-                : pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (showGoOutStep ? " → アウトになったのは？" : needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
+                : pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (showGoOutStep ? " → アウトになったのは？" : showSacAdvStep ? " → 走者は進んだ？" : needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
             + (showStealPicker
               ? '<button class="btn btn-sm" data-action="live-steal-cancel" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← キャンセル</button>'
                 + '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px;">盗塁したのはどの走者？</div>'
@@ -2377,6 +2397,10 @@ function renderGameDetail(g) {
               ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
                 + goOutTargetBtns
                 + goOutCommitHtml
+              : showSacAdvStep
+              ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
+                + sacAdvTargetBtns
+                + sacAdvCommitHtml
               : needDirNow
               ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 結果を選び直す</button>'
                 + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + dirBtns + "</div>"
@@ -2924,6 +2948,7 @@ function resetLiveInput() {
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.livePendingSacAdv = null;
   UI.liveStealPickerOpen = false;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
@@ -3239,10 +3264,30 @@ function liveResolvePlay(resultKey, bases, advance) {
   }
   return { bases: nb, outs: outs, runs: runs };
 }
+/* 犠打で「実際に進塁した走者」が明示指定されたときの塁上の動き。打者は必ずアウト。
+   チェックした走者だけ1つ進め（3塁走者は生還）、それ以外はそのまま元の塁に残る。
+   矛盾した指定（進塁先がふさがっている等）で走者が消えないよう、3塁側から
+   順に解決し、進塁先が既に埋まっていればその場に留める。 */
+function liveResolveSacAdvance(bases, advIdxs) {
+  var advSet = {};
+  (advIdxs || []).forEach(function (i) { advSet[i] = true; });
+  var nb = [null, null, null], runs = 0;
+  for (var i = 2; i >= 0; i--) {
+    if (!bases[i]) continue;
+    if (advSet[i] && (i === 2 || !nb[i + 1])) {
+      if (i === 2) runs++; else nb[i + 1] = bases[i];
+    } else {
+      nb[i] = bases[i];
+    }
+  }
+  return { bases: nb, outs: 1, runs: runs };
+}
 /* 打席結果を現在の打者の「現在の回」に1件追加。集計・アウト・走者・得点を反映し、打順を進める。
    goOutSpec = { batter: bool, runners: [塁idx,...] } を渡すと、ゴロで誰が実際に
-   アウトになったか（打者・特定の走者・複数同時＝併殺）を指定して記録できる */
-function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
+   アウトになったか（打者・特定の走者・複数同時＝併殺）を指定して記録できる。
+   sacAdvSpec = [塁idx,...] を渡すと、犠打で実際に進塁した走者を明示指定できる
+   （複数走者がいるときに全員が必ず1つ進むとは限らないため）。 */
+function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec) {
   var d = UI.draftGame;
   if (!d || !Array.isArray(d.batting) || d.batting.length === 0) return;
   if (!liveGuardControl(d)) return;
@@ -3282,7 +3327,9 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
 
   var advanceLevel = UI.livePendingAdvance || 0;
   var manualAdvance = advanceLevel > 0;
-  var play = liveResolvePlay(playKey, basesForPlay, advanceLevel);
+  var play = (playKey === "SAC" && Array.isArray(sacAdvSpec))
+    ? liveResolveSacAdvance(basesForPlay, sacAdvSpec)
+    : liveResolvePlay(playKey, basesForPlay, advanceLevel);
   play.outs += extraOut;
   var endsHalf = (snapOuts + play.outs) >= 3;
   var manualRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
@@ -3298,9 +3345,9 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
     play.bases = nb2;
     play.runs += forcedRuns;
   }
-  /* 3アウト目で終わる打球は、「進塁あり」トグルか打点の手入力で明示的に確認された
-     生還だけを得点にする（タイミングプレーの誤カウント防止） */
-  var explicitlyConfirmed = manualAdvance || manualRbi > 0;
+  /* 3アウト目で終わる打球は、「進塁あり」トグルか打点の手入力、または犠打の
+     進塁走者チェックで明示的に確認された生還だけを得点にする（タイミングプレーの誤カウント防止） */
+  var explicitlyConfirmed = manualAdvance || manualRbi > 0 || (playKey === "SAC" && Array.isArray(sacAdvSpec));
   var runsThisPlay = (play.outs > 0 && endsHalf && !explicitlyConfirmed) ? 0 : play.runs;
   var autoRbi = (resultKey === "ROE") ? 0 : runsThisPlay;
   var rbi = manualRbi > 0 ? manualRbi : autoRbi;
@@ -3339,6 +3386,7 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.livePendingSacAdv = null;
   UI.liveStealPickerOpen = false;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
@@ -3472,6 +3520,7 @@ function liveUndoAtbat() {
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.livePendingSacAdv = null;
   UI.liveStealPickerOpen = false;
   UI.livePendingRbi = 0;
   UI.livePendingAdvance = 0;
@@ -4203,6 +4252,7 @@ function onAppClick(e) {
     if (!lrRt) return;
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.livePendingSacAdv = null;
   UI.liveStealPickerOpen = false;
     if (lrRt.needsDir) { UI.livePendingResult = lrKey; renderApp(); }
     else { liveCommitAtbat(lrKey, ""); }
@@ -4215,7 +4265,30 @@ function onAppClick(e) {
       renderApp();
       return;
     }
+    if (UI.livePendingResult === "SAC" && ["左", "中", "右"].indexOf(dirChosen) === -1) {
+      var sacBasesNow = liveBasesArr();
+      var sacRunnerIdxs = [0, 1, 2].filter(function (i) { return !!sacBasesNow[i]; });
+      if (sacRunnerIdxs.length >= 2) {
+        UI.livePendingDir = dirChosen;
+        UI.livePendingSacAdv = sacRunnerIdxs.slice();
+        renderApp();
+        return;
+      }
+    }
     liveCommitAtbat(UI.livePendingResult, dirChosen);
+  } else if (action === "live-sac-toggle-adv") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    var sacBase = parseInt(el.getAttribute("data-base"), 10);
+    if (!Array.isArray(UI.livePendingSacAdv)) UI.livePendingSacAdv = [];
+    var sacIdx = UI.livePendingSacAdv.indexOf(sacBase);
+    if (sacIdx === -1) UI.livePendingSacAdv.push(sacBase); else UI.livePendingSacAdv.splice(sacIdx, 1);
+    renderApp();
+  } else if (action === "live-sac-commit-adv") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    if (!UI.livePendingResult) return;
+    var sacDir = UI.livePendingDir || "";
+    var sacAdvNow = Array.isArray(UI.livePendingSacAdv) ? UI.livePendingSacAdv.slice() : [];
+    liveCommitAtbat(UI.livePendingResult, sacDir, null, sacAdvNow);
   } else if (action === "live-go-toggle-out") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     var goTarget = el.getAttribute("data-target");
@@ -4238,6 +4311,7 @@ function onAppClick(e) {
   } else if (action === "live-cancel-go-out") {
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.livePendingSacAdv = null;
   UI.liveStealPickerOpen = false;
     renderApp();
   } else if (action === "live-skip-batter") {
@@ -4249,6 +4323,7 @@ function onAppClick(e) {
     UI.livePendingResult = null;
     UI.livePendingDir = null;
     UI.livePendingGoOuts = [];
+    UI.livePendingSacAdv = null;
     UI.liveStealPickerOpen = false;
     UI.livePendingRbi = 0;
     UI.livePendingAdvance = 0;
@@ -4264,6 +4339,7 @@ function onAppClick(e) {
     UI.livePendingResult = null;
     UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
+  UI.livePendingSacAdv = null;
   UI.liveStealPickerOpen = false;
     renderApp();
   } else if (action === "live-manual-out") {
