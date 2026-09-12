@@ -753,6 +753,7 @@ var UI = {
   rosterSort: "games",
   /* 試合中モード（打席ごとのワンタップ入力）の作業状態 */
   liveBatterRid: null,
+  liveDefPitcherRid: null,
   livePendingResult: null,
   livePendingDir: null,
   livePendingGoOuts: [],
@@ -2109,10 +2110,10 @@ function renderGameDetail(g) {
     };
     /* --- 打席ごとのワンタップ入力 --- */
     var liveBatterHtml = "";
-    if ((d.batting || []).length === 0) {
+    if ((d.batting || []).length === 0 && !UI.liveHalfDone) {
       liveBatterHtml = '<p style="color:var(--ink-muted);font-size:12px;margin:0 0 14px;">先に下の「打順をまとめて登録」で出場選手を登録すると、ここで打席の結果をタップ入力できます。</p>';
     } else {
-      if (!UI.liveBatterRid || !d.batting.some(function (b) { return b._rid === UI.liveBatterRid; })) {
+      if (d.batting.length && (!UI.liveBatterRid || !d.batting.some(function (b) { return b._rid === UI.liveBatterRid; }))) {
         UI.liveBatterRid = d.batting[0]._rid;
       }
       var curRid = UI.liveBatterRid;
@@ -2183,6 +2184,51 @@ function renderGameDetail(g) {
         goOutCommitHtml = '<button class="btn btn-primary btn-sm" data-action="live-go-commit-out" style="width:100%;margin-top:8px;font-weight:700;">' + goOutCommitLabel + "</button>";
       }
       var liveRbi = Math.max(0, Math.min(4, UI.livePendingRbi || 0));
+      var advanceToggleHtml = anyRunnerOn ? (function () {
+        var advLv = UI.livePendingAdvance || 0;
+        var advLabel = advLv === 2 ? "✓✓ 進塁あり（2つ多く）" : advLv === 1 ? "✓ 進塁あり（1つ多く）" : "進塁あり";
+        return '<button class="btn btn-sm' + (advLv ? " btn-primary" : "") + '" data-action="live-toggle-advance" style="width:100%;margin-top:8px;">'
+          + advLabel + '<span style="font-weight:400;opacity:.8;"> （ゴロ・フライ・安打で走者が多く進む。安打はもう一段タップで2つ多く）</span></button>';
+      })() : "";
+      /* ---- 守備側（相手の打席）の詳細入力：相手の打者名は追わず、自チームの
+         現在の投手成績だけを自動集計する ---- */
+      var defResultTypes = [
+        { key: "H1", label: "安打" }, { key: "H2", label: "二塁打" }, { key: "H3", label: "三塁打" },
+        { key: "HR", label: "本塁打" }, { key: "GO", label: "ゴロ" }, { key: "FLY", label: "フライ" },
+        { key: "ROE", label: "敵失" }, { key: "BB", label: "四球" }, { key: "SO", label: "三振" }
+      ];
+      var defPitcherOptions = d.pitching.map(function (p) {
+        return '<option value="' + p._rid + '"' + (p._rid === UI.liveDefPitcherRid ? " selected" : "") + ">"
+          + esc(playerNameNum(p.playerId)) + "</option>";
+      }).join("");
+      var usedDefPitcherIds = d.pitching.map(function (p) { return p.playerId; });
+      var defAddPitcherOptions = sortPlayersForAdd(STATE.players.filter(function (p) { return usedDefPitcherIds.indexOf(p.id) === -1; }), pitchingGameCounts())
+        .map(function (p) { return '<option value="' + p.id + '">' + (p.number != null && p.number !== "" ? "#" + esc(p.number) + " " : "") + esc(p.name) + "</option>"; }).join("");
+      if (d.pitching.length && (!UI.liveDefPitcherRid || !d.pitching.some(function (p) { return p._rid === UI.liveDefPitcherRid; }))) {
+        UI.liveDefPitcherRid = d.pitching[0]._rid;
+      }
+      var defResultBtns = defResultTypes.map(function (r) {
+        var lc = LIVE_RESULT_COLOR[r.key];
+        var cs = lc === "red" ? "color:var(--loss);border-color:var(--loss);" : lc === "green" ? "color:var(--win);border-color:var(--win);" : "color:var(--ink-muted);";
+        return '<button class="btn btn-sm" data-action="live-def-result" data-key="' + r.key + '" style="padding:12px 1px;font-size:15px;font-weight:700;justify-content:center;text-align:center;white-space:nowrap;' + cs + '">' + esc(r.label) + "</button>";
+      }).join("");
+      var defPanelHtml = d.pitching.length === 0
+        ? '<p style="color:var(--ink-muted);font-size:12px;margin:0 0 10px;">先に投手を登録すると、ここで打席の結果をタップして投手成績を自動集計できます。</p>'
+          + '<div class="field-row" style="align-items:flex-end;gap:8px;">'
+            + '<div class="field" style="flex:1 1 200px;"><label>投手を選択</label><select id="live-add-pitcher-select">' + '<option value="">選手を選択…</option>' + defAddPitcherOptions + "</select></div>"
+            + '<button class="btn btn-sm" data-action="live-add-def-pitcher">＋ 登板</button>'
+          + "</div>"
+        : '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+            + '<span style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">今の投手</span>'
+            + '<select id="live-def-pitcher-select" style="flex:1;min-width:0;font-size:14px;">' + defPitcherOptions + "</select>"
+          + "</div>"
+          + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + defResultBtns + "</div>"
+          + advanceToggleHtml
+          + '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">投手を交代する</summary>'
+            + '<div class="field-row" style="align-items:flex-end;gap:8px;margin-top:6px;">'
+              + '<div class="field" style="flex:1 1 200px;"><label>新しい投手</label><select id="live-add-pitcher-select">' + '<option value="">選手を選択…</option>' + defAddPitcherOptions + "</select></div>"
+              + '<button class="btn btn-sm" data-action="live-add-def-pitcher">＋ 登板</button>'
+            + "</div></details>";
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
       var outsNow = UI.liveOuts || 0;
       var outDots = "";
@@ -2269,7 +2315,12 @@ function renderGameDetail(g) {
             controlBar
             + liveSituationHtml
             + '<div class="banner" style="margin:0 0 10px;">守備中（' + (li + 1) + "回" + liveHalfChar(d, true) + "）<br>"
-              + '<span style="font-size:11.5px;">相手チームの得点は下の＋で入力。終わったら「次へ ▶」で自チームの攻撃に進みます。</span></div>'
+              + '<span style="font-size:11.5px;">下の結果ボタンで投手成績を自動集計。合わなければ相手の得点を下の＋で直接調整も可。終わったら「次へ ▶」で自チームの攻撃に進みます。</span></div>'
+            + defPanelHtml
+            + '<div style="display:flex;gap:6px;margin:10px 0;">'
+              + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
+              + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
+            + "</div>"
             + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次へ ▶ 自チームの攻撃へ</button>'
             + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
             + undoBtnHtml
@@ -2306,14 +2357,7 @@ function renderGameDetail(g) {
               + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1" style="min-width:38px;">＋</button>'
               + '<span style="font-size:10.5px;color:var(--ink-muted);">0なら自動</span>'
             + "</div>"
-            + (anyRunnerOn
-              ? (function () {
-                  var advLv = UI.livePendingAdvance || 0;
-                  var advLabel = advLv === 2 ? "✓✓ 進塁あり（2つ多く）" : advLv === 1 ? "✓ 進塁あり（1つ多く）" : "進塁あり";
-                  return '<button class="btn btn-sm' + (advLv ? " btn-primary" : "") + '" data-action="live-toggle-advance" style="width:100%;margin-top:8px;">'
-                    + advLabel + '<span style="font-weight:400;opacity:.8;"> （ゴロ・フライ・安打で走者が多く進む。安打はもう一段タップで2つ多く）</span></button>';
-                })()
-              : "")
+            + advanceToggleHtml
             + '<div style="display:flex;gap:6px;margin-top:10px;">'
               + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
               + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
@@ -2816,6 +2860,7 @@ function liveDirColorStyle(code) {
 function liveResultShort(key) { return LIVE_RESULT_SHORT[key] || key; }
 function resetLiveInput() {
   UI.liveBatterRid = null;
+  UI.liveDefPitcherRid = null;
   UI.livePendingResult = null;
   UI.livePendingDir = null;
   UI.livePendingGoOuts = [];
@@ -3239,6 +3284,62 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec) {
   UI.livePendingAdvance = 0;
   persistDraft();
 }
+/* 守備側（相手の打席）を1件記録。相手の打者名は追わず、自チームの現在の投手の
+   成績（被安打・四球・奪三振・投球回・失点／自責点）だけを自動集計する。
+   走者は liveResolvePlay を打撃側と共通利用し、"B"（今の打者）の代わりに
+   名前のない仮の走者IDを入れる（打撃成績には存在しないIDなので、走者チップは
+   自動的に「走者」という汎用表示になる） */
+function liveCommitDefAtbat(resultKey) {
+  var d = UI.draftGame;
+  if (!d || !Array.isArray(d.pitching) || d.pitching.length === 0) return;
+  if (!liveGuardControl(d)) return;
+  var prid = UI.liveDefPitcherRid;
+  var prow = d.pitching.filter(function (p) { return p._rid === prid; })[0];
+  if (!prow) { prow = d.pitching[0]; prid = prow._rid; UI.liveDefPitcherRid = prid; }
+  var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
+
+  var snapInnings = clone(d.innings);
+  var snapOuts = UI.liveOuts || 0;
+  var snapBases = liveBasesArr().slice();
+  var snapInning = inn;
+  var snapHalfDone = !!UI.liveHalfDone;
+  var prevStat = { h: n0(prow.h), r: n0(prow.r), er: n0(prow.er), bb: n0(prow.bb), so: n0(prow.so), ipOuts: n0(prow.ipOuts) };
+
+  var advanceLevel = UI.livePendingAdvance || 0;
+  var manualAdvance = advanceLevel > 0;
+  var play = liveResolvePlay(resultKey, snapBases, advanceLevel);
+  var endsHalf = (snapOuts + play.outs) >= 3;
+  var runsThisPlay = (play.outs > 0 && endsHalf && !manualAdvance) ? 0 : play.runs;
+
+  if (resultKey === "H1" || resultKey === "H2" || resultKey === "H3" || resultKey === "HR") prow.h = n0(prow.h) + 1;
+  if (resultKey === "BB") prow.bb = n0(prow.bb) + 1;
+  if (resultKey === "SO") prow.so = n0(prow.so) + 1;
+  prow.ipOuts = n0(prow.ipOuts) + play.outs;
+  if (runsThisPlay > 0) {
+    prow.r = n0(prow.r) + runsThisPlay;
+    if (resultKey !== "ROE") prow.er = n0(prow.er) + runsThisPlay;
+    var side = liveOurSide() === "top" ? "bottom" : "top";
+    if (!Array.isArray(d.innings[side])) d.innings[side] = [];
+    while (d.innings[side].length <= inn) d.innings[side].push(0);
+    d.innings[side][inn] = n0(d.innings[side][inn]) + runsThisPlay;
+  }
+
+  var oppRunnerToken = "opp:" + uid();
+  UI.liveBases = play.bases.map(function (x) { return x === "B" ? oppRunnerToken : x; });
+  UI.liveOuts = snapOuts + play.outs;
+  if (UI.liveOuts >= 3) {
+    liveAdvanceHalf();
+    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
+  }
+
+  if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
+  UI.liveLog.push({
+    type: "defatbat", prid: prid, prevStat: prevStat,
+    snapInnings: snapInnings, snapOuts: snapOuts, snapBases: snapBases, snapInning: snapInning, snapHalfDone: snapHalfDone
+  });
+  UI.livePendingAdvance = 0;
+  persistDraft();
+}
 /* 走塁アウトなど、打席によらないアウトを1つ足す */
 function liveManualOut() {
   var d = UI.draftGame;
@@ -3294,6 +3395,14 @@ function liveUndoAtbat() {
   if (last.type === "steal") {
     var srow = (d.batting || []).filter(function (b) { return b._rid === last.rid; })[0];
     if (srow) srow.sb = Math.max(0, n0(last.prevSb));
+  }
+  if (last.type === "defatbat") {
+    var prow2 = (d.pitching || []).filter(function (p) { return p._rid === last.prid; })[0];
+    if (prow2 && last.prevStat) {
+      prow2.h = last.prevStat.h; prow2.r = last.prevStat.r; prow2.er = last.prevStat.er;
+      prow2.bb = last.prevStat.bb; prow2.so = last.prevStat.so; prow2.ipOuts = last.prevStat.ipOuts;
+    }
+    UI.liveDefPitcherRid = last.prid;
   }
   if (last.snapInnings) d.innings = clone(last.snapInnings);
   UI.liveOuts = last.snapOuts || 0;
@@ -4155,6 +4264,18 @@ function onAppClick(e) {
       action: "end-game", requiresPin: true, okLabel: "試合を終了する"
     };
     renderApp();
+  } else if (action === "live-def-result") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    if (!liveIHoldControl(UI.draftGame)) { showToast("入力担当ではありません。「入力を引き継ぐ」を押してください", true); return; }
+    liveCommitDefAtbat(el.getAttribute("data-key"));
+  } else if (action === "live-add-def-pitcher") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    var defPSel = document.getElementById("live-add-pitcher-select");
+    if (!defPSel || !defPSel.value) return;
+    var newProw = { _rid: uid(), playerId: defPSel.value, ipOuts: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, decision: "" };
+    UI.draftGame.pitching.push(newProw);
+    UI.liveDefPitcherRid = newProw._rid;
+    persistDraft();
   } else if (action === "enter-live-takeover") {
     if (!UI.draftGame || UI.readOnly || UI.isNewUnsavedGame) return;
     UI.confirmDialog = { message: "試合中モードで入力するには暗証番号を入力してください。", action: "do-enter-live-takeover", requiresPin: true, okLabel: "開始する" };
@@ -4505,6 +4626,12 @@ function onAppChange(e) {
     UI.liveBatterRid = t.value;
     UI.livePendingResult = null;
     UI.livePendingRbi = 0;
+    UI.livePendingAdvance = 0;
+    renderApp();
+    return;
+  }
+  if (t.id === "live-def-pitcher-select") {
+    UI.liveDefPitcherRid = t.value;
     UI.livePendingAdvance = 0;
     renderApp();
     return;
