@@ -705,6 +705,8 @@ var STATE = loadInitialState();
 
 /* standard defensive positions for lineup / fielding tracking */
 var POSITIONS = ["投手", "捕手", "一塁手", "二塁手", "三塁手", "遊撃手", "左翼手", "中堅手", "右翼手", "指名打者"];
+/* 試合中モードの「守備交代」で切り替える対象（投手は投手交代の欄で扱うため除く） */
+var LIVE_FIELD_POSITIONS = ["捕手", "一塁手", "二塁手", "三塁手", "遊撃手", "左翼手", "中堅手", "右翼手"];
 function positionOptions(selected) {
   var opts = '<option value=""' + (selected ? "" : " selected") + ">-</option>";
   return opts + POSITIONS.map(function (p) {
@@ -2229,6 +2231,32 @@ function renderGameDetail(g) {
               + '<div class="field" style="flex:1 1 200px;"><label>新しい投手</label><select id="live-add-pitcher-select">' + '<option value="">選手を選択…</option>' + defAddPitcherOptions + "</select></div>"
               + '<button class="btn btn-sm" data-action="live-add-def-pitcher">＋ 登板</button>'
             + "</div></details>";
+      /* ---- 守備交代：現在の回以降の守備位置（投手以外）を入れ替える ---- */
+      var defFieldSubHtml = "";
+      if (d.batting.length) {
+        var lfCurInning = li + 1;
+        var lfPN = Math.max(POS_INNINGS, lfCurInning);
+        var lfPosNowMap = {};
+        d.batting.forEach(function (b) {
+          var segs = positionSegments(b, lfPN);
+          var seg = segs.filter(function (s) { return lfCurInning >= s.from && lfCurInning <= s.to; })[0];
+          var pos = seg ? (seg.position || "") : "";
+          if (pos) lfPosNowMap[pos] = b._rid;
+        });
+        var lfRows = LIVE_FIELD_POSITIONS.map(function (posName) {
+          var curRid = lfPosNowMap[posName] || "";
+          var opts = '<option value=""' + (curRid ? "" : " selected") + ">-</option>"
+            + d.batting.map(function (b) {
+              return '<option value="' + b._rid + '"' + (b._rid === curRid ? " selected" : "") + ">" + esc(playerNameNum(b.playerId)) + "</option>";
+            }).join("");
+          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
+            + '<span style="min-width:52px;font-size:12px;color:var(--ink-muted);">' + posName + "</span>"
+            + '<select class="live-pos-slot" data-pos="' + posName + '" style="flex:1;min-width:0;font-size:13px;">' + opts + "</select>"
+          + "</div>";
+        }).join("");
+        defFieldSubHtml = '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">守備交代（' + lfCurInning + '回〜の守備位置を変更）</summary>'
+          + '<div style="margin-top:6px;">' + lfRows + "</div></details>";
+      }
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
       var outsNow = UI.liveOuts || 0;
       var outDots = "";
@@ -2317,6 +2345,7 @@ function renderGameDetail(g) {
             + '<div class="banner" style="margin:0 0 10px;">守備中（' + (li + 1) + "回" + liveHalfChar(d, true) + "）<br>"
               + '<span style="font-size:11.5px;">下の結果ボタンで投手成績を自動集計。合わなければ相手の得点を下の＋で直接調整も可。終わったら「次へ ▶」で自チームの攻撃に進みます。</span></div>'
             + defPanelHtml
+            + defFieldSubHtml
             + '<div style="display:flex;gap:6px;margin:10px 0;">'
               + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
               + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
@@ -2690,6 +2719,29 @@ function positionSegments(b, totalInnings) {
   });
   segments.push({ from: startInning, to: totalInnings, position: currentPos });
   return segments;
+}
+/* posRow の ci回目以降の守備位置を nv に変更する（それまで ci回と同じ守備位置を
+   引き継いでいた後続の回も一緒に動かす）。position/posChanges を書き換えるだけで
+   persistDraft は呼び出し側の責任。*/
+function setBattingPositionAt(posRow, ci, nv, pN) {
+  var oldAt = {};
+  positionSegments(posRow, pN).forEach(function (s) {
+    for (var i = s.from; i <= s.to; i++) oldAt[i] = s.position || "";
+  });
+  var oldVal = oldAt[ci] || "";
+  var newAt = {};
+  for (var i = 1; i <= pN; i++) newAt[i] = oldAt[i] || "";
+  newAt[ci] = nv || "";
+  for (var j = ci + 1; j <= pN; j++) {
+    if ((oldAt[j] || "") === oldVal) newAt[j] = nv || "";
+    else break;
+  }
+  posRow.position = newAt[1] || "";
+  var pc = [];
+  for (var k = 2; k <= pN; k++) {
+    if ((newAt[k] || "") !== (newAt[k - 1] || "")) pc.push({ fromInning: k, position: newAt[k] || "" });
+  }
+  posRow.posChanges = pc;
 }
 function formatPositionHistory(b, totalInnings) {
   var segs = positionSegments(b, totalInnings);
@@ -4660,29 +4712,30 @@ function onAppChange(e) {
     var posRow = UI.draftGame.batting.find(function (x) { return x._rid === posRid; });
     if (!posRow) return;
     var ci = parseInt(t.getAttribute("data-inning"), 10);
-    var nv = t.value || "";
     var pN = document.querySelectorAll('.pos-inning-slot[data-rid="' + posRid + '"]').length || POS_INNINGS;
-    /* 変更前の「各回の守備位置」（前の回からの引き継ぎを展開したもの） */
-    var oldAt = {};
-    positionSegments(posRow, pN).forEach(function (s) {
-      for (var i = s.from; i <= s.to; i++) oldAt[i] = s.position || "";
+    setBattingPositionAt(posRow, ci, t.value || "", pN);
+    persistDraft();
+    return;
+  }
+  if (t.matches(".live-pos-slot")) {
+    var lpsD = UI.draftGame;
+    if (!lpsD || UI.readOnly) return;
+    if ((UI.isNewUnsavedGame || UI.liveTakeover) && !liveGuardControl(lpsD)) return;
+    var lpsPos = t.getAttribute("data-pos");
+    var lpsRid = t.value || "";
+    var lpsInning = ((typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0) + 1;
+    var lpsN = Math.max(POS_INNINGS, lpsInning);
+    /* この守備位置を今回っていた選手がいれば外す（新しい選手と同じでなければ） */
+    lpsD.batting.forEach(function (b) {
+      if (b._rid === lpsRid) return;
+      var segs = positionSegments(b, lpsN);
+      var seg = segs.filter(function (s) { return lpsInning >= s.from && lpsInning <= s.to; })[0];
+      if (seg && (seg.position || "") === lpsPos) setBattingPositionAt(b, lpsInning, "", lpsN);
     });
-    var oldVal = oldAt[ci] || "";
-    var newAt = {};
-    for (var i = 1; i <= pN; i++) newAt[i] = oldAt[i] || "";
-    newAt[ci] = nv;
-    /* この回を引き継いでいた後続の回は、一緒に新しい守備位置へ動かす
-       （後で明示的に別の位置が入っている回でストップ） */
-    for (var j = ci + 1; j <= pN; j++) {
-      if ((oldAt[j] || "") === oldVal) newAt[j] = nv;
-      else break;
+    if (lpsRid) {
+      var lpsRow = lpsD.batting.find(function (b) { return b._rid === lpsRid; });
+      if (lpsRow) setBattingPositionAt(lpsRow, lpsInning, lpsPos, lpsN);
     }
-    posRow.position = newAt[1] || "";
-    var pc = [];
-    for (var k = 2; k <= pN; k++) {
-      if ((newAt[k] || "") !== (newAt[k - 1] || "")) pc.push({ fromInning: k, position: newAt[k] || "" });
-    }
-    posRow.posChanges = pc;
     persistDraft();
     return;
   }
