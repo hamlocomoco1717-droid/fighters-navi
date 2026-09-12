@@ -2263,6 +2263,7 @@ function renderGameDetail(g) {
           + exitTakeoverBtn
           + "</div>";
         var undoBtnHtml = '<button class="btn btn-sm" data-action="live-undo" style="margin-top:8px;width:100%;color:var(--loss);">↩ ひとつ取り消す' + (undoN ? "（" + undoN + "）" : "") + "</button>";
+        var endGameBtnHtml = '<button class="btn btn-sm" data-action="live-request-end-game" style="margin-top:6px;width:100%;color:var(--loss);border-color:var(--loss);">試合終了（コールド・時間切れなどで今のスコアに確定）</button>';
         if (UI.liveHalfDone) {
           liveBatterHtml =
             controlBar
@@ -2272,6 +2273,7 @@ function renderGameDetail(g) {
             + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次へ ▶ 自チームの攻撃へ</button>'
             + '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
             + undoBtnHtml
+            + endGameBtnHtml
             + '<hr class="rule" style="margin:14px 0;">';
         } else {
           liveBatterHtml =
@@ -2317,6 +2319,7 @@ function renderGameDetail(g) {
               + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
             + "</div>"
             + undoBtnHtml
+            + endGameBtnHtml
             + '<hr class="rule" style="margin:14px 0;">';
         }
       }
@@ -4144,6 +4147,14 @@ function onAppClick(e) {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     if (!liveIHoldControl(UI.draftGame)) { showToast("入力担当ではありません", true); return; }
     liveUndoAtbat();
+  } else if (action === "live-request-end-game") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    if (!liveIHoldControl(UI.draftGame)) { showToast("入力担当ではありません", true); return; }
+    UI.confirmDialog = {
+      message: "ここで試合を終了し、今のスコアで確定します。まだ行っていない回は削除されます（コールドゲーム・時間切れなど）。暗証番号を入力してください。",
+      action: "end-game", requiresPin: true, okLabel: "試合を終了する"
+    };
+    renderApp();
   } else if (action === "enter-live-takeover") {
     if (!UI.draftGame || UI.readOnly || UI.isNewUnsavedGame) return;
     UI.confirmDialog = { message: "試合中モードで入力するには暗証番号を入力してください。", action: "do-enter-live-takeover", requiresPin: true, okLabel: "開始する" };
@@ -4339,6 +4350,18 @@ function onAppClick(e) {
       UI.discardNewGame = true;
       UI.confirmDialog = null;
       requestLeaveGameDetail(true);
+    } else if (cd.action === "end-game") {
+      var egD = UI.draftGame;
+      if (egD) {
+        var egKeepLen = (typeof UI.liveInning === "number" && UI.liveInning >= 0)
+          ? UI.liveInning + 1
+          : Math.max((egD.innings.top || []).length, (egD.innings.bottom || []).length);
+        if (Array.isArray(egD.innings.top) && egD.innings.top.length > egKeepLen) egD.innings.top.length = egKeepLen;
+        if (Array.isArray(egD.innings.bottom) && egD.innings.bottom.length > egKeepLen) egD.innings.bottom.length = egKeepLen;
+        persistDraft(null, true);
+      }
+      UI.confirmDialog = null;
+      leaveGameDetail(true);
     } else if (cd.action === "delete-game") {
       STATE.games = STATE.games.filter(function (g) { return g.id !== UI.currentGameId; });
       UI.currentGameId = null; UI.draftGame = null; UI.isNewUnsavedGame = false; UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.pitchingEditMode = false; UI.liveTakeover = false; UI.editingPosRow = null;
