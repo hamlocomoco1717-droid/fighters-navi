@@ -1391,6 +1391,14 @@ function typingInApp() {
   var app = document.getElementById("app");
   return !!(ae && app && app.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName));
 }
+/* 保存済み試合を編集モードで開いている間は、リモートの更新（自分自身の
+   書き込みが跳ね返ってきたものも含む）で画面を作り替えない。フィールドの
+   フォーカスが外れた瞬間（focusout の200ms後）に再描画されるとカーソル位置が
+   失われるため、編集モードを終了するまで保留する。 */
+function inGameEditMode() {
+  return !!(UI.currentGameId && (UI.isNewUnsavedGame || UI.atbatEditMode || UI.battingTotalsEditMode
+    || UI.positionEditMode || UI.pitchingEditMode || UI.gameMetaEditMode));
+}
 
 /* Firebase の配列は空だとキーごと消えるので、読み込み後に形をそろえる */
 function normalizeState(s) {
@@ -1409,8 +1417,8 @@ function normalizeState(s) {
 
 function applyRemoteState(remote) {
   if (!remote || typeof remote !== "object") return;
-  /* 入力中・新規試合の追加中は割り込まず、離脱後にまとめて反映する */
-  if (typingInApp() || UI.isNewUnsavedGame) { window.__pendingRemote = remote; return; }
+  /* 入力中・新規試合の追加中・保存済み試合の編集モード中は割り込まず、離脱後にまとめて反映する */
+  if (typingInApp() || inGameEditMode()) { window.__pendingRemote = remote; return; }
   adoptState(remote);
 }
 
@@ -5012,7 +5020,7 @@ function init() {
   /* 入力が終わったら、保留していた他の人の変更を取り込む
      （新規試合の追加中は取り込まない — 入力途中で画面が作り替わるのを防ぐ） */
   function flushPendingRemote() {
-    if (window.__pendingRemote && !typingInApp() && !UI.isNewUnsavedGame) adoptState(window.__pendingRemote);
+    if (window.__pendingRemote && !typingInApp() && !inGameEditMode()) adoptState(window.__pendingRemote);
   }
   document.addEventListener("focusout", function () { setTimeout(flushPendingRemote, 200); });
   setInterval(flushPendingRemote, 2000);
