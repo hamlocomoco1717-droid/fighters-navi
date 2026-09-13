@@ -3289,7 +3289,7 @@ function liveResolvePlay(resultKey, bases, advance) {
   }
   return { bases: nb, outs: outs, runs: runs };
 }
-/* 犠打で「実際に進塁した走者」が明示指定されたときの塁上の動き。打者は必ずアウト。
+/* 犠打・犠飛で「実際に進塁した走者」が明示指定されたときの塁上の動き。打者は必ずアウト。
    チェックした走者だけ1つ進め（3塁走者は生還）、それ以外はそのまま元の塁に残る。
    矛盾した指定（進塁先がふさがっている等）で走者が消えないよう、3塁側から
    順に解決し、進塁先が既に埋まっていればその場に留める。 */
@@ -3310,7 +3310,7 @@ function liveResolveSacAdvance(bases, advIdxs) {
 /* 打席結果を現在の打者の「現在の回」に1件追加。集計・アウト・走者・得点を反映し、打順を進める。
    goOutSpec = { batter: bool, runners: [塁idx,...] } を渡すと、ゴロで誰が実際に
    アウトになったか（打者・特定の走者・複数同時＝併殺）を指定して記録できる。
-   sacAdvSpec = [塁idx,...] を渡すと、犠打で実際に進塁した走者を明示指定できる
+   sacAdvSpec = [塁idx,...] を渡すと、犠打・犠飛で実際に進塁した走者を明示指定できる
    （複数走者がいるときに全員が必ず1つ進むとは限らないため）。 */
 function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec) {
   var d = UI.draftGame;
@@ -4290,7 +4290,7 @@ function onAppClick(e) {
       renderApp();
       return;
     }
-    if (UI.livePendingResult === "SAC" && ["左", "中", "右"].indexOf(dirChosen) === -1) {
+    if (UI.livePendingResult === "SAC") {
       var sacBasesNow = liveBasesArr();
       var sacRunnerIdxs = [0, 1, 2].filter(function (i) { return !!sacBasesNow[i]; });
       if (sacRunnerIdxs.length >= 2) {
