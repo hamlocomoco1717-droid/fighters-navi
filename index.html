@@ -744,6 +744,7 @@ var UI = {
   /* tab to switch to once the game's history entry has been rewound */
   pendingTab: null,
   atbatEditMode: false,
+  battingTotalsEditMode: false,
   pitchingEditMode: false,
   draftEverSaved: false,
   /* 新規追加中の試合は既定では「一時保存されたまま離脱」する。
@@ -1655,7 +1656,7 @@ function leaveGameDetail(goToList) {
   UI.liveInning = null; resetLiveInput();
   /* 追加中に貯めた古いリモート断面は破棄。直後にサーバーから最新が届く */
   window.__pendingRemote = null;
-  UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.pitchingEditMode = false;
+  UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.battingTotalsEditMode = false; UI.pitchingEditMode = false;
   UI.editingPosRow = null; UI.draftEverSaved = false; UI.confirmDialog = null;
   if (goToList) UI.tab = "games";
   /* a new game that was abandoned must also be retracted from the shared save if
@@ -2511,6 +2512,7 @@ function renderGameDetail(g) {
   var abHead = abIdxs.map(function (i) { return '<th class="num" style="white-space:nowrap;">' + (i + 1) + "回</th>"; }).join("");
   var battingColCount = 15 + battingInningCount;
   var canEditAtbats = !UI.readOnly && (UI.isNewUnsavedGame || UI.atbatEditMode);
+  var canEditBattingTotals = !UI.readOnly && (UI.isNewUnsavedGame || UI.battingTotalsEditMode);
   var canEditPosition = !UI.readOnly && (UI.isNewUnsavedGame || UI.positionEditMode);
   var canEditPitching = !UI.readOnly && (UI.isNewUnsavedGame || UI.pitchingEditMode);
   var battingRows = d.batting.length === 0
@@ -2531,9 +2533,9 @@ function renderGameDetail(g) {
           + "</td>"
         + abCells
         + '<td class="num mono">' + (n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf)) + "</td>"
-        + battingNumCell(b, "ab", canEditAtbats) + battingNumCell(b, "r", canEditAtbats) + battingNumCell(b, "h", canEditAtbats) + battingNumCell(b, "d2", canEditAtbats)
-        + battingNumCell(b, "d3", canEditAtbats) + battingNumCell(b, "hr", canEditAtbats) + battingNumCell(b, "rbi", canEditAtbats) + battingNumCell(b, "bb", canEditAtbats)
-        + battingNumCell(b, "hbp", canEditAtbats) + battingNumCell(b, "so", canEditAtbats) + battingNumCell(b, "sb", canEditAtbats) + battingNumCell(b, "sac", canEditAtbats) + battingNumCell(b, "sf", canEditAtbats)
+        + battingNumCell(b, "ab", canEditBattingTotals) + battingNumCell(b, "r", canEditBattingTotals) + battingNumCell(b, "h", canEditBattingTotals) + battingNumCell(b, "d2", canEditBattingTotals)
+        + battingNumCell(b, "d3", canEditBattingTotals) + battingNumCell(b, "hr", canEditBattingTotals) + battingNumCell(b, "rbi", canEditBattingTotals) + battingNumCell(b, "bb", canEditBattingTotals)
+        + battingNumCell(b, "hbp", canEditBattingTotals) + battingNumCell(b, "so", canEditBattingTotals) + battingNumCell(b, "sb", canEditBattingTotals) + battingNumCell(b, "sac", canEditBattingTotals) + battingNumCell(b, "sf", canEditBattingTotals)
         + "</tr>";
       return row;
     }).join("");
@@ -2550,6 +2552,9 @@ function renderGameDetail(g) {
   var atbatEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame) ? "" : (UI.atbatEditMode
     ? ' <button type="button" class="btn btn-sm" data-action="disable-atbat-edit">編集を終了</button>'
     : ' <button type="button" class="btn btn-sm" data-action="request-atbat-edit">✎ 打席内容を編集</button>');
+  var battingTotalsEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame) ? "" : (UI.battingTotalsEditMode
+    ? ' <button type="button" class="btn btn-sm" data-action="disable-batting-totals-edit">編集を終了</button>'
+    : ' <button type="button" class="btn btn-sm" data-action="request-batting-totals-edit">✎ 打席以降の数字を編集</button>');
 
   /* ---- 打順まとめて登録（新規追加中のみ） ---- */
   var bulkLineupHtml = "";
@@ -2578,7 +2583,7 @@ function renderGameDetail(g) {
       + "</details>";
   }
 
-  var battingHtml = '<div class="section-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">打撃成績' + atbatEditToggleHtml + '</div>'
+  var battingHtml = '<div class="section-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">打撃成績' + atbatEditToggleHtml + battingTotalsEditToggleHtml + '</div>'
     + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
     + "<th>選手</th>" + abHead + "<th class=\"num\">打席</th><th class=\"num\">打数</th><th class=\"num\">得点</th><th class=\"num\">安打</th><th class=\"num\">二塁打</th>"
     + "<th class=\"num\">三塁打</th><th class=\"num\">本塁打</th><th class=\"num\">打点</th><th class=\"num\">四球</th>"
@@ -4100,7 +4105,7 @@ function onAppClick(e) {
     }
     UI.tab = nextTab;
     UI.viewPlayerId = null;
-    if (UI.tab === "games") { UI.currentGameId = null; UI.draftGame = null; UI.isNewUnsavedGame = false; UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.pitchingEditMode = false; UI.liveTakeover = false; UI.editingPosRow = null; UI.draftEverSaved = false; stopLiveHeartbeat(); }
+    if (UI.tab === "games") { UI.currentGameId = null; UI.draftGame = null; UI.isNewUnsavedGame = false; UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.battingTotalsEditMode = false; UI.pitchingEditMode = false; UI.liveTakeover = false; UI.editingPosRow = null; UI.draftEverSaved = false; stopLiveHeartbeat(); }
     renderApp();
   } else if (action === "view-player") {
     UI.viewPlayerId = el.getAttribute("data-id");
@@ -4135,6 +4140,7 @@ function onAppClick(e) {
     UI.gameMetaEditMode = false;
     UI.positionEditMode = false;
     UI.atbatEditMode = false;
+    UI.battingTotalsEditMode = false;
     UI.pitchingEditMode = false;
     UI.editingPosRow = null;
     UI.draftEverSaved = false;
@@ -4180,6 +4186,16 @@ function onAppClick(e) {
       message: "打席内容を編集するには暗証番号を入力してください。\n編集すると、打数・安打などの数字は打席内容から自動的に計算し直されます（得点・打点・盗塁は手入力のまま残ります）。",
       action: "enable-atbat-edit", requiresPin: true, okLabel: "編集する"
     };
+    renderApp();
+  } else if (action === "request-batting-totals-edit") {
+    if (UI.readOnly) return;
+    UI.confirmDialog = {
+      message: "打席・打数・得点などの数字を編集するには暗証番号を入力してください。\nここで直接編集した数字は、打席内容（記号）と連動しません。",
+      action: "enable-batting-totals-edit", requiresPin: true, okLabel: "編集する"
+    };
+    renderApp();
+  } else if (action === "disable-batting-totals-edit") {
+    UI.battingTotalsEditMode = false;
     renderApp();
   } else if (action === "show-install-help") {
     UI.confirmDialog = { message: installHelpText(), action: "close-info", okLabel: "閉じる", infoOnly: true };
@@ -4657,7 +4673,7 @@ function onAppClick(e) {
       leaveGameDetail(true);
     } else if (cd.action === "delete-game") {
       STATE.games = STATE.games.filter(function (g) { return g.id !== UI.currentGameId; });
-      UI.currentGameId = null; UI.draftGame = null; UI.isNewUnsavedGame = false; UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.pitchingEditMode = false; UI.liveTakeover = false; UI.editingPosRow = null;
+      UI.currentGameId = null; UI.draftGame = null; UI.isNewUnsavedGame = false; UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.battingTotalsEditMode = false; UI.pitchingEditMode = false; UI.liveTakeover = false; UI.editingPosRow = null;
       stopLiveHeartbeat();
       UI.confirmDialog = null;
       /* the deleted game's history entry would otherwise sit there and swallow a
@@ -4685,6 +4701,10 @@ function onAppClick(e) {
       renderApp();
     } else if (cd.action === "enable-atbat-edit") {
       UI.atbatEditMode = true;
+      UI.confirmDialog = null;
+      renderApp();
+    } else if (cd.action === "enable-batting-totals-edit") {
+      UI.battingTotalsEditMode = true;
       UI.confirmDialog = null;
       renderApp();
     } else if (cd.action === "enable-pitching-edit") {
