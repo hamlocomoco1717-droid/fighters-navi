@@ -1070,7 +1070,7 @@ function computeGameMilestones(d) {
       (g.batting || []).forEach(function (b) {
         if (!b.playerId) return;
         var c = slot(b.playerId);
-        if (n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) > 0 || n0(b.h) > 0) c.games[g.id] = true;
+        if (n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf) > 0 || n0(b.h) > 0) c.games[g.id] = true;
         c.h += n0(b.h); c.d2 += n0(b.d2); c.d3 += n0(b.d3); c.hr += n0(b.hr);
         c.rbi += n0(b.rbi); c.sb += n0(b.sb);
       });
@@ -1203,25 +1203,27 @@ function computeBattingAgg(games) {
       if (!b.playerId) return;
       var cur = map.get(b.playerId);
       if (!cur) {
-        cur = { playerId: b.playerId, g: 0, ab: 0, pa: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0 };
+        cur = { playerId: b.playerId, g: 0, ab: 0, pa: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0 };
         map.set(b.playerId, cur);
       }
-      var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac);
+      var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
       var played = pa > 0;
       if (played) cur.g += 1;
       cur.ab += n0(b.ab); cur.pa += pa; cur.r += n0(b.r); cur.h += n0(b.h);
       cur.d2 += n0(b.d2); cur.d3 += n0(b.d3); cur.hr += n0(b.hr);
       cur.rbi += n0(b.rbi); cur.bb += n0(b.bb); cur.hbp += n0(b.hbp);
-      cur.so += n0(b.so); cur.sb += n0(b.sb); cur.sac += n0(b.sac);
+      cur.so += n0(b.so); cur.sb += n0(b.sb); cur.sac += n0(b.sac); cur.sf += n0(b.sf);
     });
   });
   return map;
 }
+/* 出塁率の分母には従来通り犠打(sac)も含め、犠飛(sf)も加える。犠飛は打数には
+   含めない（打率は変わらない）が、出塁率の分母には加わるので出塁率だけ下がる。 */
 function battingRates(c) {
   var singles = Math.max(0, c.h - c.d2 - c.d3 - c.hr);
   var tb = singles + c.d2 * 2 + c.d3 * 3 + c.hr * 4;
   var avg = c.ab > 0 ? c.h / c.ab : null;
-  var obDen = c.ab + c.bb + c.hbp + c.sac;
+  var obDen = c.ab + c.bb + c.hbp + c.sac + n0(c.sf);
   var obp = obDen > 0 ? (c.h + c.bb + c.hbp) / obDen : null;
   var slg = c.ab > 0 ? tb / c.ab : null;
   var ops = (obp != null && slg != null) ? obp + slg : null;
@@ -1847,9 +1849,9 @@ var IKZ_CODE = {
   "IB":  { tok: "四球", bb: 1 },
   "D":   { tok: "死球", hbp: 1 },
   "G":   { suf: "犠", sac: 1 },
-  "GF":  { tok: "犠飛", sac: 1 },
+  "GF":  { tok: "犠飛", sf: 1 },
   "GE":  { suf: "犠", sac: 1 },
-  "GFE": { tok: "犠飛", sac: 1 },
+  "GFE": { tok: "犠飛", sf: 1 },
   "S":   { suf: "ゴ", ab: 1 },
   "FC":  { suf: "野", ab: 1 },
   "E":   { suf: "失", ab: 1 },
@@ -1866,7 +1868,7 @@ var IKZ_CODE = {
 function parseIkzAtbat(raw) {
   raw = String(raw == null ? "" : raw).trim();
   if (!raw) return null;
-  var out = { token: raw, ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, so: 0, sac: 0, rbi: 0, unparsed: true };
+  var out = { token: raw, ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, so: 0, sac: 0, sf: 0, rbi: 0, unparsed: true };
   /* 先頭の打席番号（Ⅰ〜Ⅹ / I. II. …）は無視 */
   raw = raw.replace(/^[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]+\s*/, "").replace(/^[IVXivx]+[.\s]+/, "").trim();
   if (!raw) return out;
@@ -1902,7 +1904,7 @@ function parseIkzAtbat(raw) {
   return {
     token: token, unparsed: false,
     ab: def.ab || 0, h: def.h || 0, d2: def.d2 || 0, d3: def.d3 || 0, hr: def.hr || 0,
-    bb: def.bb || 0, hbp: def.hbp || 0, so: def.so || 0, sac: def.sac || 0, rbi: rbi
+    bb: def.bb || 0, hbp: def.hbp || 0, so: def.so || 0, sac: def.sac || 0, sf: def.sf || 0, rbi: rbi
   };
 }
 
@@ -1933,12 +1935,12 @@ function buildGameFromImport(obj) {
     var row = {
       _rid: uid(), playerId: pid, position: pc.position, posChanges: pc.posChanges,
       ab: n0(s.ab), r: n0(s.r), h: n0(s.h), d2: n0(s.d2), d3: n0(s.d3), hr: n0(s.hr),
-      rbi: n0(s.rbi), bb: n0(s.bb), hbp: n0(s.hbp), so: n0(s.so), sb: n0(s.sb), sac: n0(s.sac),
+      rbi: n0(s.rbi), bb: n0(s.bb), hbp: n0(s.hbp), so: n0(s.so), sb: n0(s.sb), sac: n0(s.sac), sf: n0(s.sf),
       atbats: Array.isArray(e.atbats) ? e.atbats.map(function (x) { return String(x == null ? "" : x); }) : []
     };
     /* ikz.jp 式の記号で打席が渡された場合は変換して atbats と成績を生成 */
     if (Array.isArray(e.atbatsIkz)) {
-      var acc = { ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, so: 0, sac: 0, rbi: 0 };
+      var acc = { ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, so: 0, sac: 0, sf: 0, rbi: 0 };
       row.atbats = e.atbatsIkz.map(function (cell) {
         var parts = String(cell == null ? "" : cell).split(/[・,]/).map(function (x) { return x.trim(); }).filter(Boolean);
         var toks = [];
@@ -1947,18 +1949,18 @@ function buildGameFromImport(obj) {
           if (!r) return;
           toks.push(r.token);
           acc.ab += r.ab; acc.h += r.h; acc.d2 += r.d2; acc.d3 += r.d3; acc.hr += r.hr;
-          acc.bb += r.bb; acc.hbp += r.hbp; acc.so += r.so; acc.sac += r.sac; acc.rbi += r.rbi;
+          acc.bb += r.bb; acc.hbp += r.hbp; acc.so += r.so; acc.sac += r.sac; acc.sf += r.sf; acc.rbi += r.rbi;
           if (r.unparsed) report.warnings.push((e.name || "?") + " の打席記号「" + p + "」を変換できませんでした（そのまま表示）");
         });
         return toks.join("・");
       });
       row.ab = acc.ab; row.h = acc.h; row.d2 = acc.d2; row.d3 = acc.d3; row.hr = acc.hr;
-      row.bb = acc.bb; row.hbp = acc.hbp; row.so = acc.so; row.sac = acc.sac; row.rbi = acc.rbi;
+      row.bb = acc.bb; row.hbp = acc.hbp; row.so = acc.so; row.sac = acc.sac; row.sf = acc.sf; row.rbi = acc.rbi;
       /* r（得点）・sb（盗塁）は打席記号に含まれないので stats から補完 */
       if (s.r != null) row.r = n0(s.r);
       if (s.sb != null) row.sb = n0(s.sb);
       /* 明示 stats があればそれで上書き */
-      ["ab", "h", "d2", "d3", "hr", "rbi", "bb", "hbp", "so", "sac"].forEach(function (k) {
+      ["ab", "h", "d2", "d3", "hr", "rbi", "bb", "hbp", "so", "sac", "sf"].forEach(function (k) {
         if (s[k] != null) row[k] = n0(s[k]);
       });
     } else if (!e.stats && row.atbats.some(function (x) { return x; })) {
@@ -2053,7 +2055,7 @@ function applyPrevLineup(prev) {
       _rid: uid(), playerId: b.playerId,
       position: b.position || "",
       posChanges: Array.isArray(b.posChanges) ? clone(b.posChanges) : [],
-      ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0,
+      ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0,
       atbats: []
     });
     added++;
@@ -2507,7 +2509,7 @@ function renderGameDetail(g) {
   var abIdxs = [];
   for (var abi = 0; abi < battingInningCount; abi++) abIdxs.push(abi);
   var abHead = abIdxs.map(function (i) { return '<th class="num" style="white-space:nowrap;">' + (i + 1) + "回</th>"; }).join("");
-  var battingColCount = 13 + battingInningCount;
+  var battingColCount = 14 + battingInningCount;
   var canEditAtbats = !UI.readOnly && (UI.isNewUnsavedGame || UI.atbatEditMode);
   var canEditPosition = !UI.readOnly && (UI.isNewUnsavedGame || UI.positionEditMode);
   var canEditPitching = !UI.readOnly && (UI.isNewUnsavedGame || UI.pitchingEditMode);
@@ -2530,7 +2532,7 @@ function renderGameDetail(g) {
         + abCells
         + battingNumCell(b, "ab") + battingNumCell(b, "r") + battingNumCell(b, "h") + battingNumCell(b, "d2")
         + battingNumCell(b, "d3") + battingNumCell(b, "hr") + battingNumCell(b, "rbi") + battingNumCell(b, "bb")
-        + battingNumCell(b, "hbp") + battingNumCell(b, "so") + battingNumCell(b, "sb") + battingNumCell(b, "sac")
+        + battingNumCell(b, "hbp") + battingNumCell(b, "so") + battingNumCell(b, "sb") + battingNumCell(b, "sac") + battingNumCell(b, "sf")
         + "</tr>";
       return row;
     }).join("");
@@ -2579,7 +2581,7 @@ function renderGameDetail(g) {
     + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
     + "<th>選手</th>" + abHead + "<th class=\"num\">打数</th><th class=\"num\">得点</th><th class=\"num\">安打</th><th class=\"num\">二塁打</th>"
     + "<th class=\"num\">三塁打</th><th class=\"num\">本塁打</th><th class=\"num\">打点</th><th class=\"num\">四球</th>"
-    + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">犠打</th>"
+    + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">犠打</th><th class=\"num\">犠飛</th>"
     + "</tr></thead><tbody>" + battingRows + "</tbody></table></div>"
     + (editingBatter ? renderAtbatEditorPanel(editingBatter, battingInningCount) : "")
     + (!canEditAtbats ? "" : '<div class="field-row add-row" style="margin-top:10px;align-items:flex-end;">'
@@ -2708,7 +2710,7 @@ function renderGameDetail(g) {
 function gameHasUnbackedBattingTotals(d) {
   return (d.batting || []).some(function (b) {
     var hasTokens = (b.atbats || []).some(function (t) { return t && String(t).trim() !== ""; });
-    var hasTotals = n0(b.ab) > 0 || n0(b.h) > 0 || n0(b.bb) > 0 || n0(b.hbp) > 0 || n0(b.so) > 0 || n0(b.sac) > 0;
+    var hasTotals = n0(b.ab) > 0 || n0(b.h) > 0 || n0(b.bb) > 0 || n0(b.hbp) > 0 || n0(b.so) > 0 || n0(b.sac) > 0 || n0(b.sf) > 0;
     return hasTotals && !hasTokens;
   });
 }
@@ -2890,7 +2892,7 @@ function classifyAtbatToken(tok) {
   return "OUT_OTHER";
 }
 function recomputeBattingStatsFromAtbats(row) {
-  var stat = { ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, so: 0, sac: 0 };
+  var stat = { ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, so: 0, sac: 0, sf: 0 };
   (row.atbats || []).forEach(function (cell) {
     if (!cell) return;
     cell.split("・").forEach(function (tok) {
@@ -2899,6 +2901,9 @@ function recomputeBattingStatsFromAtbats(row) {
       if (c === "BB") stat.bb++;
       else if (c === "HBP") stat.hbp++;
       else if (c === "SAC") stat.sac++;
+      /* 犠飛：打数に含めない（打率は変わらない）が出塁率の分母には数えるので
+         sac とは別の sf として集計する */
+      else if (c === "SACFLY") stat.sf++;
       else if (c === "SO") { stat.ab++; stat.so++; }
       else if (c === "H1") { stat.ab++; stat.h++; }
       else if (c === "H2") { stat.ab++; stat.h++; stat.d2++; }
@@ -2908,7 +2913,7 @@ function recomputeBattingStatsFromAtbats(row) {
     });
   });
   row.ab = stat.ab; row.h = stat.h; row.d2 = stat.d2; row.d3 = stat.d3; row.hr = stat.hr;
-  row.bb = stat.bb; row.hbp = stat.hbp; row.so = stat.so; row.sac = stat.sac;
+  row.bb = stat.bb; row.hbp = stat.hbp; row.so = stat.so; row.sac = stat.sac; row.sf = stat.sf;
 }
 function atbatResultOptionsHtml() {
   return ATBAT_RESULT_TYPES.map(function (r) { return '<option value="' + r.key + '">' + esc(r.label) + "</option>"; }).join("");
@@ -3604,7 +3609,7 @@ function recentBattingAvg(playerId, n) {
   STATE.games.forEach(function (g) {
     var b = (g.batting || []).find(function (row) { return row.playerId === playerId; });
     if (!b) return;
-    var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac);
+    var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
     if (pa <= 0) return;
     entries.push({ date: g.date || "", ab: n0(b.ab), h: n0(b.h) });
   });
@@ -3768,6 +3773,7 @@ function renderPlayerStatsTab() {
       { key: "hbp", label: "死球", cell: function (r) { return tdnum(r.c.hbp); } },
       { key: "so", label: "三振", cell: function (r) { return tdnum(r.c.so); } },
       { key: "sac", label: "犠打", cell: function (r) { return tdnum(r.c.sac); } },
+      { key: "sf", label: "犠飛", cell: function (r) { return tdnum(r.c.sf); } },
       { key: "obp", label: "出塁率", cell: function (r) { return '<td class="num mono">' + fmtRate(r.rates.obp) + "</td>"; } },
       { key: "slg", label: "長打率", cell: function (r) { return '<td class="num mono">' + fmtRate(r.rates.slg) + "</td>"; } },
       { key: "ops", label: "OPS", cell: function (r) { return '<td class="num mono">' + fmtRate(r.rates.ops) + "</td>"; } }
@@ -3901,7 +3907,8 @@ function renderPlayerDetail(pid) {
       + "<tr><th>打席</th>" + tdnum(bAgg.pa) + "<th>打数</th>" + tdnum(bAgg.ab) + "<th>得点</th>" + tdnum(bAgg.r) + "</tr>"
       + "<tr><th>二塁打</th>" + tdnum(bAgg.d2) + "<th>三塁打</th>" + tdnum(bAgg.d3) + "<th>盗塁</th>" + tdnum(bAgg.sb) + "</tr>"
       + "<tr><th>四球</th>" + tdnum(bAgg.bb) + "<th>死球</th>" + tdnum(bAgg.hbp) + "<th>三振</th>" + tdnum(bAgg.so) + "</tr>"
-      + '<tr><th>犠打</th>' + tdnum(bAgg.sac) + '<th>出塁率</th><td class="num mono">' + fmtRate(rt.obp) + '</td><th>長打率</th><td class="num mono">' + fmtRate(rt.slg) + "</td></tr>"
+      + '<tr><th>犠打</th>' + tdnum(bAgg.sac) + '<th>犠飛</th>' + tdnum(bAgg.sf) + '<th>出塁率</th><td class="num mono">' + fmtRate(rt.obp) + "</td></tr>"
+      + '<tr><th>長打率</th><td class="num mono">' + fmtRate(rt.slg) + "</td></tr>"
       + "</tbody></table></div>";
   } else {
     batHtml = '<div class="section-title">打撃</div><p style="color:var(--ink-muted);font-size:13px;">この期間の打席記録はありません。</p>';
@@ -3980,8 +3987,8 @@ function renderTeamTab() {
     return '<div class="tile"><div class="tile-label">' + esc(t[0]) + '</div><div class="tile-value' + (t[2] ? " " + t[2] : "") + '">' + esc(String(t[1])) + "</div></div>";
   }).join("") + "</div>";
 
-  var bmap = computeBattingAgg(games); var teamB = { ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, sac: 0 };
-  bmap.forEach(function (c) { teamB.ab += c.ab; teamB.h += c.h; teamB.d2 += c.d2; teamB.d3 += c.d3; teamB.hr += c.hr; teamB.bb += c.bb; teamB.hbp += c.hbp; teamB.sac += c.sac; });
+  var bmap = computeBattingAgg(games); var teamB = { ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, sac: 0, sf: 0 };
+  bmap.forEach(function (c) { teamB.ab += c.ab; teamB.h += c.h; teamB.d2 += c.d2; teamB.d3 += c.d3; teamB.hr += c.hr; teamB.bb += c.bb; teamB.hbp += c.hbp; teamB.sac += c.sac; teamB.sf += c.sf; });
   var teamRates = battingRates(teamB);
   var pmap = computePitchingAgg(games); var teamP = { outs: 0, h: 0, er: 0, bb: 0 };
   pmap.forEach(function (c) { teamP.outs += c.outs; teamP.h += c.h; teamP.er += c.er; teamP.bb += c.bb; });
@@ -4475,7 +4482,7 @@ function onAppClick(e) {
     if (!sel || !sel.value) return;
     var addedPlayer = playerById(sel.value);
     var defaultPos = (addedPlayer && POSITIONS.indexOf(addedPlayer.position) !== -1) ? addedPlayer.position : "";
-    UI.draftGame.batting.push({ _rid: uid(), playerId: sel.value, position: defaultPos, posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0 });
+    UI.draftGame.batting.push({ _rid: uid(), playerId: sel.value, position: defaultPos, posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0 });
     persistDraft();
   } else if (action === "bulk-add-lineup") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
@@ -4489,7 +4496,7 @@ function onAppClick(e) {
       bulkSeen[bpid] = true;
       var bpl = playerById(bpid);
       var bpos = (bpl && POSITIONS.indexOf(bpl.position) !== -1) ? bpl.position : "";
-      UI.draftGame.batting.push({ _rid: uid(), playerId: bpid, position: bpos, posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0 });
+      UI.draftGame.batting.push({ _rid: uid(), playerId: bpid, position: bpos, posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0 });
       bulkAdded++;
     }
     if (bulkAdded > 0) persistDraft(bulkAdded + "人を打順に追加しました");
