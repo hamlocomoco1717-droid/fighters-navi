@@ -2509,7 +2509,7 @@ function renderGameDetail(g) {
   var abIdxs = [];
   for (var abi = 0; abi < battingInningCount; abi++) abIdxs.push(abi);
   var abHead = abIdxs.map(function (i) { return '<th class="num" style="white-space:nowrap;">' + (i + 1) + "回</th>"; }).join("");
-  var battingColCount = 14 + battingInningCount;
+  var battingColCount = 15 + battingInningCount;
   var canEditAtbats = !UI.readOnly && (UI.isNewUnsavedGame || UI.atbatEditMode);
   var canEditPosition = !UI.readOnly && (UI.isNewUnsavedGame || UI.positionEditMode);
   var canEditPitching = !UI.readOnly && (UI.isNewUnsavedGame || UI.pitchingEditMode);
@@ -2530,9 +2530,10 @@ function renderGameDetail(g) {
           + (canEditAtbats ? ' <button class="icon-btn' + (isEditingThisRow ? " active" : "") + '" data-action="toggle-atbat-editor" data-rid="' + b._rid + '" title="打席を記録">✎打席</button>' : "")
           + "</td>"
         + abCells
-        + battingNumCell(b, "ab") + battingNumCell(b, "r") + battingNumCell(b, "h") + battingNumCell(b, "d2")
-        + battingNumCell(b, "d3") + battingNumCell(b, "hr") + battingNumCell(b, "rbi") + battingNumCell(b, "bb")
-        + battingNumCell(b, "hbp") + battingNumCell(b, "so") + battingNumCell(b, "sb") + battingNumCell(b, "sac") + battingNumCell(b, "sf")
+        + '<td class="num mono">' + (n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf)) + "</td>"
+        + battingNumCell(b, "ab", canEditAtbats) + battingNumCell(b, "r", canEditAtbats) + battingNumCell(b, "h", canEditAtbats) + battingNumCell(b, "d2", canEditAtbats)
+        + battingNumCell(b, "d3", canEditAtbats) + battingNumCell(b, "hr", canEditAtbats) + battingNumCell(b, "rbi", canEditAtbats) + battingNumCell(b, "bb", canEditAtbats)
+        + battingNumCell(b, "hbp", canEditAtbats) + battingNumCell(b, "so", canEditAtbats) + battingNumCell(b, "sb", canEditAtbats) + battingNumCell(b, "sac", canEditAtbats) + battingNumCell(b, "sf", canEditAtbats)
         + "</tr>";
       return row;
     }).join("");
@@ -2579,7 +2580,7 @@ function renderGameDetail(g) {
 
   var battingHtml = '<div class="section-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">打撃成績' + atbatEditToggleHtml + '</div>'
     + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
-    + "<th>選手</th>" + abHead + "<th class=\"num\">打数</th><th class=\"num\">得点</th><th class=\"num\">安打</th><th class=\"num\">二塁打</th>"
+    + "<th>選手</th>" + abHead + "<th class=\"num\">打席</th><th class=\"num\">打数</th><th class=\"num\">得点</th><th class=\"num\">安打</th><th class=\"num\">二塁打</th>"
     + "<th class=\"num\">三塁打</th><th class=\"num\">本塁打</th><th class=\"num\">打点</th><th class=\"num\">四球</th>"
     + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">犠打</th><th class=\"num\">犠飛</th>"
     + "</tr></thead><tbody>" + battingRows + "</tbody></table></div>"
@@ -3589,10 +3590,10 @@ function renderAtbatEditorPanel(b, battingInningCount) {
     + "</div></div>";
 }
 var BATTING_NUM_CELL_CLASS = { h: "stat-hit", rbi: "stat-rbi", bb: "stat-bb" };
-function battingNumCell(b, key) {
+function battingNumCell(b, key, canEdit) {
   var v = n0(b[key]);
   var cls = "cell-input-wrap num" + (BATTING_NUM_CELL_CLASS[key] ? " " + BATTING_NUM_CELL_CLASS[key] : "");
-  return '<td class="' + cls + '">' + ((UI.readOnly || !UI.isNewUnsavedGame) ? String(v) : '<input class="cell-input" type="number" min="0" inputmode="numeric" data-brow="' + b._rid + '" data-bfield="' + key + '" value="' + v + '">') + "</td>";
+  return '<td class="' + cls + '">' + (!canEdit ? String(v) : '<input class="cell-input" type="number" min="0" inputmode="numeric" data-brow="' + b._rid + '" data-bfield="' + key + '" value="' + v + '">') + "</td>";
 }
 function pitchingNumCell(p, key, canEdit) {
   var v = n0(p[key]);
