@@ -538,11 +538,12 @@ input.cell-input.wide { width: 66px; }
 
 /* stat tiles */
 .tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 10px; }
-.tile { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; }
+.tile { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; border-bottom: 3px solid var(--accent); }
 .tile-label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted); font-family: "Oswald", sans-serif; }
-.tile-value { font-family: "Roboto Mono", monospace; font-size: 24px; font-weight: 600; margin-top: 3px; }
+.tile-value { font-family: "Oswald", "Roboto Mono", monospace; font-size: 28px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .tile-value.win { color: var(--win); }
 .tile-value.loss { color: var(--loss); }
+.stat-headline { font-family: "Oswald", "Roboto Mono", monospace !important; font-size: 16px; font-weight: 700; color: var(--accent); }
 
 /* game highlights: key points + top performers */
 .keypoints-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -3826,7 +3827,7 @@ function renderPlayerStatsTab() {
     var unqualBattingRows = sortRows(rows.filter(function (r) { return !r.qualified; }), UI.battingSort, battingSortVal);
     /* 列定義。ソート中の列は「選手」の右隣（＝左端）に移動する */
     var battingCols = [
-      { key: "avg", label: "打率", cell: function (r) { return '<td class="num mono">' + fmtRate(r.rates.avg) + "</td>"; } },
+      { key: "avg", label: "打率", cell: function (r) { return '<td class="num mono stat-headline">' + fmtRate(r.rates.avg) + "</td>"; } },
       { key: "rbi", label: "打点", cell: function (r) { return tdnum(r.c.rbi, "stat-rbi"); } },
       { key: "d2", label: "二塁打", cell: function (r) { return tdnum(r.c.d2); } },
       { key: "d3", label: "三塁打", cell: function (r) { return tdnum(r.c.d3); } },
@@ -3895,7 +3896,7 @@ function renderPlayerStatsTab() {
     var unqualPitchingRows = sortRows(prows.filter(function (r) { return !r.qualified; }), UI.pitchingSort, pitchingSortVal);
     /* 列定義。ソート中の列は「選手」の右隣（＝左端）に移動する */
     var pitchingCols = [
-      { key: "era", label: "防御率", cell: function (r) { return '<td class="num mono">' + fmtEra(r.rates.era) + "</td>"; } },
+      { key: "era", label: "防御率", cell: function (r) { return '<td class="num mono stat-headline">' + fmtEra(r.rates.era) + "</td>"; } },
       { key: "g", label: "登板", cell: function (r) { return tdnum(r.c.g); } },
       { key: "ip", label: "投球回", cell: function (r) { return '<td class="num mono">' + outsToIpStr(r.c.outs) + "</td>"; } },
       { key: "er", label: "自責点", cell: function (r) { return tdnum(r.c.er); } },
@@ -3941,7 +3942,7 @@ function renderPlayerStatsTab() {
       + '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;"><input type="checkbox" id="qualified-only-pitchers"' + (UI.qualifiedOnlyPitchers ? " checked" : "") + "> 規定投球回到達選手のみ表示</label>";
   }
 
-  return '<div class="page-head"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
+  return '<div class="page-head page-head-stadium"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
     + subtabs + '<div class="card">' + content + "</div>";
 }
 function tdnum(v, cls) { return '<td class="num mono' + (cls ? " " + cls : "") + '">' + n0(v) + "</td>"; }
@@ -4073,13 +4074,13 @@ function renderTeamTab() {
     : recent.map(function (g) {
       var tot = gameTotals(g); var res = gameResult(g);
       var badge = res === "W" ? '<span class="badge badge-win">勝</span>' : res === "L" ? '<span class="badge badge-loss">敗</span>' : res === "T" ? '<span class="badge badge-tie">分</span>' : '<span class="badge badge-scheduled">予定</span>';
-      return '<div class="game-row" data-action="open-game" data-id="' + g.id + '">'
+      return '<div class="game-row game-row-stadium" data-action="open-game" data-id="' + g.id + '">'
         + '<div class="game-date">' + esc(fmtDate(g.date)) + "</div>"
         + '<div class="game-main"><div class="game-opp">' + esc(g.opponent || "(相手未設定)") + "</div></div>"
         + '<div class="game-score mono">' + (res ? tot.us + " - " + tot.them : "―") + "</div>" + badge + "</div>";
     }).join("");
 
-  return '<div class="page-head"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
+  return '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
     + '<div class="card"><div class="section-title">チーム全体の打率・防御率</div>' + teamTiles + "</div>"
     + '<div class="card"><div class="section-title">直近の試合</div>' + recentHtml + "</div>";
