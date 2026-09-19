@@ -544,6 +544,7 @@ input.cell-input.wide { width: 66px; }
 .tile-value.win { color: var(--win); }
 .tile-value.loss { color: var(--loss); }
 .stat-headline { font-family: "Oswald", "Roboto Mono", monospace !important; font-size: 16px; font-weight: 700; color: var(--accent); }
+.roster-number { font-family: "Oswald", sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
 
 /* game highlights: key points + top performers */
 .keypoints-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -3740,9 +3741,9 @@ function renderRosterTab() {
           ? '<div class="roster-edit-row"><input type="text" style="width:120px;" data-prow2="' + p.id + '" data-pfield2="name" value="' + esc(p.name) + '"><select data-prow2="' + p.id + '" data-pfield2="position">' + positionOptions(p.position || "") + "</select></div>"
           : '<button class="link-btn" data-action="view-player" data-id="' + p.id + '" style="font-size:14px;text-align:left;padding:2px 0;">' + esc(p.name) + (p.position ? '<span class="roster-position">（' + esc(p.position) + "）</span>" : "") + " ›</button>";
         return "<tr>"
-          + '<td class="cell-input-wrap num">' + (editable ? '<input class="cell-input" type="number" min="0" data-prow2="' + p.id + '" data-pfield2="number" value="' + esc(p.number == null ? "" : p.number) + '">' : esc(p.number)) + "</td>"
+          + '<td class="cell-input-wrap num">' + (editable ? '<input class="cell-input" type="number" min="0" data-prow2="' + p.id + '" data-pfield2="number" value="' + esc(p.number == null ? "" : p.number) + '">' : '<span class="roster-number">' + esc(p.number) + "</span>") + "</td>"
           + '<td class="cell-input-wrap">' + nameCell + "</td>"
-          + '<td class="num mono">' + recentLabel + "</td>"
+          + '<td class="num mono stat-headline">' + recentLabel + "</td>"
           + (editable ? ('<td><button class="icon-btn" data-action="delete-player" data-id="' + p.id + '" title="削除">×</button></td>') : "")
           + "</tr>";
       }).join("")
@@ -3759,7 +3760,7 @@ function renderRosterTab() {
     ? '<button class="btn btn-sm" data-action="disable-roster-edit">編集を終了</button>'
     : '<button class="btn btn-sm" data-action="request-roster-edit">✎ 編集する</button>');
   var lede = editable ? "選手情報を編集できます。" : "チームの選手名簿です。背番号・氏名・守備位置の変更には暗証番号が必要です。";
-  return '<div class="page-head"><div><h1>選手管理</h1><div class="page-lede">' + lede + "</div></div>" + editToggle + "</div>"
+  return '<div class="page-head page-head-stadium"><div><h1>選手管理</h1><div class="page-lede">' + lede + "</div></div>" + editToggle + "</div>"
     + sortBar
     + '<div class="card">' + rows + addForm + "</div>";
 }
@@ -4127,7 +4128,7 @@ function renderSettingsTab() {
     + '<input type="text" id="settings-scorer-name" maxlength="20" placeholder="例：大内" value="' + esc(getScorerName()) + '"' + (UI.readOnly ? " disabled" : "") + ">"
     + '<p style="color:var(--ink-muted);font-size:12.5px;margin-top:6px;">試合中モードで入力しているとき、他のメンバーの画面に「◯◯さんが入力中」と表示されます。この端末にのみ保存されます。</p>';
 
-  return '<div class="page-head"><div><h1>設定</h1><div class="page-lede">チームの基本情報を管理します。</div></div></div>'
+  return '<div class="page-head page-head-stadium"><div><h1>設定</h1><div class="page-lede">チームの基本情報を管理します。</div></div></div>'
     + '<div class="card">' + themeHtml + "</div>"
     + '<div class="card">' + scorerHtml + "</div>"
     + '<div class="card"><div class="section-title">チーム情報</div>'
