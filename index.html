@@ -464,6 +464,25 @@ input.cell-input.wide { width: 66px; }
 .game-row-stadium .badge-venue-away { background: var(--accent); color: var(--accent-ink); }
 .game-row-stadium .badge-venue-home { background: var(--scoreboard-text); color: var(--scoreboard-bg); }
 
+/* 試合詳細: スコアヒーロー */
+.game-hero {
+  background: var(--scoreboard-bg);
+  color: #fff;
+  border-radius: 10px;
+  padding: 20px 22px;
+  margin-bottom: 18px;
+}
+.game-hero-tag { font-size: 12px; color: var(--scoreboard-text-dim); letter-spacing: 0.04em; }
+.game-hero-score { display: flex; align-items: baseline; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.game-hero-score .us, .game-hero-score .them { font-family: "Oswald", sans-serif; font-size: 44px; font-weight: 700; line-height: 1; }
+.game-hero-score .us { color: #fff; }
+.game-hero-score .them { color: var(--scoreboard-text); }
+.game-hero-score .vs { font-size: 13.5px; color: #B9C4E0; }
+.game-hero .badge { margin-top: 12px; font-weight: 700; border-radius: 4px; padding: 3px 10px; }
+.game-hero .badge-win { background: var(--win); color: #fff; }
+.game-hero .badge-loss { background: var(--loss); color: #fff; }
+.game-hero .badge-tie { background: var(--tie); color: #fff; }
+
 /* mini scoreboard grid */
 .scoreboard-grid {
   overflow-x: auto;
@@ -2503,6 +2522,14 @@ function renderGameDetail(g) {
 
   var ourScore = weAreAway ? tot.top : tot.bottom;
   var theirScore = weAreAway ? tot.bottom : tot.top;
+  var heroRes = gameResult(g);
+  var scoreHeroHtml = heroRes ? (
+    '<div class="game-hero">'
+    + '<div class="game-hero-tag">' + esc(fmtDate(g.date)) + (g.ground ? " · " + esc(g.ground) : "") + "</div>"
+    + '<div class="game-hero-score"><span class="us mono">' + ourScore + '</span><span class="vs">' + esc(STATE.team.name || "自チーム") + '</span><span class="them mono">' + theirScore + '</span><span class="vs">' + esc(g.opponent || "相手") + "</span></div>"
+    + '<span class="badge ' + (heroRes === "W" ? "badge-win" : heroRes === "L" ? "badge-loss" : "badge-tie") + '">' + (heroRes === "W" ? "WIN" : heroRes === "L" ? "LOSS" : "TIE") + "</span>"
+    + "</div>"
+  ) : "";
   var gameMilestones = computeGameMilestones(d);
   var keyPointsResult = computeGameKeyPoints(d, weAreAway, ourScore, theirScore, gameMilestones);
   var keyPoints = keyPointsResult.points;
@@ -2732,6 +2759,7 @@ function renderGameDetail(g) {
     + "</div>");
 
   return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る")) + "</button></div></div>"
+    + scoreHeroHtml
     + (liveHtml
         ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card">' + metaHtml + "</div>")
         : ('<div class="card">' + metaHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>"))
