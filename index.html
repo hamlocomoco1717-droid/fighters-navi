@@ -438,6 +438,32 @@ input.cell-input.wide { width: 66px; }
 .game-meta { font-size: 12px; color: var(--ink-muted); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .game-score { font-family: "Roboto Mono", monospace; font-size: 15px; font-weight: 600; flex-shrink: 0; }
 
+/* 試合一覧: スタジアム風デザイン（まずはこのページだけ） */
+.page-head-stadium h1 {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 6px;
+  display: inline-block;
+}
+.game-row-stadium .game-score {
+  font-family: "Oswald", "Roboto Mono", monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.game-row-stadium .badge {
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 3px 10px;
+}
+.game-row-stadium .badge-win { background: var(--win); color: #fff; }
+.game-row-stadium .badge-loss { background: var(--loss); color: #fff; }
+.game-row-stadium .badge-tie { background: var(--tie); color: #fff; }
+.game-row-stadium .badge-scheduled { background: var(--accent); color: var(--accent-ink); }
+.game-row-stadium .badge-venue-away { background: var(--accent); color: var(--accent-ink); }
+.game-row-stadium .badge-venue-home { background: var(--scoreboard-text); color: var(--scoreboard-bg); }
+
 /* mini scoreboard grid */
 .scoreboard-grid {
   overflow-x: auto;
@@ -1758,7 +1784,7 @@ function renderGamesList() {
         : res === "T" ? '<span class="badge badge-tie">分</span>'
         : '<span class="badge badge-scheduled">予定</span>';
       var scoreText = res ? (tot.us + " - " + tot.them) : "―";
-      return '<div class="game-row" data-action="open-game" data-id="' + g.id + '">'
+      return '<div class="game-row game-row-stadium" data-action="open-game" data-id="' + g.id + '">'
         + '<div class="game-date">' + esc(fmtDate(g.date)) + "</div>"
         + '<div class="game-main"><div class="game-opp">' + esc(g.opponent || "(相手未設定)") + "</div>"
         + '<div class="game-meta"><span class="badge ' + (g.venue === "away" ? "badge-venue-away" : "badge-venue-home") + '">' + (g.venue === "away" ? "先攻" : "後攻") + "</span>"
@@ -1770,7 +1796,7 @@ function renderGamesList() {
     }).join("");
     body = '<div class="card" style="padding:0 18px;">' + body + "</div>";
   }
-  return '<div class="page-head"><div><h1>試合一覧</h1><div class="page-lede">' + (UI.statsYear === "all" ? "試合ごとのスコアと成績を記録します。" : UI.statsYear + "年の試合ごとのスコアと成績を記録します。") + "</div></div>"
+  return '<div class="page-head page-head-stadium"><div><h1>試合一覧</h1><div class="page-lede">' + (UI.statsYear === "all" ? "試合ごとのスコアと成績を記録します。" : UI.statsYear + "年の試合ごとのスコアと成績を記録します。") + "</div></div>"
     + yearSelectHtml()
     + "</div>"
     + body
