@@ -36,6 +36,7 @@ if ("serviceWorker" in navigator) {
   --accent: #1D2E58;
   --accent-ink: #FFFFFF;
   --accent-soft: #E0E6F3;
+  --accent-strong: #1D2E58;
   --win: #2C7A48;
   --win-soft: #E4F1E9;
   --loss: #B23A38;
@@ -62,6 +63,7 @@ if ("serviceWorker" in navigator) {
     --accent: #3A4F8C;
     --accent-ink: #FFFFFF;
     --accent-soft: #1F2C4E;
+    --accent-strong: #E8C56C;
     --win: #4FC07A;
     --win-soft: #15321F;
     --loss: #E5766C;
@@ -88,6 +90,7 @@ if ("serviceWorker" in navigator) {
   --accent: #3A4F8C;
   --accent-ink: #FFFFFF;
   --accent-soft: #1F2C4E;
+  --accent-strong: #E8C56C;
   --win: #4FC07A;
   --win-soft: #15321F;
   --loss: #E5766C;
@@ -543,8 +546,23 @@ input.cell-input.wide { width: 66px; }
 .tile-value { font-family: "Oswald", "Roboto Mono", monospace; font-size: 28px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .tile-value.win { color: var(--win); }
 .tile-value.loss { color: var(--loss); }
-.stat-headline { font-family: "Oswald", "Roboto Mono", monospace !important; font-size: 16px; font-weight: 700; color: var(--accent); }
-.roster-number { font-family: "Oswald", sans-serif; font-size: 17px; font-weight: 700; color: var(--accent); }
+.stat-headline { font-family: "Oswald", "Roboto Mono", monospace !important; font-size: 16px; font-weight: 700; color: var(--accent-strong); }
+.roster-number { font-family: "Oswald", sans-serif; font-size: 17px; font-weight: 700; color: var(--accent-strong); }
+.tile-sub { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+
+/* チーム成績: イニング別分析 */
+.inning-chart { display: flex; flex-direction: column; gap: 8px; }
+.inning-chart-row { display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center; }
+.inning-chart-label { font-family: "Oswald", sans-serif; font-weight: 700; font-size: 14px; color: var(--accent-strong); }
+.inning-chart-bars { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.inning-bar { height: 9px; border-radius: 2px; min-width: 2px; }
+.inning-bar.for { background: var(--accent-strong); }
+.inning-bar.against { background: var(--loss); }
+.inning-chart-num { font-size: 12px; color: var(--ink-muted); white-space: nowrap; }
+.inning-chart-num .for { color: var(--accent-strong); }
+.inning-chart-num .against { color: var(--loss); }
+.inning-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-muted); margin-top: 12px; }
+.inning-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 
 /* game highlights: key points + top performers */
 .keypoints-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -773,6 +791,7 @@ var UI = {
   qualifiedOnlyBatters: false,
   qualifiedOnlyPitchers: false,
   statSubtab: "batting",
+  teamSubtab: "summary",
   statsYear: (availableYears()[0] || "all"),
   readOnly: false,
   rosterEditMode: false,
@@ -4081,10 +4100,98 @@ function renderTeamTab() {
         + '<div class="game-score mono">' + (res ? tot.us + " - " + tot.them : "―") + "</div>" + badge + "</div>";
     }).join("");
 
-  return '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
+  var tsub = UI.teamSubtab || "summary";
+  var teamSubtabs = '<div class="subtabs">'
+    + [["summary", "シーズン成績"], ["innings", "イニング別"]].map(function (o) {
+      return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
+    }).join("") + "</div>";
+  var teamHead = '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
+    + teamSubtabs;
+  if (tsub === "innings") return teamHead + renderInningAnalysis(games);
+
+  return teamHead
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
     + '<div class="card"><div class="section-title">チーム全体の打率・防御率</div>' + teamTiles + "</div>"
     + '<div class="card"><div class="section-title">直近の試合</div>' + recentHtml + "</div>";
+}
+
+/* イニングごとの得点・失点。コールド等で途中終了した試合は、その回の列が
+   ある（＝実際に行った）試合だけを分母に数える */
+function computeInningAnalysis(games) {
+  var rows = [];
+  games.forEach(function (g) {
+    if (!gameResult(g)) return;
+    var away = g.venue === "away";
+    var our = (away ? g.innings.top : g.innings.bottom) || [];
+    var opp = (away ? g.innings.bottom : g.innings.top) || [];
+    var len = Math.max(our.length, opp.length);
+    for (var i = 0; i < len; i++) {
+      if (!rows[i]) rows[i] = { inning: i + 1, offGames: 0, runsFor: 0, scoredGames: 0, defGames: 0, runsAgainst: 0, zeroGames: 0 };
+      var r = rows[i];
+      if (i < our.length) { var a = n0(our[i]); r.offGames++; r.runsFor += a; if (a > 0) r.scoredGames++; }
+      if (i < opp.length) { var b = n0(opp[i]); r.defGames++; r.runsAgainst += b; if (b === 0) r.zeroGames++; }
+    }
+  });
+  rows.forEach(function (r) {
+    r.avgFor = r.offGames ? r.runsFor / r.offGames : 0;
+    r.avgAgainst = r.defGames ? r.runsAgainst / r.defGames : 0;
+  });
+  return rows;
+}
+
+function renderInningAnalysis(games) {
+  var rows = computeInningAnalysis(games);
+  if (rows.length === 0) {
+    return '<div class="card"><p style="color:var(--ink-muted);">この期間の試合結果がありません。</p></div>';
+  }
+  var pct = function (num, den) { return den ? Math.round(num / den * 100) + "%" : "-"; };
+  var signed = function (v) { return (v > 0 ? "+" : "") + v; };
+  var best = rows.slice().sort(function (a, b) { return b.avgFor - a.avgFor; })[0];
+  var worst = rows.slice().sort(function (a, b) { return b.avgAgainst - a.avgAgainst; })[0];
+  var phaseDiff = function (from, to) {
+    var d = 0;
+    rows.forEach(function (r) { if (r.inning >= from && r.inning <= to) d += r.runsFor - r.runsAgainst; });
+    return d;
+  };
+  var early = phaseDiff(1, 3), late = phaseDiff(4, 99);
+  var diffCls = function (v) { return v > 0 ? " win" : (v < 0 ? " loss" : ""); };
+  var tiles = '<div class="tile-grid">'
+    + '<div class="tile"><div class="tile-label">よく点を取る回</div><div class="tile-value">' + best.inning + '回</div><div class="tile-sub">平均 ' + best.avgFor.toFixed(2) + " 点</div></div>"
+    + '<div class="tile"><div class="tile-label">よく点を取られる回</div><div class="tile-value loss">' + worst.inning + '回</div><div class="tile-sub">平均 ' + worst.avgAgainst.toFixed(2) + " 点</div></div>"
+    + '<div class="tile"><div class="tile-label">1〜3回の得失点差</div><div class="tile-value' + diffCls(early) + '">' + signed(early) + "</div></div>"
+    + '<div class="tile"><div class="tile-label">4回以降の得失点差</div><div class="tile-value' + diffCls(late) + '">' + signed(late) + "</div></div>"
+    + "</div>";
+
+  var maxAvg = Math.max(0.01, Math.max.apply(null, rows.map(function (r) { return Math.max(r.avgFor, r.avgAgainst); })));
+  var chart = '<div class="inning-chart">' + rows.map(function (r) {
+    return '<div class="inning-chart-row"><span class="inning-chart-label">' + r.inning + "回</span>"
+      + '<div class="inning-chart-bars">'
+        + '<div class="inning-bar for" style="width:' + (r.avgFor / maxAvg * 100).toFixed(1) + '%"></div>'
+        + '<div class="inning-bar against" style="width:' + (r.avgAgainst / maxAvg * 100).toFixed(1) + '%"></div>'
+      + "</div>"
+      + '<span class="inning-chart-num mono"><b class="for">' + r.avgFor.toFixed(2) + '</b> / <b class="against">' + r.avgAgainst.toFixed(2) + "</b></span></div>";
+  }).join("") + "</div>"
+    + '<div class="inning-legend"><span><i style="background:var(--accent-strong);"></i>平均得点</span><span><i style="background:var(--loss);"></i>平均失点</span></div>';
+
+  var tableRows = rows.map(function (r) {
+    return "<tr><td><b>" + r.inning + "回</b></td>"
+      + tdnum(r.offGames)
+      + tdnum(r.runsFor)
+      + '<td class="num mono stat-headline">' + r.avgFor.toFixed(2) + "</td>"
+      + '<td class="num mono">' + pct(r.scoredGames, r.offGames) + "</td>"
+      + tdnum(r.runsAgainst, "stat-hit")
+      + '<td class="num mono">' + r.avgAgainst.toFixed(2) + "</td>"
+      + '<td class="num mono">' + pct(r.zeroGames, r.defGames) + "</td></tr>";
+  }).join("");
+  var table = '<div class="table-scroll"><table class="stat-table"><thead><tr>'
+    + '<th>回</th><th class="num">試合</th><th class="num">得点</th><th class="num">平均得点</th><th class="num">得点した率</th>'
+    + '<th class="num">失点</th><th class="num">平均失点</th><th class="num">無失点率</th>'
+    + "</tr></thead><tbody>" + tableRows + "</tbody></table></div>";
+
+  return '<div class="card"><div class="section-title">傾向</div>' + tiles + "</div>"
+    + '<div class="card"><div class="section-title">イニング別の平均得点・失点</div>' + chart + "</div>"
+    + '<div class="card"><div class="section-title">イニング別成績</div>' + table
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">コールドなどで途中終了した試合は、実際に行った回までで計算しています。</p></div>';
 }
 
 /* ---------- settings tab ---------- */
@@ -4679,6 +4786,9 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "stat-subtab") {
     UI.statSubtab = el.getAttribute("data-sub");
+    renderApp();
+  } else if (action === "team-subtab") {
+    UI.teamSubtab = el.getAttribute("data-sub");
     renderApp();
   } else if (action === "sort") {
     var key = el.getAttribute("data-sortkey");
