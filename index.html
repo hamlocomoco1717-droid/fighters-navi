@@ -564,6 +564,30 @@ input.cell-input.wide { width: 66px; }
 .inning-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-muted); margin-top: 12px; }
 .inning-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 
+/* チーム成績: 打順別分析 */
+.tile-value.text { font-family: inherit; font-size: 19px; line-height: 1.3; }
+table.stat-table tr.order-few td { color: var(--ink-muted); }
+table.stat-table tr.order-few td.stat-headline { color: var(--ink-muted); }
+.order-count { font-family: "Roboto Mono", monospace; font-size: 11px; color: var(--ink-muted); margin-left: 2px; }
+.lineup-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.lineup-card {
+  border: 1px solid var(--border); border-top: 3px solid var(--accent);
+  border-radius: 8px; padding: 12px 14px; background: var(--surface); cursor: pointer;
+}
+.lineup-card:hover { background: var(--surface-2); }
+.lineup-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.lineup-date { font-size: 11.5px; color: var(--ink-muted); }
+.lineup-opp { font-weight: 700; font-size: 13.5px; }
+.lineup-score { margin-left: auto; font-family: "Oswald", "Roboto Mono", monospace; font-weight: 700; font-size: 15px; }
+.lineup-card .badge { font-weight: 700; border-radius: 4px; padding: 2px 8px; }
+.lineup-card .badge-win { background: var(--win); color: #fff; }
+.lineup-card .badge-loss { background: var(--loss); color: #fff; }
+.lineup-card .badge-tie { background: var(--tie); color: #fff; }
+.lineup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.lineup-list li { display: flex; align-items: baseline; gap: 8px; }
+.lineup-slot { font-family: "Oswald", sans-serif; font-weight: 700; color: var(--accent-strong); min-width: 18px; text-align: right; }
+.lineup-pos { margin-left: auto; font-size: 11px; color: var(--ink-muted); }
+
 /* game highlights: key points + top performers */
 .keypoints-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .keypoints-list li { position: relative; padding-left: 16px; font-size: 13.5px; }
@@ -792,6 +816,7 @@ var UI = {
   qualifiedOnlyPitchers: false,
   statSubtab: "batting",
   teamSubtab: "summary",
+  lineupShowAll: false,
   statsYear: (availableYears()[0] || "all"),
   readOnly: false,
   rosterEditMode: false,
@@ -4102,12 +4127,13 @@ function renderTeamTab() {
 
   var tsub = UI.teamSubtab || "summary";
   var teamSubtabs = '<div class="subtabs">'
-    + [["summary", "シーズン成績"], ["innings", "イニング別"]].map(function (o) {
+    + [["summary", "シーズン成績"], ["innings", "イニング別"], ["order", "打順別"]].map(function (o) {
       return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
     }).join("") + "</div>";
   var teamHead = '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
     + teamSubtabs;
   if (tsub === "innings") return teamHead + renderInningAnalysis(games);
+  if (tsub === "order") return teamHead + renderBattingOrderAnalysis(games);
 
   return teamHead
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
@@ -4192,6 +4218,99 @@ function renderInningAnalysis(games) {
     + '<div class="card"><div class="section-title">イニング別の平均得点・失点</div>' + chart + "</div>"
     + '<div class="card"><div class="section-title">イニング別成績</div>' + table
     + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">コールドなどで途中終了した試合は、実際に行った回までで計算しています。</p></div>';
+}
+
+/* 打順（打撃成績表の並び順）ごとの成績。途中出場の選手は表の末尾に入るため、
+   その位置の打順として数える */
+var ORDER_MIN_PA = 10;
+function computeBattingOrderAnalysis(games) {
+  var slots = [];
+  games.forEach(function (g) {
+    (g.batting || []).forEach(function (b, idx) {
+      if (!b.playerId) return;
+      var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
+      if (pa <= 0) return;
+      var s = slots[idx] || (slots[idx] = {
+        slot: idx + 1, games: 0, pa: 0, ab: 0, h: 0, d2: 0, d3: 0, hr: 0,
+        bb: 0, hbp: 0, sac: 0, sf: 0, rbi: 0, players: {}
+      });
+      s.games++; s.pa += pa;
+      s.ab += n0(b.ab); s.h += n0(b.h); s.d2 += n0(b.d2); s.d3 += n0(b.d3); s.hr += n0(b.hr);
+      s.bb += n0(b.bb); s.hbp += n0(b.hbp); s.sac += n0(b.sac); s.sf += n0(b.sf); s.rbi += n0(b.rbi);
+      s.players[b.playerId] = (s.players[b.playerId] || 0) + 1;
+    });
+  });
+  return slots.filter(Boolean).map(function (s) {
+    s.rates = battingRates(s);
+    s.topPlayers = Object.keys(s.players)
+      .map(function (id) { return { id: id, n: s.players[id] }; })
+      .sort(function (a, b) { return b.n - a.n; });
+    return s;
+  });
+}
+
+function renderBattingOrderAnalysis(games) {
+  var slots = computeBattingOrderAnalysis(games);
+  if (slots.length === 0) {
+    return '<div class="card"><p style="color:var(--ink-muted);">この期間の打撃記録がありません。</p></div>';
+  }
+  var qualified = slots.filter(function (s) { return s.pa >= ORDER_MIN_PA; });
+  var pool = qualified.length ? qualified : slots;
+  var topBy = function (key) {
+    return pool.slice().sort(function (a, b) { return (b.rates[key] || 0) - (a.rates[key] || 0); })[0];
+  };
+  var obpTop = topBy("obp"), opsTop = topBy("ops");
+  var regular = function (slotNo) {
+    var s = slots.filter(function (x) { return x.slot === slotNo; })[0];
+    return s && s.topPlayers.length ? { name: playerName(s.topPlayers[0].id), n: s.topPlayers[0].n } : null;
+  };
+  var lead = regular(1), cleanup = regular(4);
+  var tiles = '<div class="tile-grid">'
+    + '<div class="tile"><div class="tile-label">出塁率が高い打順</div><div class="tile-value">' + obpTop.slot + '番</div><div class="tile-sub">出塁率 ' + fmtRate(obpTop.rates.obp) + "・" + obpTop.pa + "打席</div></div>"
+    + '<div class="tile"><div class="tile-label">OPSが高い打順</div><div class="tile-value">' + opsTop.slot + '番</div><div class="tile-sub">OPS ' + fmtRate(opsTop.rates.ops) + "・" + opsTop.pa + "打席</div></div>"
+    + '<div class="tile"><div class="tile-label">よく起用する1番</div><div class="tile-value text">' + (lead ? esc(lead.name) : "-") + '</div><div class="tile-sub">' + (lead ? lead.n + "試合" : "") + "</div></div>"
+    + '<div class="tile"><div class="tile-label">よく起用する4番</div><div class="tile-value text">' + (cleanup ? esc(cleanup.name) : "-") + '</div><div class="tile-sub">' + (cleanup ? cleanup.n + "試合" : "") + "</div></div>"
+    + "</div>";
+
+  var tableRows = slots.map(function (s) {
+    var few = s.pa < ORDER_MIN_PA;
+    var who = s.topPlayers.slice(0, 3).map(function (p) { return esc(playerName(p.id)) + '<span class="order-count">' + p.n + "</span>"; }).join("、");
+    return "<tr" + (few ? ' class="order-few"' : "") + "><td><b>" + s.slot + "番</b></td>"
+      + tdnum(s.games) + tdnum(s.pa)
+      + '<td class="num mono stat-headline">' + fmtRate(s.rates.avg) + "</td>"
+      + '<td class="num mono">' + fmtRate(s.rates.obp) + "</td>"
+      + '<td class="num mono">' + fmtRate(s.rates.ops) + "</td>"
+      + tdnum(s.rbi, "stat-rbi")
+      + '<td style="white-space:normal;min-width:160px;font-size:12.5px;">' + who + "</td></tr>";
+  }).join("");
+  var table = '<div class="table-scroll"><table class="stat-table"><thead><tr>'
+    + '<th>打順</th><th class="num">試合</th><th class="num">打席</th><th class="num">打率</th><th class="num">出塁率</th><th class="num">OPS</th><th class="num">打点</th><th>主な選手（試合数）</th>'
+    + "</tr></thead><tbody>" + tableRows + "</tbody></table></div>"
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">打席が' + ORDER_MIN_PA + '未満の打順は薄く表示しています（参考値）。途中出場の選手は打順表の末尾に入るため、その位置の打順として数えています。</p>';
+
+  var lineupGames = games.filter(function (g) { return (g.batting || []).length > 0; })
+    .sort(function (a, b) { return (b.date || "").localeCompare(a.date || "") || (b._seq || 0) - (a._seq || 0); });
+  var LINEUP_PREVIEW = 6;
+  var shownGames = UI.lineupShowAll ? lineupGames : lineupGames.slice(0, LINEUP_PREVIEW);
+  var cards = shownGames.map(function (g) {
+    var res = gameResult(g);
+    var badge = res === "W" ? '<span class="badge badge-win">勝</span>' : res === "L" ? '<span class="badge badge-loss">敗</span>' : res === "T" ? '<span class="badge badge-tie">分</span>' : "";
+    var tot = gameTotals(g);
+    return '<div class="lineup-card" data-action="open-game" data-id="' + g.id + '">'
+      + '<div class="lineup-card-head"><span class="lineup-date mono">' + esc(fmtDate(g.date)) + '</span><span class="lineup-opp">' + esc(g.opponent || "(相手未設定)") + "</span>"
+        + (res ? '<span class="lineup-score mono">' + tot.us + "-" + tot.them + "</span>" : "") + badge + "</div>"
+      + '<ol class="lineup-list">' + g.batting.map(function (b, i) {
+        return '<li><span class="lineup-slot">' + (i + 1) + "</span><span>" + esc(playerName(b.playerId)) + "</span>"
+          + (b.position ? '<span class="lineup-pos">' + esc(b.position) + "</span>" : "") + "</li>";
+      }).join("") + "</ol></div>";
+  }).join("");
+  var moreBtn = lineupGames.length > LINEUP_PREVIEW
+    ? '<button class="btn btn-sm" data-action="toggle-lineup-all" style="margin-top:12px;">' + (UI.lineupShowAll ? "最近の" + LINEUP_PREVIEW + "試合だけ表示" : "すべて表示（" + lineupGames.length + "試合）") + "</button>"
+    : "";
+
+  return '<div class="card"><div class="section-title">傾向</div>' + tiles + "</div>"
+    + '<div class="card"><div class="section-title">打順別成績</div>' + table + "</div>"
+    + '<div class="card"><div class="section-title">試合ごとの打順</div><div class="lineup-grid">' + cards + "</div>" + moreBtn + "</div>";
 }
 
 /* ---------- settings tab ---------- */
@@ -4789,6 +4908,9 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "team-subtab") {
     UI.teamSubtab = el.getAttribute("data-sub");
+    renderApp();
+  } else if (action === "toggle-lineup-all") {
+    UI.lineupShowAll = !UI.lineupShowAll;
     renderApp();
   } else if (action === "sort") {
     var key = el.getAttribute("data-sortkey");
