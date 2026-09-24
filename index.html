@@ -2081,19 +2081,62 @@ function buildGameFromImport(obj) {
   return { game: g, report: report };
 }
 
+/* スマホのチャットからコピーすると混ざりがちなもの（```json の囲み、前後の説明文、
+   “ ” のような飾り引用符、BOM）を取り除いてから読む */
+function parseImportJsonText(raw) {
+  try { return { obj: JSON.parse(raw), cleaned: false }; } catch (e) { /* 下で整形して再挑戦 */ }
+  var t = raw.replace(/^﻿/, "").replace(/```(?:json)?/gi, "").replace(/[“”„‟]/g, '"');
+  var first = t.indexOf("{"), last = t.lastIndexOf("}");
+  if (first === -1) return { error: "nobrace", text: t };
+  t = last > first ? t.slice(first, last + 1) : t.slice(first);
+  try { return { obj: JSON.parse(t), cleaned: true }; }
+  catch (e2) { return { error: e2.message, text: t, truncated: jsonLooksTruncated(t) }; }
+}
+/* 文字列の外側の { [ が閉じきっていなければ、途中で切れたとみなす */
+function jsonLooksTruncated(text) {
+  var depth = 0, inStr = false, escaped = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text.charAt(i);
+    if (inStr) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+  }
+  return depth > 0 || inStr;
+}
+
 function handleImportGameJson() {
   if (UI.readOnly) return;
   var ta = document.getElementById("import-json");
   var box = document.getElementById("import-report");
   if (!ta) return;
   var raw = (ta.value || "").trim();
-  if (!raw) { if (box) box.innerHTML = '<span style="color:var(--loss);">JSONを貼り付けてください。</span>'; return; }
-  var obj;
-  try { obj = JSON.parse(raw); }
-  catch (e) { if (box) box.innerHTML = '<span style="color:var(--loss);">JSONの形式が正しくありません：' + esc(e.message) + "</span>"; return; }
-  if (!obj || typeof obj !== "object" || !Array.isArray(obj.lineup)) {
-    if (box) box.innerHTML = '<span style="color:var(--loss);">lineup（打順の配列）が見つかりません。</span>'; return;
+  var showError = function (msg) { if (box) box.innerHTML = '<span style="color:var(--loss);">' + esc(msg) + "</span>"; };
+  var fileHint = "スマホで長い文章を貼り付けると途中で切れることがあります。JSONをファイルに保存して「① JSONファイルを選ぶ」から読み込んでください。";
+  if (!raw) { showError("JSONを貼り付けてください。"); return; }
+  var parsed = parseImportJsonText(raw);
+  if (parsed.error === "nobrace") {
+    showError("JSONが見つかりません。「{」から始まるJSON全体を貼り付けてください。");
+    return;
   }
+  if (parsed.error) {
+    showError(parsed.truncated
+      ? "JSONが途中で切れているようです（" + raw.length + "文字まで読み込めました）。\n" + fileHint
+      : "JSONの形式が正しくありません（" + parsed.error + "）。\nClaudeに「JSONの形式を確認して、全体をもう一度出して」と頼むと直せることがあります。");
+    return;
+  }
+  var obj = parsed.obj;
+  if (!obj || typeof obj !== "object" || !Array.isArray(obj.lineup)) {
+    var found = obj && typeof obj === "object" ? Object.keys(obj) : [];
+    showError("打順（lineup）が見つかりません。"
+      + (found.length ? "読み込めた項目: " + found.join("、") + "。\nJSONの一部だけが貼り付けられている可能性があります。" : "")
+      + "\n" + fileHint);
+    return;
+  }
+  if (obj.lineup.length === 0) { showError("打順（lineup）が空です。選手の打順を入れたJSONを読み込んでください。"); return; }
   var res = buildGameFromImport(obj);
   STATE.games.push(res.game);
   UI.currentGameId = res.game.id;
@@ -2105,6 +2148,7 @@ function handleImportGameJson() {
   UI.tab = "addgame";
   var r = res.report;
   var lines = ["打者 " + res.game.batting.length + "人・投手 " + res.game.pitching.length + "人を取り込みました。"];
+  if (parsed.cleaned) lines.push("※ コピーに混ざっていた ``` や前後の文章を取り除いて読み込みました。");
   if (r.matched.length) lines.push("照合: " + r.matched.join(" / "));
   if (r.created.length) lines.push("新規登録した選手: " + r.created.join("・"));
   if (r.ambiguous.length) lines.push("⚠ 候補が複数で未確定: " + r.ambiguous.join(" / ") + "\n→「選手」タブで整理するか、JSONの名前をフルネームにして取り込み直してください。");
