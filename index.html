@@ -4222,7 +4222,6 @@ function renderInningAnalysis(games) {
 
 /* 打順（打撃成績表の並び順）ごとの成績。途中出場の選手は表の末尾に入るため、
    その位置の打順として数える */
-var ORDER_MIN_PA = 10;
 function computeBattingOrderAnalysis(games) {
   var slots = [];
   games.forEach(function (g) {
@@ -4254,7 +4253,9 @@ function renderBattingOrderAnalysis(games) {
   if (slots.length === 0) {
     return '<div class="card"><p style="color:var(--ink-muted);">この期間の打撃記録がありません。</p></div>';
   }
-  var qualified = slots.filter(function (s) { return s.pa >= ORDER_MIN_PA; });
+  /* 個人成績と同じ規定打席（チーム試合数×2.5）に届いた打順だけを「傾向」の対象にする */
+  var minPA = regulationPA(games);
+  var qualified = slots.filter(function (s) { return s.pa >= minPA; });
   var pool = qualified.length ? qualified : slots;
   var topBy = function (key) {
     return pool.slice().sort(function (a, b) { return (b.rates[key] || 0) - (a.rates[key] || 0); })[0];
@@ -4273,7 +4274,7 @@ function renderBattingOrderAnalysis(games) {
     + "</div>";
 
   var tableRows = slots.map(function (s) {
-    var few = s.pa < ORDER_MIN_PA;
+    var few = s.pa < minPA;
     var who = s.topPlayers.slice(0, 3).map(function (p) { return esc(playerName(p.id)) + '<span class="order-count">' + p.n + "</span>"; }).join("、");
     return "<tr" + (few ? ' class="order-few"' : "") + "><td><b>" + s.slot + "番</b></td>"
       + tdnum(s.games) + tdnum(s.pa)
@@ -4286,7 +4287,7 @@ function renderBattingOrderAnalysis(games) {
   var table = '<div class="table-scroll"><table class="stat-table"><thead><tr>'
     + '<th>打順</th><th class="num">試合</th><th class="num">打席</th><th class="num">打率</th><th class="num">出塁率</th><th class="num">OPS</th><th class="num">打点</th><th>主な選手（試合数）</th>'
     + "</tr></thead><tbody>" + tableRows + "</tbody></table></div>"
-    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">打席が' + ORDER_MIN_PA + '未満の打順は薄く表示しています（参考値）。途中出場の選手は打順表の末尾に入るため、その位置の打順として数えています。</p>';
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">規定打席（' + Math.round(minPA) + '打席）に届かない打順は薄く表示しています（参考値）。途中出場の選手は打順表の末尾に入るため、その位置の打順として数えています。</p>';
 
   var lineupGames = games.filter(function (g) { return (g.batting || []).length > 0; })
     .sort(function (a, b) { return (b.date || "").localeCompare(a.date || "") || (b._seq || 0) - (a._seq || 0); });
