@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-27",
+  "opponent": "",
+  "venue": "home",
+  "ground": "",
+  "tournament": "1回戦",
+  "note": "試合前のスタメン表から取り込み（打席結果は未入力）。予定の守備交代：3回〜 星→三塁手・三澤→投手・駒沢→指名打者／4〜5回 星→投手・駒沢→三塁手。",
+  "lineup": [
+    { "name": "荒井",       "posByInning": ["右翼手"] },
+    { "name": "船田",       "posByInning": ["遊撃手"] },
+    { "name": "山田",       "posByInning": ["中堅手"] },
+    { "name": "星",         "posByInning": ["左翼手"] },
+    { "name": "藤澤",       "posByInning": ["一塁手"] },
+    { "name": "木村",       "posByInning": ["捕手"] },
+    { "name": "大内",       "posByInning": ["指名打者"] },
+    { "name": "渡辺（亮）", "posByInning": ["二塁手"] },
+    { "name": "三澤",       "posByInning": ["三塁手"] },
+    { "name": "駒沢",       "posByInning": [] }
+  ],
+  "pitchers": [
+    { "name": "峯田（仁）" }
+  ]
+}
