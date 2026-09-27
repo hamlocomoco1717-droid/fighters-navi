@@ -376,6 +376,13 @@ table.stat-table td.cell-input-wrap { padding: 4px 6px; }
   font-size: 12px; white-space: nowrap;
 }
 .atbat-chip .icon-btn { font-size: 12px; }
+.atbat-chip-rbi {
+  display: inline-flex; align-items: center; gap: 2px;
+  border-left: 1px solid var(--border, #ccc); padding-left: 6px; margin-left: 2px;
+}
+.atbat-chip-rbi .icon-btn { min-width: 28px; font-weight: 700; }
+.atbat-chip-rbi .icon-btn:disabled { opacity: 0.3; cursor: default; }
+.atbat-chip-rbi-val { font-size: 11.5px; min-width: 34px; text-align: center; }
 table.stat-table tr.atbat-editing-row td { background: var(--accent-soft); }
 table.stat-table tr.atbat-editing-row td:first-child { background: var(--accent-soft); }
 .icon-btn.active { color: var(--accent); background: var(--accent-soft); }
@@ -3010,6 +3017,17 @@ function stripAtbatRbiMark(tok) {
   while (i > 0 && ATBAT_CIRCLED.indexOf(tok.charAt(i - 1)) !== -1) i--;
   return tok.slice(0, i);
 }
+/* 打席トークン末尾の丸数字（①〜⑨）＝その打席の打点 */
+function atbatTokenRbi(tok) {
+  var mark = tok.slice(stripAtbatRbiMark(tok).length);
+  return mark ? ATBAT_CIRCLED.indexOf(mark.charAt(mark.length - 1)) + 1 : 0;
+}
+function setAtbatTokenRbi(tok, rbi) {
+  var base = stripAtbatRbiMark(tok);
+  rbi = Math.max(0, Math.min(ATBAT_CIRCLED.length, rbi));
+  return base + (rbi > 0 ? ATBAT_CIRCLED.charAt(rbi - 1) : "");
+}
+var ATBAT_MAX_RBI = 4;
 var ATBAT_HIT_CLASSES = { H1: true, H2: true, H3: true, HR: true };
 /* renders one inning's play-by-play text (possibly several "・"-joined tokens),
    applying the same color rule as the numeric stat columns: hits (単打/内野安打/
@@ -3075,6 +3093,11 @@ function recomputeBattingStatsFromAtbats(row) {
 }
 function atbatResultOptionsHtml() {
   return ATBAT_RESULT_TYPES.map(function (r) { return '<option value="' + r.key + '">' + esc(r.label) + "</option>"; }).join("");
+}
+function atbatRbiOptionsHtml() {
+  var h = "";
+  for (var r = 0; r <= ATBAT_MAX_RBI; r++) h += '<option value="' + r + '">' + (r === 0 ? "なし" : r + "点") + "</option>";
+  return h;
 }
 function atbatDirectionOptionsHtml() {
   return '<option value="">（方向なし）</option>' + ATBAT_DIRECTIONS.map(function (d) { return '<option value="' + d.code + '">' + esc(d.label) + "</option>"; }).join("");
@@ -3715,13 +3738,24 @@ function liveUndoAtbat() {
   persistDraft();
 }
 function renderAtbatEditorPanel(b, battingInningCount) {
+  /* 記録済みの打席を1打席ずつチップで表示。－／＋でその打席の打点を増減できる */
   var chips = "";
   for (var i = 0; i < battingInningCount; i++) {
     var v = b.atbats && b.atbats[i];
-    if (v) {
-      chips += '<span class="atbat-chip">' + (i + 1) + "回: " + esc(v)
-        + ' <button class="icon-btn" data-action="clear-atbat-inning" data-rid="' + b._rid + '" data-idx="' + i + '" title="この回の記録を削除">×</button></span>';
-    }
+    if (!v) continue;
+    v.split("・").forEach(function (tok, t) {
+      if (!tok) return;
+      var tRbi = atbatTokenRbi(tok);
+      var ref = ' data-rid="' + b._rid + '" data-idx="' + i + '" data-tidx="' + t + '"';
+      chips += '<span class="atbat-chip">'
+        + '<span class="atbat-chip-label">' + (i + 1) + "回: " + renderAtbatCellHtml(stripAtbatRbiMark(tok)) + "</span>"
+        + '<span class="atbat-chip-rbi">'
+          + '<button class="icon-btn" data-action="atbat-rbi" data-delta="-1"' + ref + (tRbi <= 0 ? " disabled" : "") + ' title="打点を1減らす">－</button>'
+          + '<span class="atbat-chip-rbi-val' + (tRbi > 0 ? " stat-rbi" : "") + '">打点' + tRbi + "</span>"
+          + '<button class="icon-btn" data-action="atbat-rbi" data-delta="1"' + ref + (tRbi >= ATBAT_MAX_RBI ? " disabled" : "") + ' title="打点を1増やす">＋</button>'
+        + "</span>"
+        + '<button class="icon-btn" data-action="clear-atbat-inning"' + ref + ' title="この打席の記録を削除">×</button></span>';
+    });
   }
   var defaultInning = 0;
   for (var j = 0; j < battingInningCount; j++) {
@@ -3734,12 +3768,13 @@ function renderAtbatEditorPanel(b, battingInningCount) {
   }
   return '<div class="atbat-editor-panel">'
     + '<div class="atbat-editor-title">' + esc(playerName(b.playerId)) + ' の打席を記録</div>'
-    + '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px;">結果と方向を選んで追加すると、打数・安打などの集計値が自動的に計算されます。</div>'
+    + '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px;">結果と方向を選んで追加すると、打数・安打などの集計値が自動的に計算されます。打点は追加時に選ぶか、記録済みの打席の－／＋で後から変更できます。</div>'
     + (chips ? '<div style="margin-bottom:8px;">' + chips + "</div>" : "")
     + '<div class="field-row atbat-editor-row" style="align-items:flex-end;gap:8px;">'
     + '<div class="field" style="flex:0 0 90px;"><label>回</label><select id="atbat-inning-' + b._rid + '">' + inningOptions + "</select></div>"
     + '<div class="field" style="flex:1 1 160px;"><label>結果</label><select id="atbat-result-' + b._rid + '">' + atbatResultOptionsHtml() + "</select></div>"
     + '<div class="field" style="flex:1 1 140px;"><label>打球方向</label><select id="atbat-dir-' + b._rid + '">' + atbatDirectionOptionsHtml() + "</select></div>"
+    + '<div class="field" style="flex:0 0 90px;"><label>打点</label><select id="atbat-rbi-' + b._rid + '">' + atbatRbiOptionsHtml() + "</select></div>"
     + '<div class="atbat-editor-actions">'
       + '<button class="btn btn-sm btn-primary" data-action="add-atbat-token" data-rid="' + b._rid + '">＋ 記録を追加</button>'
       + '<button class="btn btn-sm" data-action="toggle-atbat-editor" data-rid="' + b._rid + '">閉じる</button>'
@@ -4518,7 +4553,7 @@ function onAppClick(e) {
       return;
     }
     UI.confirmDialog = {
-      message: "打席内容を編集するには暗証番号を入力してください。\n編集すると、打数・安打などの数字は打席内容から自動的に計算し直されます（得点・打点・盗塁は手入力のまま残ります）。",
+      message: "打席内容を編集するには暗証番号を入力してください。\n編集すると、打数・安打などの数字は打席内容から自動的に計算し直されます（得点・盗塁は手入力のまま残ります。打点は各打席の「打点」ボタンで増減できます）。",
       action: "enable-atbat-edit", requiresPin: true, okLabel: "編集する"
     };
     renderApp();
@@ -4883,9 +4918,15 @@ function onAppClick(e) {
     var resultSel = document.getElementById("atbat-result-" + atRid);
     var dirSel = document.getElementById("atbat-dir-" + atRid);
     if (!inningSel || !resultSel) return;
+    var rbiSel = document.getElementById("atbat-rbi-" + atRid);
     var inningIdx = parseInt(inningSel.value, 10);
     var token = buildAtbatToken(resultSel.value, dirSel ? dirSel.value : "");
     if (!token || isNaN(inningIdx)) return;
+    var addRbi = rbiSel ? (parseInt(rbiSel.value, 10) || 0) : 0;
+    if (addRbi > 0) {
+      token = setAtbatTokenRbi(token, addRbi);
+      atRow.rbi = n0(atRow.rbi) + atbatTokenRbi(token);
+    }
     if (!atRow.atbats) atRow.atbats = [];
     while (atRow.atbats.length <= inningIdx) atRow.atbats.push("");
     atRow.atbats[inningIdx] = atRow.atbats[inningIdx] ? (atRow.atbats[inningIdx] + "・" + token) : token;
@@ -4895,10 +4936,36 @@ function onAppClick(e) {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
     var clRid = el.getAttribute("data-rid");
     var clIdx = parseInt(el.getAttribute("data-idx"), 10);
+    var clTidx = parseInt(el.getAttribute("data-tidx"), 10);
     var clRow = UI.draftGame.batting.find(function (b) { return b._rid === clRid; });
-    if (!clRow || !clRow.atbats || isNaN(clIdx)) return;
-    clRow.atbats[clIdx] = "";
+    if (!clRow || !clRow.atbats || isNaN(clIdx) || !clRow.atbats[clIdx]) return;
+    /* data-tidx があればその1打席だけ、なければその回の記録をまるごと削除。
+       消した打席に付いていた打点は、打点の合計からも差し引く */
+    var clToks = clRow.atbats[clIdx].split("・");
+    var clRemoved = isNaN(clTidx) ? clToks : clToks.splice(clTidx, 1);
+    clRemoved.forEach(function (tok) { clRow.rbi = Math.max(0, n0(clRow.rbi) - atbatTokenRbi(tok || "")); });
+    clRow.atbats[clIdx] = isNaN(clTidx) ? "" : clToks.join("・");
     recomputeBattingStatsFromAtbats(clRow);
+    persistDraft();
+  } else if (action === "atbat-rbi") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.atbatEditMode)) return;
+    var arRid = el.getAttribute("data-rid");
+    var arIdx = parseInt(el.getAttribute("data-idx"), 10);
+    var arTidx = parseInt(el.getAttribute("data-tidx"), 10);
+    var arDelta = parseInt(el.getAttribute("data-delta"), 10) || 0;
+    var arRow = UI.draftGame.batting.find(function (b) { return b._rid === arRid; });
+    if (!arRow || !arRow.atbats || !arRow.atbats[arIdx] || isNaN(arTidx)) return;
+    var arToks = arRow.atbats[arIdx].split("・");
+    if (!arToks[arTidx]) return;
+    /* 打席記号の丸数字（①②…）と、表の「打点」の合計を同じだけ増減させる */
+    var arBefore = atbatTokenRbi(arToks[arTidx]);
+    /* ＋は 4点（満塁本塁打）まで。取り込みで 5点以上になっている打席は減らすことだけできる */
+    var arAfter = Math.max(0, Math.min(Math.max(ATBAT_MAX_RBI, arBefore), arBefore + arDelta));
+    arToks[arTidx] = setAtbatTokenRbi(arToks[arTidx], arAfter);
+    var arDiff = atbatTokenRbi(arToks[arTidx]) - arBefore;
+    if (arDiff === 0) return;
+    arRow.atbats[arIdx] = arToks.join("・");
+    arRow.rbi = Math.max(0, n0(arRow.rbi) + arDiff);
     persistDraft();
   } else if (action === "add-prow") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.pitchingEditMode)) return;
