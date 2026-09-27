@@ -1,0 +1,37 @@
+{
+  "date": "2026-09-27",
+  "opponent": "WANS",
+  "venue": "away",
+  "ground": "",
+  "tournament": "ひばりクラブ杯",
+  "note": "手書きスコアシートから取り込み。3回まで。日付は写真で切れていたため同日の9/27と推定。大会名・守備位置の変更（荒井9→7、星7→DH、大内DH→9、三澤5→1、峯田1→5を試合開始から適用）・峯田（仁）か（卓）か・各選手の得点（推定）は要確認。塗りつぶされた丸数字は打点なしとして扱った。",
+  "innings": {
+    "top":    [12, 0, 3],
+    "bottom": [0, 3, 0]
+  },
+  "lineup": [
+    { "name": "荒井",     "posByInning": ["左翼手","左翼手","左翼手"],
+      "atbatsIkz": ["B", "B", "7.H", "7.H"], "stats": { "r": 2 } },
+    { "name": "船田",     "posByInning": ["遊撃手","遊撃手","遊撃手"],
+      "atbatsIkz": ["7.HR/2", "8.H/1", "1.OG", "8.OF"], "stats": { "r": 2 } },
+    { "name": "山田",     "posByInning": ["中堅手","中堅手","中堅手"],
+      "atbatsIkz": ["7.H", "9.2H/2", "8.OF"], "stats": { "r": 2 } },
+    { "name": "星",       "posByInning": ["指名打者","指名打者","指名打者"],
+      "atbatsIkz": ["6.E", "8.2H/2", "5.OG"], "stats": { "r": 2 } },
+    { "name": "藤澤",     "posByInning": ["一塁手","一塁手","一塁手"],
+      "atbatsIkz": ["6.OG", "9.H/1", "5.E"], "stats": { "r": 1 } },
+    { "name": "木村",     "posByInning": ["捕手","捕手","捕手"],
+      "atbatsIkz": ["8.H/2", "9.H", "8.H/1"], "stats": { "r": 2 } },
+    { "name": "大内",     "posByInning": ["右翼手","右翼手","右翼手"],
+      "atbatsIkz": ["B", "7.2H", "6.OG"], "stats": { "r": 1 } },
+    { "name": "渡辺（亮）", "posByInning": ["二塁手","二塁手","二塁手"],
+      "atbatsIkz": ["8.H/2", "B", "7.OF"], "stats": { "r": 1 } },
+    { "name": "峯田（仁）", "posByInning": ["三塁手","三塁手","三塁手"],
+      "atbatsIkz": ["B", "6.OF"], "stats": { "r": 1 } },
+    { "name": "駒沢",     "posByInning": [],
+      "atbatsIkz": ["", "", "7.H/1"], "stats": { "r": 1 } }
+  ],
+  "pitchers": [
+    { "name": "三澤", "ip": "3.0", "r": 3, "er": 0, "bb": 0, "so": 0, "decision": "W" }
+  ]
+}
