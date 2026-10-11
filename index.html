@@ -585,6 +585,13 @@ input.cell-input.wide { width: 66px; }
 table.stat-table tr.order-few td { color: var(--ink-muted); }
 table.stat-table tr.opp-row { cursor: pointer; }
 table.stat-table tr.opp-open td { background: var(--accent-soft); }
+.edit-menu-toggle { width: 100%; justify-content: center; }
+#sec-meta, #sec-batting, #sec-position, #sec-pitching { scroll-margin-top: 120px; }
+.edit-menu-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+.edit-menu-item { justify-content: center; text-align: center; flex-direction: column; line-height: 1.35; }
+.edit-menu-item.editing { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 700; }
+.edit-menu-state { display: block; font-size: 10.5px; font-weight: 400; color: var(--ink-muted); }
+.edit-menu-note { grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-muted); margin: 6px 0 0; }
 .opp-caret { display: inline-block; width: 1em; color: var(--ink-muted); }
 table.stat-table tr.opp-total td { background: var(--surface-2); font-weight: 700; border-bottom: 2px solid var(--border); }
 .opp-total-sub { font-size: 11px; font-weight: 400; color: var(--ink-muted); margin-left: 6px; }
@@ -1839,6 +1846,12 @@ function renderApp() {
   else content = renderSettingsTab();
   document.getElementById("app").innerHTML = renderShell(content);
   saveViewState();
+  if (UI.scrollAfterEdit && !UI.confirmDialog) {
+    var sae = UI.scrollAfterEdit;
+    UI.scrollAfterEdit = null;
+    var saeEl = UI[sae.mode] ? document.getElementById(sae.id) : null;
+    if (saeEl) saeEl.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
 }
 
 var VIEW_STATE_KEY = "softball-scorebook-view-v1";
@@ -2870,16 +2883,13 @@ function renderGameDetail(g) {
   var editingPosBatter = canEditPosition && UI.editingPosRow
     ? d.batting.filter(function (b) { return b._rid === UI.editingPosRow; })[0]
     : null;
-  var posEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame) ? "" : (UI.positionEditMode
-    ? ' <button type="button" class="btn btn-sm" data-action="disable-position-edit">編集を終了</button>'
-    : ' <button type="button" class="btn btn-sm" data-action="request-position-edit">✎ 守備位置の交代を編集</button>');
-
-  var atbatEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame) ? "" : (UI.atbatEditMode
-    ? ' <button type="button" class="btn btn-sm" data-action="disable-atbat-edit">編集を終了</button>'
-    : ' <button type="button" class="btn btn-sm" data-action="request-atbat-edit">✎ 打席内容を編集</button>');
-  var battingTotalsEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame) ? "" : (UI.battingTotalsEditMode
-    ? ' <button type="button" class="btn btn-sm" data-action="disable-batting-totals-edit">編集を終了</button>'
-    : ' <button type="button" class="btn btn-sm" data-action="request-batting-totals-edit">✎ 打席以降の数字を編集</button>');
+  /* 編集の入口はページ下部の「✎ 編集」メニューにまとめ、各欄には編集中だけ「編集を終了」を出す */
+  var posEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame || !UI.positionEditMode) ? ""
+    : ' <button type="button" class="btn btn-sm btn-primary" data-action="disable-position-edit">編集を終了</button>';
+  var atbatEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame || !UI.atbatEditMode) ? ""
+    : ' <button type="button" class="btn btn-sm btn-primary" data-action="disable-atbat-edit">打席の編集を終了</button>';
+  var battingTotalsEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame || !UI.battingTotalsEditMode) ? ""
+    : ' <button type="button" class="btn btn-sm btn-primary" data-action="disable-batting-totals-edit">数字の編集を終了</button>';
 
   /* ---- 打順まとめて登録（新規追加中のみ） ---- */
   var bulkLineupHtml = "";
@@ -2953,9 +2963,8 @@ function renderGameDetail(g) {
         + "</tr>";
     }).join("");
 
-  var pitchingEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame) ? "" : (UI.pitchingEditMode
-    ? ' <button type="button" class="btn btn-sm" data-action="disable-pitching-edit">編集を終了</button>'
-    : ' <button type="button" class="btn btn-sm" data-action="request-pitching-edit">✎ 投手成績を編集</button>');
+  var pitchingEditToggleHtml = (UI.readOnly || UI.isNewUnsavedGame || !UI.pitchingEditMode) ? ""
+    : ' <button type="button" class="btn btn-sm btn-primary" data-action="disable-pitching-edit">編集を終了</button>';
 
   var pitchingHtml = '<div class="section-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">投手成績' + pitchingEditToggleHtml + '</div>'
     + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
@@ -2967,9 +2976,8 @@ function renderGameDetail(g) {
       + '<button class="btn btn-sm" data-action="add-prow">＋ 追加</button></div>');
 
   var canEditMeta = UI.isNewUnsavedGame || UI.gameMetaEditMode;
-  var metaEditToggleHtml = UI.isNewUnsavedGame || UI.readOnly ? "" : (canEditMeta
-    ? ' <button type="button" class="btn btn-sm" data-action="disable-game-meta-edit" style="margin-top:4px;">編集を終了</button>'
-    : ' <button type="button" class="btn btn-sm" data-action="request-game-meta-edit" style="margin-top:4px;">✎ 編集する</button>');
+  var metaEditToggleHtml = (UI.isNewUnsavedGame || UI.readOnly || !canEditMeta) ? ""
+    : ' <button type="button" class="btn btn-sm btn-primary" data-action="disable-game-meta-edit" style="margin-top:4px;">編集を終了</button>';
   var dateFieldHtml = canEditMeta
     ? ('<input type="date" data-draft="date" value="' + esc(d.date || "") + '"' + (UI.readOnly ? " disabled" : "") + ">" + metaEditToggleHtml)
     : (esc(fmtDate(d.date)) + metaEditToggleHtml);
@@ -3013,6 +3021,31 @@ function renderGameDetail(g) {
     }
   }
 
+  var editMenuHtml = "";
+  if (!UI.readOnly && !isAdding) {
+    var editItems = [
+      { label: "試合情報（日付・相手・会場）", on: UI.gameMetaEditMode, req: "request-game-meta-edit", off: "disable-game-meta-edit", sec: "sec-meta", mode: "gameMetaEditMode" },
+      { label: "打席内容", on: UI.atbatEditMode, req: "request-atbat-edit", off: "disable-atbat-edit", sec: "sec-batting", mode: "atbatEditMode" },
+      { label: "打席以降の数字", on: UI.battingTotalsEditMode, req: "request-batting-totals-edit", off: "disable-batting-totals-edit", sec: "sec-batting", mode: "battingTotalsEditMode" },
+      { label: "守備位置の交代", on: UI.positionEditMode, req: "request-position-edit", off: "disable-position-edit", sec: "sec-position", mode: "positionEditMode" },
+      { label: "投手成績", on: UI.pitchingEditMode, req: "request-pitching-edit", off: "disable-pitching-edit", sec: "sec-pitching", mode: "pitchingEditMode" }
+    ];
+    var anyEditing = editItems.some(function (it) { return it.on; });
+    var menuOpen = UI.editMenuOpen || anyEditing;
+    editMenuHtml = '<div class="card edit-menu">'
+      + '<button type="button" class="btn edit-menu-toggle' + (menuOpen ? " btn-primary" : "") + '" data-action="toggle-edit-menu">'
+        + (menuOpen ? "✎ 編集 ▴" : "✎ 編集 ▾") + "</button>"
+      + (!menuOpen ? "" : '<div class="edit-menu-items">'
+        + editItems.map(function (it) {
+          return it.on
+            ? '<button type="button" class="btn btn-sm edit-menu-item editing" data-action="' + it.off + '">✓ ' + it.label + '<span class="edit-menu-state">編集中・押すと終了</span></button>'
+            : '<button type="button" class="btn btn-sm edit-menu-item" data-action="' + it.req + '" data-scroll="' + it.sec + '" data-scroll-mode="' + it.mode + '">' + it.label + "</button>";
+        }).join("")
+        + '<p class="edit-menu-note">編集には暗証番号が必要です。選ぶとその欄に移動します。</p>'
+        + "</div>")
+      + "</div>";
+  }
+
   var footer = UI.readOnly ? "" : ('<div class="field-row game-footer" style="justify-content:space-between;margin-top:20px;">'
     + '<button class="btn btn-danger" data-action="' + (isAdding ? "discard-new-game" : "delete-game") + '">' + (isAdding ? "破棄する" : "試合を削除") + "</button>"
     + '<div class="game-footer-actions" style="display:flex;gap:8px;">'
@@ -3025,13 +3058,14 @@ function renderGameDetail(g) {
   return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る")) + "</button></div></div>"
     + scoreHeroHtml
     + (liveHtml
-        ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card">' + metaHtml + "</div>")
-        : ('<div class="card">' + metaHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>"))
+        ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card" id="sec-meta">' + metaHtml + "</div>")
+        : ('<div class="card" id="sec-meta">' + metaHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>"))
     + (highlightsHtml ? '<div class="card">' + highlightsHtml + "</div>" : "")
-    + '<div class="card">' + battingHtml + "</div>"
-    + '<div class="card">' + posHtml + "</div>"
-    + '<div class="card">' + pitchingHtml + "</div>"
+    + '<div class="card" id="sec-batting">' + battingHtml + "</div>"
+    + '<div class="card" id="sec-position">' + posHtml + "</div>"
+    + '<div class="card" id="sec-pitching">' + pitchingHtml + "</div>"
     + (liveEntryHtml ? '<div class="card">' + liveEntryHtml + "</div>" : "")
+    + editMenuHtml
     + footer;
 }
 
@@ -4167,13 +4201,18 @@ function renderRosterTab() {
     + '<div class="field" style="flex:1 1 140px;"><label>守備位置</label><select id="new-player-position">' + positionOptions("") + "</select></div>"
     + '<button class="btn btn-primary" data-action="add-player">＋ 追加</button>'
     + "</div>") : "";
-  var editToggle = UI.readOnly ? "" : (editable
-    ? '<button class="btn btn-sm" data-action="disable-roster-edit">編集を終了</button>'
-    : '<button class="btn btn-sm" data-action="request-roster-edit">✎ 編集する</button>');
+  /* 編集ボタンはページ下部。編集中は上にも「編集を終了」を出す */
+  var editToggle = (UI.readOnly || !editable) ? ""
+    : '<button class="btn btn-sm btn-primary" data-action="disable-roster-edit">編集を終了</button>';
+  var bottomEdit = UI.readOnly ? "" : '<div class="card edit-menu">' + (editable
+    ? '<button type="button" class="btn btn-primary edit-menu-toggle" data-action="disable-roster-edit">✓ 編集を終了</button>'
+    : '<button type="button" class="btn edit-menu-toggle" data-action="request-roster-edit">✎ 選手情報を編集</button>'
+      + '<p class="edit-menu-note">背番号・氏名・守備位置の変更、選手の追加には暗証番号が必要です。</p>') + "</div>";
   var lede = editable ? "選手情報を編集できます。" : "チームの選手名簿です。背番号・氏名・守備位置の変更には暗証番号が必要です。";
   return '<div class="page-head page-head-stadium"><div><h1>選手管理</h1><div class="page-lede">' + lede + "</div></div>" + editToggle + "</div>"
     + sortBar
-    + '<div class="card">' + rows + addForm + "</div>";
+    + '<div class="card">' + rows + addForm + "</div>"
+    + bottomEdit;
 }
 
 /* ---------- player stats tab ---------- */
@@ -4925,6 +4964,8 @@ function attachHandlers() {
 
 function onAppClick(e) {
   var el = e.target.closest("[data-action]");
+  /* 下部の編集メニューから選んだら、暗証番号の確認後にその欄へ移動する */
+  if (el && el.getAttribute("data-scroll")) UI.scrollAfterEdit = { id: el.getAttribute("data-scroll"), mode: el.getAttribute("data-scroll-mode") };
   if (!el) return;
   var action = el.getAttribute("data-action");
 
@@ -4965,6 +5006,7 @@ function onAppClick(e) {
       navigator.clipboard.writeText(hlTxt).then(done).catch(fail);
     } else { fail(); }
   } else if (action === "open-game") {
+    UI.editMenuOpen = false;
     UI.tab = "games";
     UI.currentGameId = el.getAttribute("data-id");
     UI.draftGame = null;
@@ -5485,6 +5527,10 @@ function onAppClick(e) {
   } else if (action === "stat-subtab") {
     UI.statSubtab = el.getAttribute("data-sub");
     renderApp();
+  } else if (action === "toggle-edit-menu") {
+    UI.editMenuOpen = !UI.editMenuOpen;
+    renderApp();
+    if (UI.editMenuOpen) { var em = document.querySelector(".edit-menu"); if (em) em.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
   } else if (action === "toggle-opponent") {
     var oppKey = el.getAttribute("data-key");
     UI.openOpponent = UI.openOpponent === oppKey ? null : oppKey;
