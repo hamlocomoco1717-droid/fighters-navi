@@ -376,6 +376,7 @@ table.stat-table td.cell-input-wrap { padding: 4px 6px; }
   font-size: 12px; white-space: nowrap;
 }
 .atbat-chip .icon-btn { font-size: 12px; }
+.risp-sub { display: block; font-size: 10.5px; color: var(--ink-muted); font-weight: 400; letter-spacing: 0; }
 .atbat-chip-rbi {
   display: inline-flex; align-items: center; gap: 2px;
   border-left: 1px solid var(--border, #ccc); padding-left: 6px; margin-left: 2px;
@@ -1298,13 +1299,15 @@ function yearSelectHtml() {
 function computeBattingAgg(games) {
   var map = new Map();
   (games || STATE.games).forEach(function (g) {
-    (g.batting || []).forEach(function (b) {
+    var risp = computeGameRisp(g);
+    (g.batting || []).forEach(function (b, bi) {
       if (!b.playerId) return;
       var cur = map.get(b.playerId);
       if (!cur) {
-        cur = { playerId: b.playerId, g: 0, ab: 0, pa: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0 };
+        cur = { playerId: b.playerId, g: 0, ab: 0, pa: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0, rispAb: 0, rispH: 0, rispEst: 0 };
         map.set(b.playerId, cur);
       }
+      cur.rispAb += risp[bi].ab; cur.rispH += risp[bi].h; cur.rispEst += risp[bi].estimated;
       var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
       var played = pa > 0;
       if (played) cur.g += 1;
@@ -1318,6 +1321,7 @@ function computeBattingAgg(games) {
 }
 /* 出塁率の分母には従来通り犠打(sac)も含め、犠飛(sf)も加える。犠飛は打数には
    含めない（打率は変わらない）が、出塁率の分母には加わるので出塁率だけ下がる。 */
+var RISP_NOTE = "得点圏＝2塁か3塁に走者がいる場面の打率（右の小さい数字は 打数-安打）。走者の位置が記録されていない打席は、打席の順番と打点から推定しています（盗塁・暴投での進塁は反映されません）。";
 function battingRates(c) {
   var singles = Math.max(0, c.h - c.d2 - c.d3 - c.hr);
   var tb = singles + c.d2 * 2 + c.d3 * 3 + c.hr * 4;
@@ -1326,7 +1330,8 @@ function battingRates(c) {
   var obp = obDen > 0 ? (c.h + c.bb + c.hbp) / obDen : null;
   var slg = c.ab > 0 ? tb / c.ab : null;
   var ops = (obp != null && slg != null) ? obp + slg : null;
-  return { avg: avg, obp: obp, slg: slg, ops: ops, tb: tb };
+  var risp = n0(c.rispAb) > 0 ? n0(c.rispH) / n0(c.rispAb) : null;
+  return { avg: avg, obp: obp, slg: slg, ops: ops, tb: tb, risp: risp };
 }
 
 function computePitchingAgg(games) {
@@ -1895,7 +1900,7 @@ function renderAddGameTab() {
     + '<textarea id="import-json" rows="5" placeholder=\'{ "date": "2026-09-06", "opponent": "済生病院", "venue": "home", "innings": { "top": [1,1,5,0,1,6,1], "bottom": [0,0,1,2,1,0,0] }, "lineup": [ { "name": "荒井", "posByInning": ["中堅手","中堅手","中堅手","中堅手","中堅手","中堅手","中堅手"], "atbatsIkz": ["8.H","6.OG","","4.OL","8.OF"], "stats": { "r": 1 } } ], "pitchers": [ { "name": "峯田（仁）", "ip": "4.0", "r": 7, "decision": "L" } ] }\' style="font-family:\'Roboto Mono\',monospace;font-size:12px;margin-top:4px;"></textarea>'
     + '<button class="btn btn-sm btn-primary" data-action="import-game-json" style="margin-top:8px;">取り込む</button>'
     + '<div id="import-report" style="margin-top:8px;font-size:12.5px;white-space:pre-wrap;"></div>'
-    + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:10px;">打席は <code>atbatsIkz</code> に ikz.jp 式の記号で書けます（例 <code>"8.H/1"</code>=中前打・打点1、<code>"6.OG"</code>=遊ゴロ、<code>"90.HR/4"</code>=右超本塁打・打点4、<code>"B"</code>=四球）。打点は末尾の丸数字（③）も可。<code>G</code>=犠打なので凡打は <code>OG/OF/OL</code>。得点・盗塁は <code>stats</code> に。</p>'
+    + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:10px;">打席は <code>atbatsIkz</code> に ikz.jp 式の記号で書けます（例 <code>"8.H/1"</code>=中前打・打点1、<code>"6.OG"</code>=遊ゴロ、<code>"90.HR/4"</code>=右超本塁打・打点4、<code>"B"</code>=四球）。打点は末尾の丸数字（③）も可。<code>G</code>=犠打なので凡打は <code>OG/OF/OL</code>。得点・盗塁は <code>stats</code> に。任意で <code>bases</code> に打つ前の走者を同じ並びで書くと得点圏打率が正確になります（<code>"0"</code>=なし、<code>"13"</code>=1・3塁、空欄=自動推定）。</p>'
     + "</details>"
     + "</div>");
   return '<div class="page-head"><div><h1>試合を追加</h1><div class="page-lede">新しい試合のスコア・成績を入力します。</div></div></div>'
@@ -2072,6 +2077,12 @@ function buildGameFromImport(obj) {
       });
     } else if (!e.stats && row.atbats.some(function (x) { return x; })) {
       recomputeBattingStatsFromAtbats(row);
+    }
+    /* 任意：打つ前の走者（"0"=なし、"13"=1・3塁…）。atbatsIkz と同じ並び、複数打席は「・」区切り */
+    if (Array.isArray(e.bases)) {
+      row.atbatBases = e.bases.map(function (x) {
+        return String(x == null ? "" : x).split(/[・,]/).map(function (c) { c = c.trim(); return /^(0|[123]{1,3})$/.test(c) ? c : ""; }).join("・");
+      });
     }
     g.batting.push(row);
   });
@@ -3475,6 +3486,125 @@ function liveResolvePlay(resultKey, bases, advance) {
   }
   return { bases: nb, outs: outs, runs: runs };
 }
+/* ---------- 得点圏打率（2塁か3塁に走者がいる場面の打率） ----------
+   打席ごとの「打つ前の走者」を row.atbatBases に保存する。atbats と同じ形で、
+   各回の文字列を「・」で区切った1打席ずつの塁コード：
+     "0"=走者なし / "1"・"2"・"3"・"12"・"13"・"23"・"123"=走者のいる塁 / ""=不明
+   試合中モードは実際の走者を保存する。不明な打席は、その試合の打席を打順どおりに
+   並べ直し、試合中モードと同じ進塁ルール（liveResolvePlay）で走者を再現して推定する
+   （打点の丸数字で「何人還ったか」を合わせる。盗塁・暴投などの進塁は記号に残らない
+   ので反映されない）。 */
+/* atbatBases を atbats と同じ並びに保つ（追加・削除のたびに呼ぶ） */
+function pushAtbatBaseCode(row, inn, wasFirst, code) {
+  if (!Array.isArray(row.atbatBases)) {
+    if (!code) return;
+    row.atbatBases = [];
+  }
+  while (row.atbatBases.length <= inn) row.atbatBases.push("");
+  if (wasFirst) { row.atbatBases[inn] = code; return; }
+  var nTok = String(row.atbats[inn]).split("・").length;
+  var codes = String(row.atbatBases[inn] || "").split("・");
+  while (codes.length < nTok - 1) codes.push("");
+  codes.length = nTok - 1;
+  codes.push(code);
+  row.atbatBases[inn] = codes.join("・");
+}
+function removeAtbatBaseCode(row, inn, tidx) {
+  if (!Array.isArray(row.atbatBases) || !row.atbatBases[inn]) return;
+  var codes = String(row.atbatBases[inn]).split("・");
+  if (tidx == null) codes = []; else codes.splice(tidx, 1);
+  row.atbatBases[inn] = codes.join("・");
+}
+function basesToCode(bases) {
+  var c = "";
+  for (var i = 0; i < 3; i++) if (bases[i]) c += String(i + 1);
+  return c || "0";
+}
+function codeToBases(code) {
+  return [code.indexOf("1") !== -1 ? "R" : null, code.indexOf("2") !== -1 ? "R" : null, code.indexOf("3") !== -1 ? "R" : null];
+}
+function atbatBaseCode(row, inn, tidx) {
+  var cell = row.atbatBases && row.atbatBases[inn];
+  if (!cell) return "";
+  var c = String(cell).split("・")[tidx];
+  return (c && /^(0|[123]{1,3})$/.test(c)) ? c : "";
+}
+/* その回の打席を打順どおりに並べる：[{ri: 打順の行, tidx: その回の何打席目か}, ...]。
+   回の先頭は「前の回の最後の打者の次」。わからないときは、打席のある打者のうち
+   1つ前の打者にその回の打席がない人から始める（＝連続した打席の切れ目） */
+function orderInningAtbats(rows, inn, prevLast) {
+  var n = rows.length, counts = [], total = 0;
+  for (var r = 0; r < n; r++) {
+    var cell = rows[r].atbats && rows[r].atbats[inn];
+    counts[r] = cell ? String(cell).split("・").length : 0;
+    total += counts[r];
+  }
+  if (total === 0) return [];
+  var start = -1;
+  if (prevLast != null && counts[(prevLast + 1) % n] > 0) start = (prevLast + 1) % n;
+  for (var s0 = 0; start === -1 && s0 < n; s0++) {
+    if (counts[s0] > 0 && counts[(s0 - 1 + n) % n] === 0) start = s0;
+  }
+  if (start === -1) start = prevLast != null ? (prevLast + 1) % n : 0;
+  var seq = [], used = counts.map(function () { return 0; });
+  for (var k = start; seq.length < total; k++) {
+    var ri = k % n;
+    if (used[ri] < counts[ri]) { seq.push({ ri: ri, tidx: used[ri] }); used[ri]++; }
+  }
+  return seq;
+}
+var RISP_PLAY_KEY = { H1: "H1", H2: "H2", H3: "H3", HR: "HR", BB: "BB", HBP: "HBP", SO: "SO", SAC: "SAC",
+  FC: "FC", ROE: "ROE", DP: "DP", GO: "GO", FLY: "FLY", LINE: "LINE", OUT_OTHER: "LINE" };
+/* 1試合ぶんの得点圏成績を打順の行ごとに返す：[{ab, h, estimated}, ...]（g.batting と同じ並び） */
+function computeGameRisp(g) {
+  var rows = g.batting || [];
+  var out = rows.map(function () { return { ab: 0, h: 0, estimated: 0 }; });
+  var innCount = rows.reduce(function (m, b) { return Math.max(m, (b.atbats || []).length); }, 0);
+  var prevLast = null;
+  for (var inn = 0; inn < innCount; inn++) {
+    var seq = orderInningAtbats(rows, inn, prevLast);
+    if (seq.length === 0) continue;
+    var bases = [null, null, null], outs = 0;
+    seq.forEach(function (pa) {
+      var row = rows[pa.ri];
+      var tok = String(row.atbats[inn]).split("・")[pa.tidx] || "";
+      var cls = classifyAtbatToken(tok);
+      var saved = atbatBaseCode(row, inn, pa.tidx);
+      if (saved) bases = codeToBases(saved);
+      if (outs >= 3) { bases = saved ? bases : [null, null, null]; outs = 0; }
+      if (cls === null) return;
+      var isAb = !(cls === "BB" || cls === "HBP" || cls === "SAC" || cls === "SACFLY");
+      if (isAb && (bases[1] || bases[2])) {
+        out[pa.ri].ab++;
+        if (cls === "H1" || cls === "H2" || cls === "H3" || cls === "HR") out[pa.ri].h++;
+        if (!saved) out[pa.ri].estimated++;
+      }
+      /* 打席後の走者を進める。打点の丸数字ぶん走者が還るよう進塁の大きさを合わせる */
+      var rbi = atbatTokenRbi(tok);
+      var play;
+      if (cls === "SACFLY") {
+        play = { bases: [bases[0], bases[1], null], outs: 1, runs: bases[2] ? 1 : 0 };
+      } else {
+        var key = RISP_PLAY_KEY[cls] || "LINE";
+        play = liveResolvePlay(key, bases, 0);
+        for (var adv = 1; adv <= 2 && play.runs < rbi && (key === "H1" || key === "H2" || key === "FC" || key === "ROE"); adv++) {
+          play = liveResolvePlay(key, bases, adv);
+        }
+        if (play.outs > 0 && play.runs < rbi) {
+          var nb = play.bases.slice();
+          for (var bp = 2; bp >= 0 && play.runs < rbi; bp--) {
+            if (nb[bp] && nb[bp] !== "B") { nb[bp] = null; play.runs++; }
+          }
+          play.bases = nb;
+        }
+      }
+      bases = play.bases.map(function (x) { return x ? "R" : null; });
+      outs += play.outs;
+    });
+    prevLast = seq[seq.length - 1].ri;
+  }
+  return out;
+}
 /* 犠打・犠飛で「実際に進塁した走者」が明示指定されたときの塁上の動き。打者は必ずアウト。
    チェックした走者だけ1つ進め（3塁走者は生還）、それ以外はそのまま元の塁に残る。
    矛盾した指定（進塁先がふさがっている等）で走者が消えないよう、3塁側から
@@ -3568,6 +3698,7 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec) {
   while (row.atbats.length <= inn) row.atbats.push("");
   var wasFirst = !row.atbats[inn];
   row.atbats[inn] = wasFirst ? token : (row.atbats[inn] + "・" + token);
+  pushAtbatBaseCode(row, inn, wasFirst, basesToCode(snapBases));
   recomputeBattingStatsFromAtbats(row);
   if (rbi > 0) row.rbi = n0(row.rbi) + rbi;
 
@@ -3706,6 +3837,7 @@ function liveUndoAtbat() {
       var parts = row.atbats[last.inn].split("・");
       parts.pop();
       row.atbats[last.inn] = parts.join("・");
+      removeAtbatBaseCode(row, last.inn, parts.length);
       recomputeBattingStatsFromAtbats(row);
       row.rbi = Math.max(0, n0(last.prevRbi));
     }
@@ -3944,7 +4076,7 @@ function renderPlayerStatsTab() {
     if (UI.qualifiedOnlyBatters) rows = rows.filter(function (r) { return r.qualified; });
     var battingSortVal = function (r, key) {
       if (key === "name") return playerName(r.c.playerId);
-      if (["avg", "obp", "slg", "ops"].indexOf(key) !== -1) return r.rates[key];
+      if (["avg", "obp", "slg", "ops", "risp"].indexOf(key) !== -1) return r.rates[key];
       return r.c[key];
     };
     var qualBattingRows = sortRows(rows.filter(function (r) { return r.qualified; }), UI.battingSort, battingSortVal);
@@ -3953,6 +4085,10 @@ function renderPlayerStatsTab() {
     var battingCols = [
       { key: "avg", label: "打率", cell: function (r) { return '<td class="num mono stat-headline">' + fmtRate(r.rates.avg) + "</td>"; } },
       { key: "rbi", label: "打点", cell: function (r) { return tdnum(r.c.rbi, "stat-rbi"); } },
+      { key: "risp", label: "得点圏", cell: function (r) {
+        return '<td class="num mono" style="white-space:nowrap;">' + fmtRate(r.rates.risp)
+          + '<span class="risp-sub">' + n0(r.c.rispAb) + "-" + n0(r.c.rispH) + "</span></td>";
+      } },
       { key: "d2", label: "二塁打", cell: function (r) { return tdnum(r.c.d2); } },
       { key: "d3", label: "三塁打", cell: function (r) { return tdnum(r.c.d3); } },
       { key: "hr", label: "本塁打", cell: function (r) { return tdnum(r.c.hr); } },
@@ -3996,6 +4132,7 @@ function renderPlayerStatsTab() {
       body += unqualBattingRows.map(renderBattingRow).join("");
     }
     content = '<div class="page-lede" style="margin-bottom:8px;">規定打席: ' + Math.round(qualPA) + '打席（チーム' + computeTeamRecord(games).gp + '試合 × 2.5）</div>'
+      + '<div class="page-lede" style="margin-bottom:8px;font-size:12px;">' + RISP_NOTE + "</div>"
       + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
       + statHeader("選手", "name", UI.battingSort)
       + orderedBattingCols.map(function (col) { return statHeader(col.label, col.key, UI.battingSort, true); }).join("")
@@ -4091,7 +4228,7 @@ function renderPlayerDetail(pid) {
   var batHtml;
   if (bAgg && bAgg.pa > 0) {
     var rt = battingRates(bAgg);
-    var tiles = [["打率", fmtRate(rt.avg)], ["OPS", fmtRate(rt.ops)], ["本塁打", bAgg.hr], ["打点", bAgg.rbi], ["安打", bAgg.h], ["試合", bAgg.g]];
+    var tiles = [["打率", fmtRate(rt.avg)], ["得点圏", fmtRate(rt.risp) + '<span class="risp-sub">' + n0(bAgg.rispAb) + "打数" + n0(bAgg.rispH) + "安打</span>"], ["OPS", fmtRate(rt.ops)], ["本塁打", bAgg.hr], ["打点", bAgg.rbi], ["安打", bAgg.h], ["試合", bAgg.g]];
     batHtml = '<div class="section-title">打撃</div>'
       + '<div class="tile-grid">' + tiles.map(function (t) {
         return '<div class="tile"><div class="tile-label">' + t[0] + '</div><div class="tile-value">' + t[1] + "</div></div>";
@@ -4102,7 +4239,8 @@ function renderPlayerDetail(pid) {
       + "<tr><th>四球</th>" + tdnum(bAgg.bb) + "<th>死球</th>" + tdnum(bAgg.hbp) + "<th>三振</th>" + tdnum(bAgg.so) + "</tr>"
       + '<tr><th>犠打</th>' + tdnum(bAgg.sac) + '<th>犠飛</th>' + tdnum(bAgg.sf) + '<th>出塁率</th><td class="num mono">' + fmtRate(rt.obp) + "</td></tr>"
       + '<tr><th>長打率</th><td class="num mono">' + fmtRate(rt.slg) + "</td></tr>"
-      + "</tbody></table></div>";
+      + "</tbody></table></div>"
+      + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>";
   } else {
     batHtml = '<div class="section-title">打撃</div><p style="color:var(--ink-muted);font-size:13px;">この期間の打席記録はありません。</p>';
   }
@@ -4929,7 +5067,9 @@ function onAppClick(e) {
     }
     if (!atRow.atbats) atRow.atbats = [];
     while (atRow.atbats.length <= inningIdx) atRow.atbats.push("");
-    atRow.atbats[inningIdx] = atRow.atbats[inningIdx] ? (atRow.atbats[inningIdx] + "・" + token) : token;
+    var atFirst = !atRow.atbats[inningIdx];
+    atRow.atbats[inningIdx] = atFirst ? token : (atRow.atbats[inningIdx] + "・" + token);
+    pushAtbatBaseCode(atRow, inningIdx, atFirst, "");
     recomputeBattingStatsFromAtbats(atRow);
     persistDraft();
   } else if (action === "clear-atbat-inning") {
@@ -4945,6 +5085,7 @@ function onAppClick(e) {
     var clRemoved = isNaN(clTidx) ? clToks : clToks.splice(clTidx, 1);
     clRemoved.forEach(function (tok) { clRow.rbi = Math.max(0, n0(clRow.rbi) - atbatTokenRbi(tok || "")); });
     clRow.atbats[clIdx] = isNaN(clTidx) ? "" : clToks.join("・");
+    removeAtbatBaseCode(clRow, clIdx, isNaN(clTidx) ? null : clTidx);
     recomputeBattingStatsFromAtbats(clRow);
     persistDraft();
   } else if (action === "atbat-rbi") {
