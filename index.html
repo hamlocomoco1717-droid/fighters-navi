@@ -1655,12 +1655,10 @@ function computeHitStreaks(games) {
    打席記号の先頭の守備位置（左安・遊ゴ・右中2 など）から打球の飛んだ方向を集計する。
    三振・四死球・打撃妨害など打球のない打席は数えない。方向なしで記録した打席は「方向不明」 */
 var SPRAY_ZONES = [
-  /* 外野：左翼線〜右翼線を5等分 */
-  { key: "左", label: "レフト", r0: 118, r1: 205, a0: -45, a1: -27 },
-  { key: "左中", label: "左中間", r0: 118, r1: 205, a0: -27, a1: -9 },
-  { key: "中", label: "センター", r0: 118, r1: 205, a0: -9, a1: 9 },
-  { key: "右中", label: "右中間", r0: 118, r1: 205, a0: 9, a1: 27 },
-  { key: "右", label: "ライト", r0: 118, r1: 205, a0: 27, a1: 45 },
+  /* 外野：レフト・センター・ライトの3方向（左中間はレフト、右中間はライトに含める） */
+  { key: "左", label: "レフト", r0: 118, r1: 205, a0: -45, a1: -15 },
+  { key: "中", label: "センター", r0: 118, r1: 205, a0: -15, a1: 15 },
+  { key: "右", label: "ライト", r0: 118, r1: 205, a0: 15, a1: 45 },
   /* 内野：三遊間・二遊間で4分割 */
   { key: "三", label: "サード", r0: 32, r1: 118, a0: -45, a1: -22.5 },
   { key: "遊", label: "ショート", r0: 32, r1: 118, a0: -22.5, a1: 0 },
@@ -1668,13 +1666,14 @@ var SPRAY_ZONES = [
   { key: "一", label: "ファースト", r0: 32, r1: 118, a0: 22.5, a1: 45 },
   { key: "投捕", label: "投・捕", r0: 0, r1: 32, a0: -45, a1: 45 }
 ];
-var SPRAY_SIDE = { "左": "L", "左中": "L", "三": "L", "遊": "L", "中": "C", "投捕": "C", "二": "R", "一": "R", "右中": "R", "右": "R" };
+var SPRAY_SIDE = { "左": "L", "三": "L", "遊": "L", "中": "C", "投捕": "C", "二": "R", "一": "R", "右": "R" };
 function atbatTokenDir(tok) {
   var cls = classifyAtbatToken(tok);
   if (cls === null || cls === "SO" || cls === "BB" || cls === "HBP") return null;
   var base = stripAtbatRbiMark(tok);
   var two = base.slice(0, 2);
-  if (two === "左中" || two === "右中") return two;
+  if (two === "左中") return "左";
+  if (two === "右中") return "右";
   var c = base.charAt(0);
   if (c === "投" || c === "捕") return "投捕";
   if ("一二三遊左中右".indexOf(c) !== -1) return c;
