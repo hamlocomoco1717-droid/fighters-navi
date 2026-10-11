@@ -588,6 +588,17 @@ input.cell-input.wide { width: 66px; }
 table.stat-table tr.order-few td { color: var(--ink-muted); }
 table.stat-table tr.opp-row { cursor: pointer; }
 table.stat-table tr.opp-open td { background: var(--accent-soft); }
+.ms-list { display: flex; flex-direction: column; gap: 6px; }
+.ms-row { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "player goal left" "bar bar cur"; align-items: center; column-gap: 8px; row-gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
+.ms-row.ms-own { grid-template-areas: "goal goal left" "bar bar cur"; }
+.ms-player { grid-area: player; font-size: 14px; font-weight: 700; }
+.ms-goal { grid-area: goal; color: var(--ink-muted); font-size: 12.5px; }
+.ms-left { grid-area: left; white-space: nowrap; }
+.ms-left b { font-size: 18px; color: var(--loss); margin: 0 2px; }
+.ms-bar { grid-area: bar; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.ms-bar > span { display: block; height: 100%; background: var(--focus); }
+.ms-cur { grid-area: cur; font-size: 11px; color: var(--ink-muted); }
+.ms-row.ms-near { box-shadow: inset 3px 0 0 var(--focus); }
 .title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .title-card { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; border-bottom: 3px solid var(--focus); }
 .title-name { font-weight: 700; font-size: 15px; margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; }
@@ -1195,6 +1206,82 @@ function computeGameKeyPoints(d, weAreAway, ourScore, theirScore, milestones) {
   return { points: points, originIds: originIds };
 }
 
+/* 通算記録の区切り（試合のキーポイントと「記録まであと少し」で共通） */
+var MILESTONE_THRESHOLDS = {
+  h: [10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500],
+  hr: [5, 10, 15, 20, 25, 30, 40, 50],
+  d2: [10, 25, 50, 100], d3: [5, 10, 20],
+  rbi: [10, 25, 50, 75, 100, 150, 200, 250, 300],
+  sb: [10, 25, 50], so: [25, 50, 100, 150, 200, 300],
+  w: [5, 10, 25, 50], s: [5, 10, 20]
+};
+var MILESTONE_LABEL = { h: "安打", hr: "本塁打", d2: "二塁打", d3: "三塁打", rbi: "打点", sb: "盗塁", so: "奪三振", w: "勝", s: "セーブ" };
+/* 「あと少し」とみなす残り（これ以下なら一覧に出す） */
+var MILESTONE_NEAR = { h: 5, hr: 2, d2: 2, d3: 1, rbi: 5, sb: 3, so: 5, w: 1, s: 1 };
+var MILESTONE_UNIT = { h: "本", hr: "本", d2: "本", d3: "本", rbi: "点", sb: "個", so: "個", w: "勝", s: "" };
+/* 通算（全試合）の成績から、各選手・各記録の「次の区切りまであと何」を出す */
+function computeMilestoneCountdown() {
+  var totals = new Map();
+  var slot = function (pid) { return totals.get(pid) || (totals.set(pid, {}), totals.get(pid)); };
+  computeBattingAgg(STATE.games).forEach(function (c) {
+    var t = slot(c.playerId);
+    ["h", "hr", "d2", "d3", "rbi", "sb"].forEach(function (k) { t[k] = n0(c[k]); });
+  });
+  computePitchingAgg(STATE.games).forEach(function (c) {
+    var t = slot(c.playerId);
+    t.so = n0(c.so); t.w = n0(c.w); t.s = n0(c.s);
+  });
+  var items = [];
+  totals.forEach(function (t, pid) {
+    Object.keys(MILESTONE_THRESHOLDS).forEach(function (k) {
+      var cur = n0(t[k]);
+      var target = MILESTONE_THRESHOLDS[k].filter(function (T) { return T > cur; })[0];
+      if (!target) return;
+      items.push({ pid: pid, key: k, cur: cur, target: target, left: target - cur, near: target - cur <= MILESTONE_NEAR[k] });
+    });
+  });
+  /* 近い順：残りを「あと少し」の幅で割った値が小さいほど上。同じなら大きい記録が上 */
+  items.sort(function (a, b) {
+    return a.left / MILESTONE_NEAR[a.key] - b.left / MILESTONE_NEAR[b.key] || b.target - a.target;
+  });
+  return items;
+}
+/* 選手ページ：その選手の次の通算記録（近い順に4つまで） */
+function renderPlayerNextMilestones(pid) {
+  var mine = computeMilestoneCountdown().filter(function (it) { return it.pid === pid && it.cur > 0; }).slice(0, 4);
+  if (mine.length === 0) return "";
+  return '<div class="section-title" style="margin-top:16px;">次の通算記録</div><div class="ms-list">'
+    + mine.map(function (it) {
+      return '<div class="ms-row ms-own' + (it.near ? " ms-near" : "") + '"><span class="ms-goal">通算' + it.target + MILESTONE_LABEL[it.key] + "</span>"
+        + '<span class="ms-left">あと<b>' + it.left + "</b>" + MILESTONE_UNIT[it.key] + "</span>"
+        + '<span class="ms-bar"><span style="width:' + Math.round(it.cur / it.target * 100) + '%;"></span></span>'
+        + '<span class="ms-cur mono">' + it.cur + " / " + it.target + "</span></div>";
+    }).join("") + "</div>";
+}
+function renderMilestoneCountdown() {
+  /* 登録が「在籍中」でない選手は一覧に出さない */
+  var inactive = {};
+  STATE.players.forEach(function (pl) { if (pl.active === false) inactive[pl.id] = true; });
+  var near = computeMilestoneCountdown().filter(function (it) { return it.near && !inactive[it.pid]; });
+  var MS_PREVIEW = 8;
+  var total = near.length;
+  if (!UI.msShowAll) near = near.slice(0, MS_PREVIEW);
+  var body = near.length === 0
+    ? '<p class="title-empty">もうすぐ届きそうな記録はありません。</p>'
+    : '<div class="ms-list">' + near.map(function (it) {
+      return '<div class="ms-row"><button class="link-btn ms-player" data-action="view-player" data-id="' + it.pid + '">' + esc(playerName(it.pid)) + "</button>"
+        + '<span class="ms-goal">通算' + it.target + MILESTONE_LABEL[it.key] + "</span>"
+        + '<span class="ms-left">あと<b>' + it.left + "</b>" + MILESTONE_UNIT[it.key] + "</span>"
+        + '<span class="ms-bar"><span style="width:' + Math.round(it.cur / it.target * 100) + '%;"></span></span>'
+        + '<span class="ms-cur mono">' + it.cur + " / " + it.target + "</span></div>";
+    }).join("") + "</div>"
+    + (total > MS_PREVIEW ? '<button class="btn btn-sm" data-action="toggle-ms-all" style="width:100%;margin-top:8px;justify-content:center;">'
+      + (UI.msShowAll ? "少なく表示" : "すべて見る（" + total + "件）") + "</button>" : "");
+  return '<div class="card"><div class="section-title">記録まであと少し</div>'
+    + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">シーズンに関係なく、通算（全試合）の数字で数えています。</div>'
+    + body + "</div>";
+}
+
 /* この試合で達成された「初〇〇」「通算Nの区切り」を検出する。
    {bullets:[...文], top:"最も目立つ1件。", playerIds:[...]} を返す。 */
 function computeGameMilestones(d) {
@@ -1239,15 +1326,8 @@ function computeGameMilestones(d) {
     d2: { label: "二塁打", w: 35 }, rbi: { label: "打点", w: 35 }, sb: { label: "盗塁", w: 35 },
     w: { label: "勝利", w: 90 }, s: { label: "セーブ", w: 65 }
   };
-  var thresholds = {
-    h: [10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500],
-    hr: [5, 10, 15, 20, 25, 30, 40, 50],
-    d2: [10, 25, 50, 100], d3: [5, 10, 20],
-    rbi: [10, 25, 50, 75, 100, 150, 200, 250, 300],
-    sb: [10, 25, 50], so: [25, 50, 100, 150, 200, 300],
-    w: [5, 10, 25, 50], s: [5, 10, 20]
-  };
-  var thLabel = { h: "安打", hr: "本塁打", d2: "二塁打", d3: "三塁打", rbi: "打点", sb: "盗塁", so: "奪三振", w: "勝", s: "セーブ" };
+  var thresholds = MILESTONE_THRESHOLDS;
+  var thLabel = MILESTONE_LABEL;
   var items = [];
   Object.keys(now).forEach(function (pid) {
     var name = playerName(pid);
@@ -4264,7 +4344,7 @@ function renderPlayerStatsTab() {
   var content;
   if (sub === "titles") {
     return '<div class="page-head page-head-stadium"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
-      + subtabs + renderTitleRace(games);
+      + subtabs + renderMilestoneCountdown() + renderTitleRace(games);
   }
   if (sub === "fielding") {
     var fmap = computeFieldingAgg(games);
@@ -4531,6 +4611,7 @@ function renderPlayerDetail(pid) {
         + '<th>最長</th><td class="num mono">' + pStreak.best + "試合</td></tr>"
       + "</tbody></table></div>"
       + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>"
+      + renderPlayerNextMilestones(pid)
       + '<div class="section-title" style="margin-top:16px;">打球方向</div>'
       + renderSprayChart(computeSprayData(games, pid));
   } else {
@@ -5606,6 +5687,9 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "stat-subtab") {
     UI.statSubtab = el.getAttribute("data-sub");
+    renderApp();
+  } else if (action === "toggle-ms-all") {
+    UI.msShowAll = !UI.msShowAll;
     renderApp();
   } else if (action === "toggle-edit-menu") {
     UI.editMenuOpen = !UI.editMenuOpen;
