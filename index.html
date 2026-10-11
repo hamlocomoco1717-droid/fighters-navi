@@ -603,7 +603,7 @@ table.stat-table tr.opp-open td { background: var(--accent-soft); }
 .form-line { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .form-dot { fill: var(--chart-line); stroke: var(--surface); stroke-width: 2; }
 .form-ref { stroke: var(--ink-muted); stroke-width: 1; }
-.form-ref-label { font-size: 9.5px; fill: var(--ink-muted); }
+.form-ref-label { font-size: 9.5px; fill: var(--ink-muted); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .form-end { font-size: 11px; font-weight: 700; fill: var(--ink); font-family: "Roboto Mono", monospace; }
 .form-cross { stroke: var(--ink-muted); stroke-width: 1; }
 .form-tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.45; color: var(--ink-muted); box-shadow: var(--shadow); white-space: nowrap; }
@@ -1320,7 +1320,7 @@ function computeFormSeries(games, pid) {
 function renderFormChart(games, pid, periodAvg) {
   var pts = computeFormSeries(games, pid).filter(function (p) { return p.avg != null; });
   if (pts.length < 3) return '<p class="title-empty">3試合以上打席に立つと、調子のグラフが出ます。</p>';
-  var W = 340, H = 170, L = 40, R = 58, T = 12, B = 24;
+  var W = 340, H = 170, L = 40, R = 40, T = 12, B = 24;
   var pw = W - L - R, ph = H - T - B;
   var x = function (i) { return L + (pts.length === 1 ? pw / 2 : i * pw / (pts.length - 1)); };
   var y = function (v) { return T + ph * (1 - Math.min(1, Math.max(0, v))); };
@@ -1333,12 +1333,11 @@ function renderFormChart(games, pid, periodAvg) {
   var dots = pts.map(function (p, i) { return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.avg).toFixed(1) + '" r="4" class="form-dot"/>'; }).join("");
   var ref = periodAvg != null
     ? '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(periodAvg).toFixed(1) + '" y2="' + y(periodAvg).toFixed(1) + '" class="form-ref"/>'
-      + '<text x="' + (W - R + 4) + '" y="' + (y(periodAvg) + 3.5).toFixed(1) + '" class="form-ref-label">期間 ' + fmtRate(periodAvg) + "</text>"
+      /* 期間打率のラベルは横線の左端の上（右端は最新値のラベル用に空けておく） */
+      + '<text x="' + (L + 4) + '" y="' + (y(periodAvg) - 4).toFixed(1) + '" class="form-ref-label">期間 ' + fmtRate(periodAvg) + "</text>"
     : "";
   var last = pts[pts.length - 1];
-  var lastLabelY = y(last.avg) - 9;
-  if (periodAvg != null && Math.abs(y(last.avg) - y(periodAvg)) < 12) lastLabelY = y(last.avg) + (y(last.avg) < y(periodAvg) ? -9 : 17);
-  var endLabel = '<text x="' + (x(pts.length - 1) + 6).toFixed(1) + '" y="' + lastLabelY.toFixed(1) + '" class="form-end">' + fmtRate(last.avg) + "</text>";
+  var endLabel = '<text x="' + (x(pts.length - 1) + 7).toFixed(1) + '" y="' + (y(last.avg) + 4).toFixed(1) + '" class="form-end">' + fmtRate(last.avg) + "</text>";
   var xLabels = '<text x="' + x(0).toFixed(1) + '" y="' + (H - 6) + '" class="form-tick" text-anchor="start">' + esc(fmtDate(pts[0].date)) + "</text>"
     + '<text x="' + x(pts.length - 1).toFixed(1) + '" y="' + (H - 6) + '" class="form-tick" text-anchor="end">' + esc(fmtDate(last.date)) + "</text>";
   /* 直近5試合と、その前の5試合を比べて「上向き／下向き」を一言で */
