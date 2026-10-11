@@ -376,6 +376,14 @@ table.stat-table td.cell-input-wrap { padding: 4px 6px; }
   font-size: 12px; white-space: nowrap;
 }
 .atbat-chip .icon-btn { font-size: 12px; }
+.spray-wrap { max-width: 420px; }
+.spray-svg { width: 100%; height: auto; display: block; }
+.spray-zone { fill: var(--info); stroke: var(--border); stroke-width: 1.5; }
+.spray-num { font-size: 13px; font-weight: 700; fill: var(--ink); text-anchor: middle; font-family: inherit; }
+.spray-num-sm { font-size: 11px; }
+.spray-sub { font-size: 9.5px; fill: var(--ink-muted); text-anchor: middle; font-family: inherit; }
+.spray-bar { display: flex; gap: 3px; margin-top: 6px; font-size: 12px; }
+.spray-seg { min-width: 54px; text-align: center; padding: 4px 2px; border-radius: 4px; background: var(--info-soft); color: var(--ink); white-space: nowrap; }
 .risp-sub { display: block; font-size: 10.5px; color: var(--ink-muted); font-weight: 400; letter-spacing: 0; }
 .atbat-chip-rbi {
   display: inline-flex; align-items: center; gap: 2px;
@@ -1357,6 +1365,100 @@ function computeHitStreaks(games) {
     });
   });
   return map;
+}
+/* ---------- 打球方向（スプレーチャート） ----------
+   打席記号の先頭の守備位置（左安・遊ゴ・右中2 など）から打球の飛んだ方向を集計する。
+   三振・四死球・打撃妨害など打球のない打席は数えない。方向なしで記録した打席は「方向不明」 */
+var SPRAY_ZONES = [
+  /* 外野：左翼線〜右翼線を5等分 */
+  { key: "左", label: "レフト", r0: 118, r1: 205, a0: -45, a1: -27 },
+  { key: "左中", label: "左中間", r0: 118, r1: 205, a0: -27, a1: -9 },
+  { key: "中", label: "センター", r0: 118, r1: 205, a0: -9, a1: 9 },
+  { key: "右中", label: "右中間", r0: 118, r1: 205, a0: 9, a1: 27 },
+  { key: "右", label: "ライト", r0: 118, r1: 205, a0: 27, a1: 45 },
+  /* 内野：三遊間・二遊間で4分割 */
+  { key: "三", label: "サード", r0: 32, r1: 118, a0: -45, a1: -22.5 },
+  { key: "遊", label: "ショート", r0: 32, r1: 118, a0: -22.5, a1: 0 },
+  { key: "二", label: "セカンド", r0: 32, r1: 118, a0: 0, a1: 22.5 },
+  { key: "一", label: "ファースト", r0: 32, r1: 118, a0: 22.5, a1: 45 },
+  { key: "投捕", label: "投・捕", r0: 0, r1: 32, a0: -45, a1: 45 }
+];
+var SPRAY_SIDE = { "左": "L", "左中": "L", "三": "L", "遊": "L", "中": "C", "投捕": "C", "二": "R", "一": "R", "右中": "R", "右": "R" };
+function atbatTokenDir(tok) {
+  var cls = classifyAtbatToken(tok);
+  if (cls === null || cls === "SO" || cls === "BB" || cls === "HBP") return null;
+  var base = stripAtbatRbiMark(tok);
+  var two = base.slice(0, 2);
+  if (two === "左中" || two === "右中") return two;
+  var c = base.charAt(0);
+  if (c === "投" || c === "捕") return "投捕";
+  if ("一二三遊左中右".indexOf(c) !== -1) return c;
+  return cls === "OUT_OTHER" ? null : "?";
+}
+function computeSprayData(games, pid) {
+  var d = { zones: {}, total: 0, hits: 0, unknown: 0 };
+  SPRAY_ZONES.forEach(function (z) { d.zones[z.key] = { n: 0, h: 0 }; });
+  games.forEach(function (g) {
+    (g.batting || []).forEach(function (b) {
+      if (b.playerId !== pid) return;
+      (b.atbats || []).forEach(function (cell) {
+        if (!cell) return;
+        String(cell).split("・").forEach(function (tok) {
+          var dir = atbatTokenDir(tok);
+          if (dir === null) return;
+          if (dir === "?") { d.unknown++; return; }
+          var cls = classifyAtbatToken(tok);
+          var hit = cls === "H1" || cls === "H2" || cls === "H3" || cls === "HR";
+          d.zones[dir].n++; d.total++;
+          if (hit) { d.zones[dir].h++; d.hits++; }
+        });
+      });
+    });
+  });
+  return d;
+}
+function renderSprayChart(d) {
+  if (d.total === 0) {
+    return '<p style="color:var(--ink-muted);font-size:13px;">打球方向の記録がありません。</p>';
+  }
+  var hx = 150, hy = 238;
+  function pt(r, deg) {
+    var a = deg * Math.PI / 180;
+    return (hx + r * Math.sin(a)).toFixed(1) + " " + (hy - r * Math.cos(a)).toFixed(1);
+  }
+  var maxN = 0;
+  SPRAY_ZONES.forEach(function (z) { maxN = Math.max(maxN, d.zones[z.key].n); });
+  var shapes = "", labels = "";
+  SPRAY_ZONES.forEach(function (z) {
+    var zd = d.zones[z.key];
+    var path = z.r0 > 0
+      ? "M" + pt(z.r0, z.a0) + " L" + pt(z.r1, z.a0) + " A" + z.r1 + " " + z.r1 + " 0 0 1 " + pt(z.r1, z.a1)
+        + " L" + pt(z.r0, z.a1) + " A" + z.r0 + " " + z.r0 + " 0 0 0 " + pt(z.r0, z.a0) + " Z"
+      : "M" + hx + " " + hy + " L" + pt(z.r1, z.a0) + " A" + z.r1 + " " + z.r1 + " 0 0 1 " + pt(z.r1, z.a1) + " Z";
+    var op = zd.n > 0 ? (0.12 + 0.5 * zd.n / maxN) : 0;
+    shapes += '<path d="' + path + '" class="spray-zone" style="fill-opacity:' + op.toFixed(2) + '"><title>'
+      + esc(z.label) + "：" + zd.n + "本（安打" + zd.h + "）</title></path>";
+    var mid = (z.a0 + z.a1) / 2;
+    var infield = z.r0 > 0 && z.r1 < 200;
+    var lr = z.r0 === 0 ? 18 : (infield ? z.r0 + (z.r1 - z.r0) * 0.7 : (z.r0 + z.r1) / 2);
+    var xy = pt(lr, mid).split(" ");
+    var pct = Math.round(zd.n / d.total * 100);
+    labels += '<text x="' + xy[0] + '" y="' + (+xy[1] - 4) + '" class="spray-num' + (infield || z.r0 === 0 ? " spray-num-sm" : "") + '">' + (zd.n > 0 ? pct + "%" : "") + "</text>"
+      + '<text x="' + xy[0] + '" y="' + (+xy[1] + 9) + '" class="spray-sub">' + (zd.n > 0 ? zd.n + "本" + (zd.h > 0 ? "・安" + zd.h : "") : "") + "</text>";
+  });
+  var side = { L: 0, C: 0, R: 0 };
+  SPRAY_ZONES.forEach(function (z) { side[SPRAY_SIDE[z.key]] += d.zones[z.key].n; });
+  function sp(v) { return Math.round(v / d.total * 100); }
+  return '<div class="spray-wrap">'
+    + '<svg viewBox="0 0 300 245" class="spray-svg" role="img" aria-label="打球方向">' + shapes + labels + "</svg>"
+    + '<div class="spray-bar">'
+      + '<span class="spray-seg" style="flex:' + Math.max(side.L, 0.001) + ';">左 ' + sp(side.L) + "%</span>"
+      + '<span class="spray-seg" style="flex:' + Math.max(side.C, 0.001) + ';">中 ' + sp(side.C) + "%</span>"
+      + '<span class="spray-seg" style="flex:' + Math.max(side.R, 0.001) + ';">右 ' + sp(side.R) + "%</span>"
+    + "</div>"
+    + '<div class="page-lede" style="margin-top:6px;font-size:12px;">打球 ' + d.total + "本（うち安打 " + d.hits + "）"
+      + (d.unknown > 0 ? "・方向不明 " + d.unknown + "本は除く" : "") + "。三振・四死球は含みません。</div>"
+    + "</div>";
 }
 var RISP_NOTE = "※得点圏打率（下段は打数-安打）は参考値です。走者は打順と打点から推定しており、スコアの書き方によって実際と異なる場合があります。";
 function battingRates(c) {
@@ -4292,7 +4394,9 @@ function renderPlayerDetail(pid) {
       + '<tr><th>連続試合安打</th><td class="num mono">' + (pStreak.cur > 0 ? pStreak.cur + "試合継続中" : "-") + "</td>"
         + '<th>最長</th><td class="num mono">' + pStreak.best + "試合</td></tr>"
       + "</tbody></table></div>"
-      + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>";
+      + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>"
+      + '<div class="section-title" style="margin-top:16px;">打球方向</div>'
+      + renderSprayChart(computeSprayData(games, pid));
   } else {
     batHtml = '<div class="section-title">打撃</div><p style="color:var(--ink-muted);font-size:13px;">この期間の打席記録はありません。</p>';
   }
