@@ -1728,15 +1728,23 @@ function renderSprayChart(d) {
     var lr = z.r0 === 0 ? 30 : (infield ? z.r0 + (z.r1 - z.r0) * 0.6 : (z.r0 + z.r1) / 2);
     var xy = pt(lr, mid).split(" ");
     var pct = Math.round(zd.n / d.total * 100);
-    labels += '<text x="' + xy[0] + '" y="' + (+xy[1] - 4) + '" class="spray-num' + (infield || z.r0 === 0 ? " spray-num-sm" : "") + '">' + (zd.n > 0 ? pct + "%" : "") + "</text>"
+    if (zd.n === 0) return;
+    var ny = +xy[1] - (infield ? 8 : 4);
+    labels += '<text x="' + xy[0] + '" y="' + ny + '" class="spray-num' + (infield || z.r0 === 0 ? " spray-num-sm" : "") + '">' + pct + "%</text>";
+    if (infield) {
+      /* 内野の扇は横幅が狭く、隣どうし（特に二遊間）で文字がぶつかるので、本数と安打を2行に分ける */
+      labels += '<text x="' + xy[0] + '" y="' + (ny + 12) + '" class="spray-sub">' + zd.n + "本</text>"
+        + (zd.h > 0 ? '<text x="' + xy[0] + '" y="' + (ny + 23) + '" class="spray-sub">安' + zd.h + "</text>" : "");
+    } else {
       /* 投捕の扇は細いので、本数は扇の要（ホーム）の下に出す */
-      + '<text x="' + xy[0] + '" y="' + (z.r0 === 0 ? hy + 12 : +xy[1] + 9) + '" class="spray-sub">' + (zd.n > 0 ? zd.n + "本" + (zd.h > 0 ? "・安" + zd.h : "") : "") + "</text>";
+      labels += '<text x="' + xy[0] + '" y="' + (z.r0 === 0 ? hy + 12 : +xy[1] + 9) + '" class="spray-sub">' + zd.n + "本" + (zd.h > 0 ? "・安" + zd.h : "") + "</text>";
+    }
   });
   var side = { L: 0, C: 0, R: 0 };
   SPRAY_ZONES.forEach(function (z) { side[SPRAY_SIDE[z.key]] += d.zones[z.key].n; });
   function sp(v) { return Math.round(v / d.total * 100); }
   return '<div class="spray-wrap">'
-    + '<svg viewBox="0 0 300 264" class="spray-svg" role="img" aria-label="打球方向">' + shapes + labels + "</svg>"
+    + '<svg viewBox="0 34 300 230" class="spray-svg" role="img" aria-label="打球方向">' + shapes + labels + "</svg>"
     + '<div class="spray-bar">'
       + '<span class="spray-seg">左 ' + sp(side.L) + "%</span>"
       + '<span class="spray-seg">中 ' + sp(side.C) + "%</span>"
