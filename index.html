@@ -588,6 +588,17 @@ input.cell-input.wide { width: 66px; }
 table.stat-table tr.order-few td { color: var(--ink-muted); }
 table.stat-table tr.opp-row { cursor: pointer; }
 table.stat-table tr.opp-open td { background: var(--accent-soft); }
+.title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.title-card { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; border-bottom: 3px solid var(--focus); }
+.title-name { font-weight: 700; font-size: 15px; margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; }
+.title-label { font-size: 11px; font-weight: 400; color: var(--ink-muted); }
+.title-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13.5px; }
+.title-row.rank-1 { font-size: 16px; font-weight: 700; }
+.title-medal { width: 1.4em; text-align: center; }
+.title-player { flex: 1 1 auto; text-align: left; font-size: inherit; font-weight: inherit; }
+.title-val { font-weight: 700; }
+.title-gap { margin-top: 6px; font-size: 11.5px; color: var(--ink-muted); }
+.title-empty { font-size: 12.5px; color: var(--ink-muted); margin: 0; }
 .edit-menu-toggle { width: 100%; justify-content: center; }
 #sec-meta, #sec-batting, #sec-position, #sec-pitching { scroll-margin-top: 120px; }
 .edit-menu-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
@@ -4246,10 +4257,15 @@ function renderPlayerStatsTab() {
     + '<button class="btn btn-sm' + (sub === "batting" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="batting">打撃成績</button>'
     + '<button class="btn btn-sm' + (sub === "pitching" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="pitching">投手成績</button>'
     + '<button class="btn btn-sm' + (sub === "fielding" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="fielding">守備出場</button>'
+    + '<button class="btn btn-sm' + (sub === "titles" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="titles">🏆 タイトル</button>'
     + "</div>";
   var games = gamesForYear(UI.statsYear);
 
   var content;
+  if (sub === "titles") {
+    return '<div class="page-head page-head-stadium"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
+      + subtabs + renderTitleRace(games);
+  }
   if (sub === "fielding") {
     var fmap = computeFieldingAgg(games);
     var frows = [];
@@ -4416,6 +4432,65 @@ function renderPlayerStatsTab() {
 
   return '<div class="page-head page-head-stadium"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
     + subtabs + '<div class="card">' + content + "</div>";
+}
+/* ---------- タイトル争い ----------
+   打率・出塁率は規定打席（チーム試合数×2.5）に届いた選手だけ。数を競うタイトルは全員。
+   同じ数字は同じ順位（3位までを表示）。全員0のタイトルは出さない */
+function renderTitleRace(games) {
+  var qualPA = regulationPA(games);
+  var bat = [];
+  computeBattingAgg(games).forEach(function (c) { if (c.pa > 0) bat.push({ pid: c.playerId, c: c, rt: battingRates(c), qual: qualPA > 0 && c.pa >= qualPA }); });
+  var pit = [];
+  computePitchingAgg(games).forEach(function (c) { pit.push({ pid: c.playerId, c: c }); });
+  var titles = [
+    { name: "首位打者", label: "打率", rate: true, list: bat.filter(function (r) { return r.qual; }), val: function (r) { return r.rt.avg; } },
+    { name: "最高出塁率", label: "出塁率", rate: true, list: bat.filter(function (r) { return r.qual; }), val: function (r) { return r.rt.obp; } },
+    { name: "本塁打王", label: "本塁打", unit: "本", list: bat, val: function (r) { return r.c.hr; } },
+    { name: "打点王", label: "打点", unit: "点", list: bat, val: function (r) { return r.c.rbi; } },
+    { name: "最多安打", label: "安打", unit: "本", list: bat, val: function (r) { return r.c.h; } },
+    { name: "盗塁王", label: "盗塁", unit: "個", list: bat, val: function (r) { return r.c.sb; } },
+    { name: "最多勝", label: "勝利", unit: "勝", list: pit, val: function (r) { return r.c.w; } },
+    { name: "最多奪三振", label: "奪三振", unit: "個", list: pit, val: function (r) { return r.c.so; } }
+  ];
+  var fmt = function (t, v) { return t.rate ? fmtRate(v) : v + t.unit; };
+  var cards = titles.map(function (t) {
+    var rows = t.list.map(function (r) { return { pid: r.pid, v: t.val(r) }; })
+      .filter(function (r) { return r.v != null && r.v > 0; })
+      .sort(function (a, b) { return b.v - a.v; });
+    if (rows.length === 0) return t.rate ? ('<div class="title-card"><div class="title-name">' + t.name + '</div><p class="title-empty">規定打席に届いた選手がまだいません</p></div>') : "";
+    var ranked = [];
+    var rank = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (i === 0 || rows[i].v < rows[i - 1].v) rank = i + 1;
+      if (rank > 3) break;
+      rows[i].rank = rank;
+      ranked.push(rows[i]);
+    }
+    var leaders = ranked.filter(function (r) { return r.rank === 1; });
+    var next = rows[leaders.length];
+    var gap;
+    if (leaders.length > 1) gap = leaders.length + "人が首位で並んでいます";
+    else if (!next) gap = "独走中";
+    else {
+      var d = rows[0].v - next.v;
+      gap = "2位に " + (t.rate ? Math.round(d * 1000) + "厘" : d + t.unit) + " 差";
+    }
+    var medal = ["", "🥇", "🥈", "🥉"];
+    var hidden = Math.max(0, ranked.length - 5);
+    if (hidden) ranked = ranked.slice(0, 5);
+    return '<div class="title-card">'
+      + '<div class="title-name">' + t.name + '<span class="title-label">' + t.label + "</span></div>"
+      + ranked.map(function (r) {
+        return '<div class="title-row rank-' + r.rank + '"><span class="title-medal">' + medal[r.rank] + "</span>"
+          + '<button class="link-btn title-player" data-action="view-player" data-id="' + r.pid + '">' + esc(playerName(r.pid)) + "</button>"
+          + '<span class="title-val mono">' + fmt(t, r.v) + "</span></div>";
+      }).join("")
+      + (hidden ? '<div class="title-gap">ほか ' + hidden + "人が同じ順位</div>" : "")
+      + '<div class="title-gap">' + gap + "</div></div>";
+  }).join("");
+  return '<div class="card"><div class="section-title">タイトル争い</div>'
+    + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">打率・出塁率は規定打席（' + Math.round(qualPA) + '打席）に届いた選手だけが対象です。選手名を押すと選手ページを開きます。</div>'
+    + '<div class="title-grid">' + cards + "</div></div>";
 }
 function tdnum(v, cls) { return '<td class="num mono' + (cls ? " " + cls : "") + '">' + n0(v) + "</td>"; }
 
