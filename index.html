@@ -1187,6 +1187,7 @@ function computeGameMilestones(d) {
   }
   var before = aggregate(prior);
   var now = aggregate([d]);
+  var streaksNow = computeHitStreaks(prior.concat([d]));
   var firstMeta = {
     h: { label: "安打", w: 55 }, hr: { label: "本塁打", w: 95 }, d3: { label: "三塁打", w: 50 },
     d2: { label: "二塁打", w: 35 }, rbi: { label: "打点", w: 35 }, sb: { label: "盗塁", w: 35 },
@@ -1218,6 +1219,14 @@ function computeGameMilestones(d) {
         if (bv < T && av >= T) { items.push({ w: T, text: name + "が通算" + T + thLabel[k] + "に到達", pid: pid }); touched = true; }
       });
     });
+    var gameH = nrec ? n0(nrec.h) : 0;
+    if (gameH >= 3) { items.push({ w: 20 + gameH * 4, text: name + "が猛打賞（" + gameH + "安打）", pid: pid }); touched = true; }
+    var stNow = streaksNow.get(pid);
+    /* このチームは打率が高く3〜4試合の連続安打は珍しくないので、5試合以上から */
+    if (gameH > 0 && stNow && stNow.cur >= 5) {
+      items.push({ w: 15 + stNow.cur * 3, text: name + "が" + stNow.cur + "試合連続安打" + (stNow.cur === stNow.best && stNow.cur >= 5 ? "（自己最長）" : ""), pid: pid });
+      touched = true;
+    }
     if (touched) res.playerIds.push(pid);
   });
   items.sort(function (a, b2) { return b2.w - a.w; });
@@ -1321,6 +1330,34 @@ function computeBattingAgg(games) {
 }
 /* 出塁率の分母には従来通り犠打(sac)も含め、犠飛(sf)も加える。犠飛は打数には
    含めない（打率は変わらない）が、出塁率の分母には加わるので出塁率だけ下がる。 */
+/* 猛打賞（1試合3安打以上）・マルチ安打（2安打以上）の試合数と、連続試合安打。
+   試合は日付順（同日は登録順）。打数0で四死球・犠打だけの試合は記録を止めない
+   （プロ野球と同じ扱い）。出場していない試合は数えない。 */
+function sortGamesByDate(games) {
+  return games.slice().sort(function (a, b) {
+    var da = a.date || "", db = b.date || "";
+    if (da !== db) return da < db ? -1 : 1;
+    return (a._seq || 0) - (b._seq || 0);
+  });
+}
+function computeHitStreaks(games) {
+  var map = new Map();
+  sortGamesByDate(games || STATE.games).forEach(function (g) {
+    (g.batting || []).forEach(function (b) {
+      if (!b.playerId) return;
+      var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
+      if (pa <= 0 && n0(b.h) <= 0) return;
+      var c = map.get(b.playerId);
+      if (!c) { c = { multi: 0, g3h: 0, cur: 0, best: 0 }; map.set(b.playerId, c); }
+      var h = n0(b.h);
+      if (h >= 2) c.multi++;
+      if (h >= 3) c.g3h++;
+      if (h > 0) { c.cur++; if (c.cur > c.best) c.best = c.cur; }
+      else if (n0(b.ab) > 0) c.cur = 0;
+    });
+  });
+  return map;
+}
 var RISP_NOTE = "※得点圏打率（下段は打数-安打）は参考値です。走者は打順と打点から推定しており、スコアの書き方によって実際と異なる場合があります。";
 function battingRates(c) {
   var singles = Math.max(0, c.h - c.d2 - c.d3 - c.hr);
@@ -4070,8 +4107,13 @@ function renderPlayerStatsTab() {
   } else if (sub === "batting") {
     var qualPA = regulationPA(games);
     var bmap = computeBattingAgg(games);
+    var streaks = computeHitStreaks(games);
     var rows = [];
-    bmap.forEach(function (c) { rows.push({ c: c, rates: battingRates(c), qualified: c.pa >= qualPA && qualPA > 0 }); });
+    bmap.forEach(function (c) {
+      var st = streaks.get(c.playerId) || { multi: 0, g3h: 0, cur: 0, best: 0 };
+      c.g3h = st.g3h; c.multi = st.multi; c.streak = st.cur; c.bestStreak = st.best;
+      rows.push({ c: c, rates: battingRates(c), qualified: c.pa >= qualPA && qualPA > 0 });
+    });
     if (!UI.showAllBatters) rows = rows.filter(function (r) { return r.c.ab > 0; });
     if (UI.qualifiedOnlyBatters) rows = rows.filter(function (r) { return r.qualified; });
     var battingSortVal = function (r, key) {
@@ -4088,6 +4130,12 @@ function renderPlayerStatsTab() {
       { key: "risp", label: "得点圏", cell: function (r) {
         return '<td class="num mono" style="white-space:nowrap;">' + fmtRate(r.rates.risp)
           + '<span class="risp-sub">' + n0(r.c.rispAb) + "-" + n0(r.c.rispH) + "</span></td>";
+      } },
+      { key: "g3h", label: "猛打賞", cell: function (r) { return tdnum(r.c.g3h, r.c.g3h > 0 ? "stat-hit" : ""); } },
+      { key: "multi", label: "マルチ", cell: function (r) { return tdnum(r.c.multi); } },
+      { key: "streak", label: "連続安打", cell: function (r) {
+        return '<td class="num mono" style="white-space:nowrap;">' + (r.c.streak > 0 ? r.c.streak + "試合" : "-")
+          + '<span class="risp-sub">最長' + n0(r.c.bestStreak) + "</span></td>";
       } },
       { key: "d2", label: "二塁打", cell: function (r) { return tdnum(r.c.d2); } },
       { key: "d3", label: "三塁打", cell: function (r) { return tdnum(r.c.d3); } },
@@ -4228,6 +4276,7 @@ function renderPlayerDetail(pid) {
   var batHtml;
   if (bAgg && bAgg.pa > 0) {
     var rt = battingRates(bAgg);
+    var pStreak = computeHitStreaks(games).get(pid) || { multi: 0, g3h: 0, cur: 0, best: 0 };
     var tiles = [["打率", fmtRate(rt.avg)], ["得点圏", fmtRate(rt.risp) + '<span class="risp-sub">' + n0(bAgg.rispAb) + "打数" + n0(bAgg.rispH) + "安打</span>"], ["OPS", fmtRate(rt.ops)], ["本塁打", bAgg.hr], ["打点", bAgg.rbi], ["安打", bAgg.h], ["試合", bAgg.g]];
     batHtml = '<div class="section-title">打撃</div>'
       + '<div class="tile-grid">' + tiles.map(function (t) {
@@ -4238,7 +4287,10 @@ function renderPlayerDetail(pid) {
       + "<tr><th>二塁打</th>" + tdnum(bAgg.d2) + "<th>三塁打</th>" + tdnum(bAgg.d3) + "<th>盗塁</th>" + tdnum(bAgg.sb) + "</tr>"
       + "<tr><th>四球</th>" + tdnum(bAgg.bb) + "<th>死球</th>" + tdnum(bAgg.hbp) + "<th>三振</th>" + tdnum(bAgg.so) + "</tr>"
       + '<tr><th>犠打</th>' + tdnum(bAgg.sac) + '<th>犠飛</th>' + tdnum(bAgg.sf) + '<th>出塁率</th><td class="num mono">' + fmtRate(rt.obp) + "</td></tr>"
-      + '<tr><th>長打率</th><td class="num mono">' + fmtRate(rt.slg) + "</td></tr>"
+      + '<tr><th>長打率</th><td class="num mono">' + fmtRate(rt.slg) + "</td>"
+        + "<th>猛打賞</th>" + tdnum(pStreak.g3h) + "<th>マルチ安打</th>" + tdnum(pStreak.multi) + "</tr>"
+      + '<tr><th>連続試合安打</th><td class="num mono">' + (pStreak.cur > 0 ? pStreak.cur + "試合継続中" : "-") + "</td>"
+        + '<th>最長</th><td class="num mono">' + pStreak.best + "試合</td></tr>"
       + "</tbody></table></div>"
       + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>";
   } else {
