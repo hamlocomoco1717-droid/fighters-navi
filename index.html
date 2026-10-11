@@ -586,6 +586,8 @@ table.stat-table tr.order-few td { color: var(--ink-muted); }
 table.stat-table tr.opp-row { cursor: pointer; }
 table.stat-table tr.opp-open td { background: var(--accent-soft); }
 .opp-caret { display: inline-block; width: 1em; color: var(--ink-muted); }
+table.stat-table tr.opp-total td { background: var(--surface-2); font-weight: 700; border-bottom: 2px solid var(--border); }
+.opp-total-sub { font-size: 11px; font-weight: 400; color: var(--ink-muted); margin-left: 6px; }
 table.stat-table tr.opp-games > td { padding: 6px 4px 10px; background: var(--surface-2); white-space: normal; }
 .opp-game-list { position: sticky; left: 4px; width: min(330px, calc(100vw - 72px)); display: flex; flex-direction: column; gap: 4px; }
 .opp-game { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; font-size: 13px; }
@@ -4588,7 +4590,23 @@ function renderOpponentAnalysis(games) {
     + tile("一番多く戦った相手", most, function (o) { return o.gp + "試合・" + rec(o); }, "", "")
     + "</div>";
 
-  var tableRows = rows.map(function (o) {
+  /* 先頭に全相手の合計（通算）の行 */
+  var all = { w: 0, l: 0, t: 0, rf: 0, ra: 0, ab: 0, h: 0, gp: 0 };
+  rows.forEach(function (o) { ["w", "l", "t", "rf", "ra", "ab", "h", "gp"].forEach(function (k) { all[k] += o[k]; }); });
+  var allPct = (all.w + all.l) > 0 ? all.w / (all.w + all.l) : null;
+  var allDiff = all.rf - all.ra;
+  var totalRow = '<tr class="opp-total"><td style="white-space:nowrap;"><span class="opp-caret"></span> <b>通算</b>'
+      + '<span class="opp-total-sub">' + rows.length + "チーム</span></td>"
+    + tdnum(all.gp)
+    + '<td class="num mono" style="white-space:nowrap;">' + all.w + "-" + all.l + (all.t ? "-" + all.t : "") + "</td>"
+    + '<td class="num mono stat-headline">' + (allPct == null ? "-" : fmtRate(allPct)) + "</td>"
+    + tdnum(all.rf) + tdnum(all.ra)
+    + '<td class="num mono' + diffCls(allDiff) + '">' + signed(allDiff) + "</td>"
+    + '<td class="num mono">' + (all.rf / all.gp).toFixed(1) + "</td>"
+    + '<td class="num mono">' + (all.ra / all.gp).toFixed(1) + "</td>"
+    + '<td class="num mono">' + fmtRate(all.ab > 0 ? all.h / all.ab : null) + "</td>"
+    + "<td></td></tr>";
+  var tableRows = totalRow + rows.map(function (o) {
     var open = UI.openOpponent === o.key;
     var diff = o.rf - o.ra;
     var lastRes = gameResult(o.last);
