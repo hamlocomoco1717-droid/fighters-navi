@@ -1321,7 +1321,7 @@ function computeBattingAgg(games) {
 }
 /* 出塁率の分母には従来通り犠打(sac)も含め、犠飛(sf)も加える。犠飛は打数には
    含めない（打率は変わらない）が、出塁率の分母には加わるので出塁率だけ下がる。 */
-var RISP_NOTE = "※得点圏打率は参考値です（打数-安打）。走者は打順と打点から推定しており、スコアの書き方によって実際と異なる場合があります。";
+var RISP_NOTE = "※得点圏打率（下段は打数-安打）は参考値です。走者は打順と打点から推定しており、スコアの書き方によって実際と異なる場合があります。";
 function battingRates(c) {
   var singles = Math.max(0, c.h - c.d2 - c.d3 - c.hr);
   var tb = singles + c.d2 * 2 + c.d3 * 3 + c.hr * 4;
