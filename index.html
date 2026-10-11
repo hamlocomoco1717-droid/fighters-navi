@@ -2078,6 +2078,11 @@ function renderShell(contentHtml) {
 }
 
 function renderApp() {
+  /* 対戦相手別は年をまたいだ対戦成績を見るものなので、開いたときだけ通算（全期間）にし、
+     ほかの画面に移ったら一番新しいシーズンに戻す（対戦相手別の中で年を選び直すのは自由） */
+  var onOpponentView = UI.tab === "team" && UI.teamSubtab === "opponent" && !UI.viewPlayerId;
+  if (onOpponentView && !UI.oppAutoAll) { UI.statsYear = "all"; UI.oppAutoAll = true; }
+  else if (!onOpponentView && UI.oppAutoAll) { UI.statsYear = availableYears()[0] || "all"; UI.oppAutoAll = false; }
   if (UI.statsYear !== "all" && availableYears().indexOf(UI.statsYear) === -1) {
     /* the previously selected season no longer has any games (e.g. its only
        game was just deleted) — fall back to the newest remaining season
@@ -5909,8 +5914,6 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "team-subtab") {
     UI.teamSubtab = el.getAttribute("data-sub");
-    /* 対戦相手別は年をまたいだ対戦成績を見るものなので、開いたら通算（全期間）にする */
-    if (UI.teamSubtab === "opponent") UI.statsYear = "all";
     renderApp();
   } else if (action === "toggle-lineup-all") {
     UI.lineupShowAll = !UI.lineupShowAll;
