@@ -4797,7 +4797,8 @@ function renderAllTimeRecords() {
 /* ---------- 月間MVP・シーズンMVP ----------
    1試合ごとの活躍点（試合の「活躍選手」と同じ式）を月・シーズンで合計する。
    打撃＝塁打＋打点＋四球×0.5＋盗塁×0.5、投手＝投球回＋奪三振×0.5−失点＋勝利2／セーブ1.5
-   （投手の点がマイナスの試合は0として足す） */
+   （投手の点がマイナスの試合は0として足す）。さらに出場1試合ごとに出場ボーナス1pt */
+var MVP_GAME_BONUS = 1;
 function computeMvpPoints(games) {
   var map = new Map();
   games.forEach(function (g) {
@@ -4815,6 +4816,10 @@ function computeMvpPoints(games) {
     (g.pitching || []).forEach(function (p) {
       add(p.playerId, Math.max(0, pitchingContribScore(p)), null);
       var c = map.get(p.playerId); if (c && p.decision === "W") c.w++;
+    });
+    /* 出場ボーナス：この試合に出た選手に1試合1pt（打って投げても1回だけ） */
+    map.forEach(function (c) {
+      if (c.games[g.id] && c.bonusFor !== g.id) { c.pts += MVP_GAME_BONUS; c.bonusFor = g.id; }
     });
   });
   var rows = [];
@@ -4845,7 +4850,7 @@ function renderMvp(games) {
   var label = UI.statsYear === "all" ? "通算" : UI.statsYear + "年";
   var html = '<div class="card"><div class="section-title">' + esc(label) + "のMVP</div>"
     + (season.length ? '<div class="title-card mvp-season">' + podium(season, 3) + "</div>" : '<p class="title-empty">この期間の記録がありません。</p>')
-    + '<p class="title-gap" style="margin-top:8px;">活躍点＝塁打＋打点＋四球×0.5＋盗塁×0.5（投手は 投球回＋奪三振×0.5−失点＋勝利2／セーブ1.5、マイナスの試合は0）。試合ページの「活躍選手」と同じ式を合計しています。</p></div>';
+    + '<p class="title-gap" style="margin-top:8px;">活躍点＝塁打＋打点＋四球×0.5＋盗塁×0.5（投手は 投球回＋奪三振×0.5−失点＋勝利2／セーブ1.5、マイナスの試合は0）を試合ごとに合計し、さらに<b>出場1試合につき＋' + MVP_GAME_BONUS + 'pt</b>の出場ボーナスを足しています。</p></div>';
   var byMonth = {};
   games.forEach(function (g) { var m = (g.date || "").slice(0, 7); if (m) (byMonth[m] = byMonth[m] || []).push(g); });
   var months = Object.keys(byMonth).sort().reverse();
