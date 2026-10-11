@@ -610,6 +610,8 @@ table.stat-table tr.opp-open td { background: var(--accent-soft); }
 .form-tip b { color: var(--ink); font-size: 13px; }
 .form-table { margin-top: 6px; font-size: 13px; }
 .form-table summary { cursor: pointer; color: var(--link); }
+table.stat-table tr.year-current td { background: var(--accent-soft); }
+table.stat-table tr.year-total td { border-top: 2px solid var(--border); background: var(--surface-2); font-weight: 700; }
 .ms-list { display: flex; flex-direction: column; gap: 6px; }
 .ms-row { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "player goal left" "bar bar cur"; align-items: center; column-gap: 8px; row-gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
 .ms-row.ms-own { grid-template-areas: "goal goal left" "bar bar cur"; }
@@ -4822,7 +4824,56 @@ function renderPlayerDetail(pid) {
 
   return head
     + '<div class="card">' + batHtml + pitHtml + fldHtml + "</div>"
+    + renderPlayerYearly(pid)
     + '<div class="card">' + perGameHtml + "</div>";
+}
+
+/* 選手ページ：年度別成績（上で選んだシーズンに関係なく全年度＋通算）。
+   出場した年だけ行を出す。選んでいるシーズンの行は色を付ける */
+function renderPlayerYearly(pid) {
+  var years = availableYears().slice().sort();
+  var batRows = [], pitRows = [];
+  years.forEach(function (y) {
+    var gs = gamesForYear(y);
+    var b = computeBattingAgg(gs).get(pid);
+    if (b && b.pa > 0) batRows.push({ y: y, c: b });
+    var pc = computePitchingAgg(gs).get(pid);
+    if (pc && pc.outs > 0) pitRows.push({ y: y, c: pc });
+  });
+  if (batRows.length === 0 && pitRows.length === 0) return "";
+  var cls = function (y) { return y === UI.statsYear ? ' class="year-current"' : ""; };
+  var batLine = function (label, c, rowCls) {
+    var rt = battingRates(c);
+    return "<tr" + rowCls + "><td><b>" + label + "</b></td>"
+      + '<td class="num mono stat-headline">' + fmtRate(rt.avg) + "</td>"
+      + tdnum(c.g) + tdnum(c.ab) + tdnum(c.h, "stat-hit") + tdnum(c.hr) + tdnum(c.rbi, "stat-rbi")
+      + tdnum(c.d2) + tdnum(c.sb) + tdnum(c.bb + c.hbp, "stat-bb") + tdnum(c.so) + tdnum(c.pa)
+      + '<td class="num mono">' + fmtRate(rt.obp) + "</td>"
+      + '<td class="num mono">' + fmtRate(rt.ops) + "</td></tr>";
+  };
+  var html = '<div class="card"><div class="section-title">年度別成績</div>';
+  if (batRows.length) {
+    var tot = computeBattingAgg(STATE.games).get(pid);
+    html += '<div class="table-scroll"><table class="stat-table year-table"><thead><tr><th>年度</th><th class="num">打率</th><th class="num">試合</th><th class="num">打数</th><th class="num">安打</th><th class="num">本塁打</th><th class="num">打点</th><th class="num">二塁打</th><th class="num">盗塁</th><th class="num">四死球</th><th class="num">三振</th><th class="num">打席</th><th class="num">出塁率</th><th class="num">OPS</th></tr></thead><tbody>'
+      + batRows.map(function (r) { return batLine(r.y + "年", r.c, cls(r.y)); }).join("")
+      + (batRows.length > 1 ? batLine("通算", tot, ' class="year-total"') : "")
+      + "</tbody></table></div>";
+  }
+  if (pitRows.length) {
+    var ptot = computePitchingAgg(STATE.games).get(pid);
+    var pitLine = function (label, c, rowCls) {
+      return "<tr" + rowCls + "><td><b>" + label + "</b></td>" + tdnum(c.g)
+        + '<td class="num mono">' + outsToIpStr(c.outs) + "</td>"
+        + '<td class="num mono">' + c.w + "-" + c.l + (c.s ? "-" + c.s : "") + "</td>"
+        + tdnum(c.r) + tdnum(c.bb) + tdnum(c.so) + "</tr>";
+    };
+    html += '<div class="section-title" style="margin-top:14px;">投手</div>'
+      + '<div class="table-scroll"><table class="stat-table year-table"><thead><tr><th>年度</th><th class="num">登板</th><th class="num">投球回</th><th class="num">勝-敗</th><th class="num">失点</th><th class="num">四球</th><th class="num">奪三振</th></tr></thead><tbody>'
+      + pitRows.map(function (r) { return pitLine(r.y + "年", r.c, cls(r.y)); }).join("")
+      + (pitRows.length > 1 ? pitLine("通算", ptot, ' class="year-total"') : "")
+      + "</tbody></table></div>";
+  }
+  return html + "</div>";
 }
 
 /* ---------- team tab ---------- */
@@ -5858,6 +5909,8 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "team-subtab") {
     UI.teamSubtab = el.getAttribute("data-sub");
+    /* 対戦相手別は年をまたいだ対戦成績を見るものなので、開いたら通算（全期間）にする */
+    if (UI.teamSubtab === "opponent") UI.statsYear = "all";
     renderApp();
   } else if (action === "toggle-lineup-all") {
     UI.lineupShowAll = !UI.lineupShowAll;
