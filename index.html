@@ -2171,6 +2171,67 @@ function restoreViewState() {
    did before (leaves the page) and the app keeps working. */
 var HISTORY_VIEW_GAME = "sb-game-detail";
 
+/* ---------- 「戻る」で元の画面に戻る ----------
+   詳細（試合・選手）を開く直前の画面（タブ・サブタブ・シーズン・開いていた対戦相手・
+   スクロール位置）を覚えておき、「← 戻る」やスマホの戻るでそこへ戻す */
+var HISTORY_VIEW_PLAYER = "sb-player-detail";
+function snapshotView() {
+  return {
+    tab: UI.tab, viewPlayerId: UI.viewPlayerId || null, teamSubtab: UI.teamSubtab, statSubtab: UI.statSubtab,
+    statsYear: UI.statsYear, oppAutoAll: !!UI.oppAutoAll, openOpponent: UI.openOpponent || null,
+    msShowAll: !!UI.msShowAll, lineupShowAll: !!UI.lineupShowAll,
+    scrollY: (typeof window !== "undefined" && window.scrollY) || 0
+  };
+}
+function restoreView(v) {
+  UI.tab = v.tab; UI.viewPlayerId = v.viewPlayerId; UI.teamSubtab = v.teamSubtab; UI.statSubtab = v.statSubtab;
+  UI.statsYear = v.statsYear; UI.oppAutoAll = v.oppAutoAll; UI.openOpponent = v.openOpponent;
+  UI.msShowAll = v.msShowAll; UI.lineupShowAll = v.lineupShowAll;
+  renderApp();
+  var y = v.scrollY || 0;
+  try { window.scrollTo(0, y); requestAnimationFrame(function () { window.scrollTo(0, y); }); } catch (e) { /* ignore */ }
+}
+var TEAM_SUB_LABEL = { summary: "シーズン成績", innings: "イニング別", order: "打順別", position: "守備位置別", opponent: "対戦相手別", records: "歴代記録" };
+var STAT_SUB_LABEL = { batting: "打撃成績", pitching: "投手成績", fielding: "守備出場", titles: "タイトル", mvp: "MVP" };
+function describeView(v) {
+  if (!v) return "";
+  if (v.viewPlayerId) return playerName(v.viewPlayerId) + "のページ";
+  if (v.tab === "team") return "チーム成績・" + (TEAM_SUB_LABEL[v.teamSubtab || "summary"] || "");
+  if (v.tab === "stats") return "個人成績・" + (STAT_SUB_LABEL[v.statSubtab || "batting"] || "");
+  if (v.tab === "roster") return "選手管理";
+  if (v.tab === "addgame") return "試合を追加";
+  if (v.tab === "settings") return "設定";
+  return "試合一覧";
+}
+function hasPlayerHistoryEntry() {
+  try { return !!(window.history && history.state && history.state.sbView === HISTORY_VIEW_PLAYER); }
+  catch (e) { return false; }
+}
+function openPlayerView(pid) {
+  if (UI.viewPlayerId === pid) return;
+  /* 選手ページから別の選手ページへ移るときは、最初の戻り先を保つ */
+  if (!UI.viewPlayerId) UI.playerReturn = snapshotView();
+  UI.viewPlayerId = pid;
+  if (!hasPlayerHistoryEntry()) {
+    try { if (window.history && typeof history.pushState === "function") history.pushState({ sbView: HISTORY_VIEW_PLAYER }, ""); } catch (e) { /* ignore */ }
+  }
+  try { window.scrollTo(0, 0); } catch (e) { /* ignore */ }
+  renderApp();
+}
+function closePlayerView() {
+  var ret = UI.playerReturn;
+  UI.playerReturn = null;
+  if (ret) restoreView(ret);
+  else { UI.viewPlayerId = null; renderApp(); }
+}
+function requestClosePlayerView() {
+  if (hasPlayerHistoryEntry()) {
+    UI.pendingClosePlayer = true;
+    try { history.back(); return; } catch (e) { UI.pendingClosePlayer = false; }
+  }
+  closePlayerView();
+}
+
 function hasGameHistoryEntry() {
   try { return !!(window.history && history.state && history.state.sbView === HISTORY_VIEW_GAME); }
   catch (e) { return false; }
@@ -2212,9 +2273,15 @@ function leaveGameDetail(goToList) {
   UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.battingTotalsEditMode = false; UI.pitchingEditMode = false;
   UI.editingPosRow = null; UI.draftEverSaved = false; UI.confirmDialog = null;
   if (goToList) UI.tab = "games";
+  var ret = UI.gameReturn;
+  UI.gameReturn = null;
   /* a new game that was abandoned must also be retracted from the shared save if
      any of its fields had already been auto-saved along the way */
-  if ((discarded && everSaved) || releasedLock) persist(); else renderApp();
+  if ((discarded && everSaved) || releasedLock) persist();
+  /* 試合一覧以外（チーム成績・選手ページなど）から開いた試合は、開いた画面へ戻す */
+  if (ret && !UI.pendingTabApplied) restoreView(ret);
+  else if (!((discarded && everSaved) || releasedLock)) renderApp();
+  UI.pendingTabApplied = false;
 }
 
 /* on-screen buttons rewind the entry that opening the game pushed, so the Back
@@ -2235,12 +2302,21 @@ function onPopState() {
     renderApp();
     return;
   }
-  if (!UI.currentGameId) return;   /* already on a list — let the browser go back */
+  if (!UI.currentGameId) {
+    /* 選手ページでの戻る：開く前の画面へ（タブ移動で戻された場合はそのタブへ） */
+    if (UI.viewPlayerId) {
+      var ptab = UI.pendingTab;
+      UI.pendingTab = null; UI.pendingClosePlayer = false;
+      if (ptab) { UI.playerReturn = null; UI.viewPlayerId = null; UI.tab = ptab; renderApp(); }
+      else closePlayerView();
+    }
+    return;   /* already on a list — let the browser go back */
+  }
   var goToList = UI.pendingLeaveGoToList;
   var pendingTab = UI.pendingTab;
   UI.pendingLeaveGoToList = null;
   UI.pendingTab = null;
-  if (pendingTab) UI.tab = pendingTab;
+  if (pendingTab) { UI.tab = pendingTab; UI.viewPlayerId = null; UI.gameReturn = null; UI.playerReturn = null; UI.pendingTabApplied = true; }
   /* a real Back press (no pending flag) always lands on the game list */
   leaveGameDetail(pendingTab ? false : (goToList === null || goToList === undefined ? true : goToList));
 }
@@ -3326,11 +3402,11 @@ function renderGameDetail(g) {
     + '<div class="game-footer-actions" style="display:flex;gap:8px;">'
       + (isAdding
         ? '<button class="btn btn-primary" data-action="finish-new-game">入力を終了</button>'
-        : '<button class="btn" data-action="cancel-game">一覧に戻る</button>')
+        : '<button class="btn" data-action="cancel-game">' + (UI.gameReturn ? "戻る" : "一覧に戻る") + "</button>")
     + "</div>"
     + "</div>");
 
-  return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る")) + "</button></div></div>"
+  return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.gameReturn ? "← " + esc(describeView(UI.gameReturn)) + "へ戻る" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る"))) + "</button></div></div>"
     + scoreHeroHtml
     + (liveHtml
         ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card" id="sec-meta">' + metaHtml + "</div>")
@@ -4942,7 +5018,7 @@ function renderPlayerDetail(pid) {
   var fAgg = computeFieldingAgg(games).get(pid);
 
   var head = '<div class="page-head"><div>'
-    + '<button class="link-btn" data-action="close-player">← 選手一覧へ戻る</button>'
+    + '<button class="link-btn" data-action="close-player">← ' + esc(UI.playerReturn ? describeView(UI.playerReturn) + "へ戻る" : "戻る") + "</button>"
     + '<h1 style="margin-top:6px;">' + (p.number != null && p.number !== "" ? '<span class="num-badge">#' + esc(p.number) + "</span> " : "") + esc(p.name) + "</h1>"
     + '<div class="page-lede">' + (p.position ? esc(p.position) + "・" : "") + (UI.statsYear === "all" ? "通算" : esc(UI.statsYear) + "年") + "の成績</div>"
     + "</div>" + yearSelectHtml() + "</div>";
@@ -5011,7 +5087,7 @@ function renderPlayerDetail(pid) {
     var pline = pp ? (outsToIpStr(pp.ipOuts) + "回 失" + n0(pp.r) + (pp.decision ? " " + pp.decision : "")) : "";
     var innN = (g.innings && g.innings.top) ? Math.max(7, g.innings.top.length, (g.innings.bottom || []).length) : 7;
     var pos = b ? formatPositionHistory(b, innN) : (pp ? "投手" : "-");
-    return "<tr>"
+    return '<tr class="opp-row" data-action="open-game" data-id="' + g.id + '">'
       + '<td style="white-space:nowrap;">' + esc(fmtDate(g.date)) + "</td>"
       + "<td>" + esc(g.opponent || "-") + " " + badge + "</td>"
       + '<td style="font-size:12px;">' + esc(pos) + "</td>"
@@ -5676,17 +5752,20 @@ function onAppClick(e) {
       UI.pendingLeaveGoToList = false;
       try { history.back(); return; } catch (e) { UI.pendingTab = null; UI.pendingLeaveGoToList = null; }
     }
+    if (!UI.currentGameId && UI.viewPlayerId && hasPlayerHistoryEntry()) {
+      UI.pendingTab = nextTab;
+      try { history.back(); return; } catch (e) { UI.pendingTab = null; }
+    }
     UI.tab = nextTab;
     UI.viewPlayerId = null;
+    UI.playerReturn = null;
+    UI.gameReturn = null;
     if (UI.tab === "games") { UI.currentGameId = null; UI.draftGame = null; UI.isNewUnsavedGame = false; UI.editingAtbatsRow = null; UI.gameMetaEditMode = false; UI.positionEditMode = false; UI.atbatEditMode = false; UI.battingTotalsEditMode = false; UI.pitchingEditMode = false; UI.liveTakeover = false; UI.editingPosRow = null; UI.draftEverSaved = false; stopLiveHeartbeat(); }
     renderApp();
   } else if (action === "view-player") {
-    UI.viewPlayerId = el.getAttribute("data-id");
-    try { window.scrollTo(0, 0); } catch (e) { /* ignore */ }
-    renderApp();
+    openPlayerView(el.getAttribute("data-id"));
   } else if (action === "close-player") {
-    UI.viewPlayerId = null;
-    renderApp();
+    requestClosePlayerView();
   } else if (action === "copy-highlight") {
     var hlSrc = document.getElementById("highlight-copy-src");
     var hlTxt = hlSrc ? hlSrc.value : "";
@@ -5705,6 +5784,9 @@ function onAppClick(e) {
     } else { fail(); }
   } else if (action === "open-game") {
     UI.editMenuOpen = false;
+    /* 試合一覧以外から開いたときは、閉じたときにその画面へ戻れるよう覚えておく */
+    UI.gameReturn = (UI.tab !== "games" || UI.viewPlayerId) ? snapshotView() : null;
+    UI.viewPlayerId = null;
     UI.tab = "games";
     UI.currentGameId = el.getAttribute("data-id");
     UI.draftGame = null;
@@ -5719,6 +5801,7 @@ function onAppClick(e) {
     UI.editingPosRow = null;
     UI.draftEverSaved = false;
     pushGameHistory();
+    try { window.scrollTo(0, 0); } catch (e) { /* ignore */ }
     renderApp();
   } else if (action === "back-to-games") {
     if (UI.isNewUnsavedGame) { UI.isNewUnsavedGame = false; persist(); requestLeaveGameDetail(true); }
