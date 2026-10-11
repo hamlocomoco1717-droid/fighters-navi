@@ -35,6 +35,7 @@ if ("serviceWorker" in navigator) {
   --ink-muted: #5B6585;
   --accent: #1D2E58;
   --link: #1D2E58;
+  --chart-line: #2A5AA6;
   --accent-ink: #FFFFFF;
   --accent-soft: #E0E6F3;
   --accent-strong: #1D2E58;
@@ -63,6 +64,7 @@ if ("serviceWorker" in navigator) {
     --ink-muted: #9AA4C2;
     --accent: #3A4F8C;
     --link: #B4CCF7;
+    --chart-line: #5B8BD6;
     --accent-ink: #FFFFFF;
     --accent-soft: #1F2C4E;
     --accent-strong: #E8C56C;
@@ -91,6 +93,7 @@ if ("serviceWorker" in navigator) {
   --ink-muted: #9AA4C2;
   --accent: #3A4F8C;
   --link: #B4CCF7;
+  --chart-line: #5B8BD6;
   --accent-ink: #FFFFFF;
   --accent-soft: #1F2C4E;
   --accent-strong: #E8C56C;
@@ -588,6 +591,25 @@ input.cell-input.wide { width: 66px; }
 table.stat-table tr.order-few td { color: var(--ink-muted); }
 table.stat-table tr.opp-row { cursor: pointer; }
 table.stat-table tr.opp-open td { background: var(--accent-soft); }
+.form-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; margin-bottom: 6px; color: var(--ink-muted); }
+.form-summary b { color: var(--ink); font-size: 15px; }
+.form-summary .win { color: var(--win); font-weight: 700; }
+.form-summary .loss { color: var(--loss); font-weight: 700; }
+.form-wrap { position: relative; max-width: 520px; }
+.form-svg { width: 100%; height: auto; display: block; touch-action: pan-y; }
+.form-grid { stroke: var(--border); stroke-width: 1; }
+.form-tick { font-size: 9.5px; fill: var(--ink-muted); font-family: "Roboto Mono", monospace; }
+.form-area { fill: var(--chart-line); fill-opacity: 0.1; }
+.form-line { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.form-dot { fill: var(--chart-line); stroke: var(--surface); stroke-width: 2; }
+.form-ref { stroke: var(--ink-muted); stroke-width: 1; }
+.form-ref-label { font-size: 9.5px; fill: var(--ink-muted); }
+.form-end { font-size: 11px; font-weight: 700; fill: var(--ink); font-family: "Roboto Mono", monospace; }
+.form-cross { stroke: var(--ink-muted); stroke-width: 1; }
+.form-tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.45; color: var(--ink-muted); box-shadow: var(--shadow); white-space: nowrap; }
+.form-tip b { color: var(--ink); font-size: 13px; }
+.form-table { margin-top: 6px; font-size: 13px; }
+.form-table summary { cursor: pointer; color: var(--link); }
 .ms-list { display: flex; flex-direction: column; gap: 6px; }
 .ms-row { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "player goal left" "bar bar cur"; align-items: center; column-gap: 8px; row-gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
 .ms-row.ms-own { grid-template-areas: "goal goal left" "bar bar cur"; }
@@ -1258,6 +1280,115 @@ function computeMilestoneCountdown() {
     return a.left / MILESTONE_NEAR[a.key] - b.left / MILESTONE_NEAR[b.key] || b.target - a.target;
   });
   return items;
+}
+/* ---------- 調子のグラフ（直近の打率の推移） ----------
+   選手が打席に立った試合を日付順に並べ、各試合の時点での「直近5試合の打率」を
+   折れ線にする（1試合ごとの打率は3〜4打数で上下が大きすぎるため）。
+   表示は最新20試合まで。横線は表示期間全体の打率 */
+var FORM_WINDOW = 5, FORM_POINTS = 20;
+function computeFormSeries(games, pid) {
+  var played = [];
+  sortGamesByDate(games).forEach(function (g) {
+    var b = (g.batting || []).filter(function (x) { return x.playerId === pid; })[0];
+    if (!b) return;
+    var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
+    if (pa <= 0) return;
+    played.push({ g: g, ab: n0(b.ab), h: n0(b.h) });
+  });
+  var pts = played.map(function (e, i) {
+    var ab = 0, h = 0;
+    for (var j = Math.max(0, i - FORM_WINDOW + 1); j <= i; j++) { ab += played[j].ab; h += played[j].h; }
+    return { date: e.g.date || "", opp: e.g.opponent || "", ab: e.ab, h: e.h, avg: ab > 0 ? h / ab : null };
+  });
+  return pts.slice(-FORM_POINTS);
+}
+function renderFormChart(games, pid, periodAvg) {
+  var pts = computeFormSeries(games, pid).filter(function (p) { return p.avg != null; });
+  if (pts.length < 3) return '<p class="title-empty">3試合以上打席に立つと、調子のグラフが出ます。</p>';
+  var W = 340, H = 170, L = 40, R = 58, T = 12, B = 24;
+  var pw = W - L - R, ph = H - T - B;
+  var x = function (i) { return L + (pts.length === 1 ? pw / 2 : i * pw / (pts.length - 1)); };
+  var y = function (v) { return T + ph * (1 - Math.min(1, Math.max(0, v))); };
+  var grid = [0, 0.25, 0.5, 0.75, 1].map(function (v) {
+    return '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" class="form-grid"/>'
+      + '<text x="' + (L - 6) + '" y="' + (y(v) + 3.5).toFixed(1) + '" class="form-tick" text-anchor="end">' + fmtRate(v) + "</text>";
+  }).join("");
+  var line = pts.map(function (p, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.avg).toFixed(1); }).join(" ");
+  var area = line + " L" + x(pts.length - 1).toFixed(1) + " " + y(0).toFixed(1) + " L" + x(0).toFixed(1) + " " + y(0).toFixed(1) + " Z";
+  var dots = pts.map(function (p, i) { return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.avg).toFixed(1) + '" r="4" class="form-dot"/>'; }).join("");
+  var ref = periodAvg != null
+    ? '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(periodAvg).toFixed(1) + '" y2="' + y(periodAvg).toFixed(1) + '" class="form-ref"/>'
+      + '<text x="' + (W - R + 4) + '" y="' + (y(periodAvg) + 3.5).toFixed(1) + '" class="form-ref-label">期間 ' + fmtRate(periodAvg) + "</text>"
+    : "";
+  var last = pts[pts.length - 1];
+  var lastLabelY = y(last.avg) - 9;
+  if (periodAvg != null && Math.abs(y(last.avg) - y(periodAvg)) < 12) lastLabelY = y(last.avg) + (y(last.avg) < y(periodAvg) ? -9 : 17);
+  var endLabel = '<text x="' + (x(pts.length - 1) + 6).toFixed(1) + '" y="' + lastLabelY.toFixed(1) + '" class="form-end">' + fmtRate(last.avg) + "</text>";
+  var xLabels = '<text x="' + x(0).toFixed(1) + '" y="' + (H - 6) + '" class="form-tick" text-anchor="start">' + esc(fmtDate(pts[0].date)) + "</text>"
+    + '<text x="' + x(pts.length - 1).toFixed(1) + '" y="' + (H - 6) + '" class="form-tick" text-anchor="end">' + esc(fmtDate(last.date)) + "</text>";
+  /* 直近5試合と、その前の5試合を比べて「上向き／下向き」を一言で */
+  var recentAvg = last.avg;
+  var prev = pts.length > FORM_WINDOW ? pts[pts.length - 1 - FORM_WINDOW].avg : null;
+  var trend = "";
+  if (prev != null) {
+    var dd = recentAvg - prev;
+    trend = Math.abs(dd) < 0.03 ? "横ばい" : (dd > 0 ? "上向き ↗" : "下向き ↘");
+  }
+  var diffP = periodAvg != null ? recentAvg - periodAvg : null;
+  var summary = '<div class="form-summary"><span>直近5試合 <b>' + fmtRate(recentAvg) + "</b></span>"
+    + (diffP != null ? '<span class="' + (diffP >= 0 ? "win" : "loss") + '">期間打率より ' + (diffP >= 0 ? "+" : "-") + fmtRate(Math.abs(diffP)) + "</span>" : "")
+    + (trend ? "<span>調子 <b>" + trend + "</b></span>" : "") + "</div>";
+  var data = pts.map(function (p) { return { d: fmtDate(p.date), o: p.opp, ab: p.ab, h: p.h, a: fmtRate(p.avg) }; });
+  var table = '<details class="form-table"><summary>表で見る</summary><div class="table-scroll"><table class="stat-table"><thead><tr><th>日付</th><th>相手</th><th class="num">打数-安打</th><th class="num">直近5試合</th></tr></thead><tbody>'
+    + pts.slice().reverse().map(function (p) {
+      return "<tr><td>" + esc(fmtDate(p.date)) + "</td><td>" + esc(p.opp || "-") + "</td>" + '<td class="num mono">' + p.ab + "-" + p.h + "</td>" + '<td class="num mono">' + fmtRate(p.avg) + "</td></tr>";
+    }).join("") + "</tbody></table></div></details>";
+  return summary
+    + '<div class="form-wrap">'
+    + '<svg viewBox="0 0 ' + W + " " + H + '" class="form-svg" role="img" aria-label="直近5試合の打率の推移" data-form="' + esc(JSON.stringify(data)) + '" data-x0="' + L + '" data-pw="' + pw + '" data-w="' + W + '">'
+      + grid + '<path d="' + area + '" class="form-area"/>' + ref + '<path d="' + line + '" class="form-line"/>' + dots + endLabel + xLabels
+      + '<line class="form-cross" x1="0" x2="0" y1="' + T + '" y2="' + (T + ph) + '" style="display:none"/>'
+    + "</svg>"
+    + '<div class="form-tip" style="display:none"></div>'
+    + "</div>"
+    + '<div class="page-lede" style="margin-top:6px;font-size:12px;">線は各試合の時点での直近5試合の打率（最新' + FORM_POINTS + '試合まで）。横線は表示期間の打率です。点に触れると試合ごとの成績が出ます。</div>'
+    + table;
+}
+/* グラフ上で指やマウスを動かしたとき、一番近い試合に縦線とツールチップを出す */
+function onFormPointer(e) {
+  var svg = e.target.closest && e.target.closest(".form-svg");
+  document.querySelectorAll(".form-wrap").forEach(function (w) {
+    if (svg && w.contains(svg)) return;
+    var c = w.querySelector(".form-cross"), t = w.querySelector(".form-tip");
+    if (c) c.style.display = "none";
+    if (t) t.style.display = "none";
+  });
+  if (!svg) return;
+  var data;
+  try { data = JSON.parse(svg.getAttribute("data-form")); } catch (err) { return; }
+  var rect = svg.getBoundingClientRect();
+  var scale = rect.width / Number(svg.getAttribute("data-w"));
+  var x0 = Number(svg.getAttribute("data-x0")), pw = Number(svg.getAttribute("data-pw"));
+  var vx = (e.clientX - rect.left) / scale;
+  var i = Math.round((vx - x0) / (pw / Math.max(1, data.length - 1)));
+  i = Math.max(0, Math.min(data.length - 1, i));
+  var cx = x0 + i * pw / Math.max(1, data.length - 1);
+  var cross = svg.querySelector(".form-cross");
+  cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.style.display = "";
+  var tip = svg.parentNode.querySelector(".form-tip");
+  var p = data[i];
+  tip.textContent = "";
+  var strong = document.createElement("b"); strong.textContent = "直近5試合 " + p.a;
+  var l1 = document.createElement("div"); l1.appendChild(strong);
+  var l2 = document.createElement("div"); l2.textContent = p.d + " " + (p.o || "") ;
+  var l3 = document.createElement("div"); l3.textContent = "この試合 " + p.ab + "打数" + p.h + "安打";
+  tip.appendChild(l1); tip.appendChild(l2); tip.appendChild(l3);
+  tip.style.display = "";
+  /* 縦線の右側に出し、はみ出すときは左側へ（線と点を隠さない） */
+  var px = cx * scale;
+  var left = px + 10;
+  if (left + tip.offsetWidth > rect.width) left = px - 10 - tip.offsetWidth;
+  tip.style.left = Math.max(0, left) + "px";
 }
 /* 選手ページ：その選手の次の通算記録（近い順に4つまで） */
 function renderPlayerNextMilestones(pid) {
@@ -4632,6 +4763,8 @@ function renderPlayerDetail(pid) {
         + '<th>最長</th><td class="num mono">' + pStreak.best + "試合</td></tr>"
       + "</tbody></table></div>"
       + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>"
+      + '<div class="section-title" style="margin-top:16px;">調子（打率の推移）</div>'
+      + renderFormChart(games, pid, rt.avg)
       + renderPlayerNextMilestones(pid)
       + '<div class="section-title" style="margin-top:16px;">打球方向</div>'
       + renderSprayChart(computeSprayData(games, pid));
@@ -5141,6 +5274,9 @@ function attachHandlers() {
   app.addEventListener("click", onAppClick);
   app.addEventListener("input", onAppInput);
   app.addEventListener("change", onAppChange);
+  app.addEventListener("pointermove", onFormPointer);
+  app.addEventListener("pointerdown", onFormPointer);
+  app.addEventListener("pointerleave", function () { onFormPointer({ target: document.body }); });
   window.addEventListener("popstate", onPopState);
 }
 
