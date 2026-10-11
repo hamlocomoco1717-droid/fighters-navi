@@ -2192,7 +2192,7 @@ function restoreView(v) {
   var y = v.scrollY || 0;
   try { window.scrollTo(0, y); requestAnimationFrame(function () { window.scrollTo(0, y); }); } catch (e) { /* ignore */ }
 }
-var TEAM_SUB_LABEL = { summary: "シーズン成績", innings: "イニング別", order: "打順別", position: "守備位置別", opponent: "対戦相手別", records: "歴代記録" };
+var TEAM_SUB_LABEL = { period: "時期別", summary: "シーズン成績", innings: "イニング別", order: "打順別", position: "守備位置別", opponent: "対戦相手別", records: "歴代記録" };
 var STAT_SUB_LABEL = { batting: "打撃成績", pitching: "投手成績", fielding: "守備出場", titles: "タイトル", mvp: "MVP" };
 function describeView(v) {
   if (!v) return "";
@@ -4774,6 +4774,100 @@ function renderPlayerStatsTab() {
   return '<div class="page-head page-head-stadium"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
     + subtabs + '<div class="card">' + content + "</div>";
 }
+/* ---------- 時期別（シーズンを序盤・中盤・終盤に3分割） ----------
+   その年の結果の出た試合を日付順に並べ、試合数でできるだけ均等に3つに分ける
+   （端数は序盤・中盤に寄せる）。シーズン途中の年は、ここまでの試合を3分割 */
+var PERIOD_NAMES = ["序盤", "中盤", "終盤"];
+function splitSeasonPeriods(yearGames) {
+  var gs = sortGamesByDate(yearGames).filter(function (g) { return gameResult(g); });
+  var parts = [[], [], []];
+  gs.forEach(function (g, i) { parts[Math.min(2, Math.floor(i * 3 / gs.length))].push(g); });
+  return parts.map(function (pg, k) {
+    var o = { name: PERIOD_NAMES[k], games: pg, n: pg.length, w: 0, l: 0, t: 0, rf: 0, ra: 0, ab: 0, h: 0 };
+    pg.forEach(function (g) {
+      var r = gameResult(g), tot = gameTotals(g);
+      if (r === "W") o.w++; else if (r === "L") o.l++; else o.t++;
+      o.rf += tot.us; o.ra += tot.them;
+      (g.batting || []).forEach(function (b) { o.ab += n0(b.ab); o.h += n0(b.h); });
+    });
+    o.pct = (o.w + o.l) > 0 ? o.w / (o.w + o.l) : null;
+    o.avg = o.ab > 0 ? o.h / o.ab : null;
+    o.from = pg.length ? pg[0].date : ""; o.to = pg.length ? pg[pg.length - 1].date : "";
+    return o;
+  });
+}
+function renderPeriodAnalysis() {
+  var md = function (d) { return d ? Number(d.slice(5, 7)) + "/" + Number(d.slice(8, 10)) : ""; };
+  var recStr = function (o) { return o.w + "勝" + o.l + "敗" + (o.t ? o.t + "分" : ""); };
+  var avgPerGame = function (v, n) { return n ? (v / n).toFixed(1) : "-"; };
+  var periodRow = function (o, label, best) {
+    if (!o.n) return "<tr><td><b>" + label + '</b></td><td colspan="6" style="color:var(--ink-muted);">試合なし</td></tr>';
+    return "<tr" + (best ? ' class="year-current"' : "") + '><td style="white-space:nowrap;"><b>' + label + "</b>"
+      + '<span class="rec-when" style="display:block;">' + md(o.from) + "〜" + md(o.to) + "</span></td>"
+      + tdnum(o.n)
+      + '<td class="num mono" style="white-space:nowrap;">' + recStr(o) + "</td>"
+      + '<td class="num mono stat-headline">' + (o.pct == null ? "-" : fmtRate(o.pct)) + "</td>"
+      + '<td class="num mono">' + avgPerGame(o.rf, o.n) + "</td>"
+      + '<td class="num mono">' + avgPerGame(o.ra, o.n) + "</td>"
+      + '<td class="num mono">' + fmtRate(o.avg) + "</td></tr>";
+  };
+  var head = '<thead><tr><th>時期</th><th class="num">試合</th><th class="num">勝敗</th><th class="num">勝率</th><th class="num">平均得点</th><th class="num">平均失点</th><th class="num">打率</th></tr></thead>';
+  var bestIdx = function (ps) {
+    var bi = -1;
+    ps.forEach(function (o, i) { if (o.n && o.pct != null && (bi === -1 || o.pct > ps[bi].pct)) bi = i; });
+    return bi;
+  };
+  var years = availableYears().slice().sort();
+  if (years.length === 0) return '<div class="card"><p style="color:var(--ink-muted);">まだ試合がありません。</p></div>';
+  var note = '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">その年の試合を日付順に並べ、試合数でほぼ均等に3つに分けています。シーズン途中の年は、ここまでの試合を3つに分けています。色付きの行はその年で勝率が一番高い時期です。</p>';
+
+  if (UI.statsYear !== "all") {
+    var ps = splitSeasonPeriods(gamesForYear(UI.statsYear));
+    var bi = bestIdx(ps);
+    /* 各時期によく打った選手（安打数の多い順に3人） */
+    var hitters = ps.map(function (o) {
+      var rows = [];
+      computeBattingAgg(o.games).forEach(function (c) { if (c.h > 0) rows.push(c); });
+      rows.sort(function (a, b) { return b.h - a.h || (b.ab ? 0 : 1) - (a.ab ? 0 : 1); });
+      return '<div class="title-card"><div class="title-name">' + o.name + '<span class="title-label">' + (o.n ? md(o.from) + "〜" + md(o.to) + "・" + recStr(o) : "試合なし") + "</span></div>"
+        + (rows.length ? rows.slice(0, 3).map(function (c, i) {
+          return '<div class="title-row rank-' + (i + 1) + '"><span class="title-medal">' + ["🥇", "🥈", "🥉"][i] + "</span>"
+            + '<span class="mvp-who"><button class="link-btn title-player" data-action="view-player" data-id="' + c.playerId + '">' + esc(playerName(c.playerId)) + "</button>"
+            + '<span class="rec-when">' + c.ab + "打数・打率" + fmtRate(c.ab ? c.h / c.ab : null) + (c.rbi ? "・" + c.rbi + "打点" : "") + "</span></span>"
+            + '<span class="title-val mono">' + c.h + "安打</span></div>";
+        }).join("") : '<p class="title-empty">記録なし</p>') + "</div>";
+    }).join("");
+    return '<div class="card"><div class="section-title">' + esc(UI.statsYear) + "年の時期別成績</div>"
+      + '<div class="table-scroll"><table class="stat-table">' + head + "<tbody>"
+      + ps.map(function (o, i) { return periodRow(o, o.name, i === bi); }).join("") + "</tbody></table></div>" + note + "</div>"
+      + '<div class="card"><div class="section-title">各時期によく打った選手（安打数）</div><div class="title-grid">' + hitters + "</div></div>";
+  }
+
+  /* 全期間：年ごとの3分割と、全年を合わせた序盤・中盤・終盤 */
+  var sum = [0, 1, 2].map(function (k) { return { name: PERIOD_NAMES[k], n: 0, w: 0, l: 0, t: 0, rf: 0, ra: 0, ab: 0, h: 0 }; });
+  var perYear = years.map(function (y) {
+    var ps = splitSeasonPeriods(gamesForYear(y));
+    ps.forEach(function (o, k) { ["n", "w", "l", "t", "rf", "ra", "ab", "h"].forEach(function (f) { sum[k][f] += o[f]; }); });
+    return { y: y, ps: ps };
+  });
+  sum.forEach(function (o) { o.pct = (o.w + o.l) > 0 ? o.w / (o.w + o.l) : null; o.avg = o.ab > 0 ? o.h / o.ab : null; });
+  var sb = bestIdx(sum);
+  var tiles = '<div class="tile-grid">' + sum.map(function (o, i) {
+    return '<div class="tile"><div class="tile-label">' + o.name + '</div><div class="tile-value' + (i === sb ? " win" : "") + '">' + (o.pct == null ? "-" : fmtRate(o.pct)) + '</div><div class="tile-sub">' + recStr(o) + "・平均 " + avgPerGame(o.rf, o.n) + "-" + avgPerGame(o.ra, o.n) + "</div></div>";
+  }).join("") + "</div>";
+  var yearCards = perYear.slice().reverse().map(function (yy) {
+    var bi2 = bestIdx(yy.ps);
+    var total = yy.ps.reduce(function (a, o) { return a + o.n; }, 0);
+    return '<div class="section-title rec-group">' + yy.y + "年（" + total + "試合）</div>"
+      + '<div class="table-scroll"><table class="stat-table">' + head + "<tbody>"
+      + yy.ps.map(function (o, i) { return periodRow(o, o.name, i === bi2); }).join("") + "</tbody></table></div>";
+  }).join("");
+  var gamesPerYear = (perYear.reduce(function (a, yy) { return a + yy.ps.reduce(function (b, o) { return b + o.n; }, 0); }, 0) / perYear.length).toFixed(1);
+  return '<div class="card"><div class="section-title">全期間の時期別（勝率）</div>' + tiles
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">' + perYear.length + "年分の序盤・中盤・終盤をそれぞれ合計しています。1年の平均試合数は " + gamesPerYear + " 試合です。</p></div>"
+    + '<div class="card"><div class="section-title">年ごとの時期別成績</div>' + yearCards + note + "</div>";
+}
+
 /* ---------- 歴代記録 ----------
    シーズン選択に関係なく全試合から。上位3位まで（同じ数字は同順位、5件まで表示）。
    1試合の記録は押すとその試合、シーズン記録は押すと選手ページを開く */
@@ -5202,7 +5296,7 @@ function renderTeamTab() {
 
   var tsub = UI.teamSubtab || "summary";
   var teamSubtabs = '<div class="subtabs">'
-    + [["summary", "シーズン成績"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"], ["records", "歴代記録"]].map(function (o) {
+    + [["summary", "シーズン成績"], ["period", "時期別"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"], ["records", "歴代記録"]].map(function (o) {
       return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
     }).join("") + "</div>";
   var teamHead = '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
@@ -5212,6 +5306,7 @@ function renderTeamTab() {
   if (tsub === "opponent") return teamHead + renderOpponentAnalysis(games);
   if (tsub === "position") return teamHead + renderPositionAnalysis(games);
   if (tsub === "records") return teamHead + renderAllTimeRecords();
+  if (tsub === "period") return teamHead + renderPeriodAnalysis();
 
   return teamHead
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
