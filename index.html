@@ -2998,7 +2998,9 @@ function renderGameDetail(g) {
     + '<div class="field"><label>対戦相手</label>' + opponentFieldHtml + "</div>"
     + '<div class="field"><label>先攻・後攻</label>' + venueFieldHtml + "</div>"
     + '<div class="field"><label>試合会場</label>' + groundFieldHtml + "</div>"
-    + '<div class="field"><label>大会名</label><input type="text" data-draft="tournament" value="' + esc(d.tournament || "") + '" placeholder="(任意)"' + (UI.readOnly ? " disabled" : "") + "></div>"
+    + '<div class="field"><label>大会名</label>' + (canEditMeta
+      ? '<input type="text" data-draft="tournament" value="' + esc(d.tournament || "") + '" placeholder="(任意)"' + (UI.readOnly ? " disabled" : "") + ">"
+      : esc(d.tournament || "-")) + "</div>"
     + "</div>"
     + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">先攻の場合は上段、後攻の場合は下段に自チームの成績が入ります。スコアボードに得点を入力すると、自動的に「試合結果」としてチーム成績・個人成績に反映されます。</p>';
 
