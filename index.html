@@ -612,6 +612,8 @@ table.stat-table tr.opp-open td { background: var(--accent-soft); }
 .form-table summary { cursor: pointer; color: var(--link); }
 table.stat-table tr.year-current td { background: var(--accent-soft); }
 table.stat-table tr.year-total td { border-top: 2px solid var(--border); background: var(--surface-2); font-weight: 700; }
+.pos-ops-bar { display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: var(--border); overflow: hidden; min-width: 44px; }
+.pos-ops-bar > span { display: block; height: 100%; background: var(--chart-line); border-radius: 2px; }
 .ms-list { display: flex; flex-direction: column; gap: 6px; }
 .ms-row { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "player goal left" "bar bar cur"; align-items: center; column-gap: 8px; row-gap: 4px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
 .ms-row.ms-own { grid-template-areas: "goal goal left" "bar bar cur"; }
@@ -729,7 +731,9 @@ table.stat-table tr.order-few td.stat-headline { color: var(--ink-muted); }
 .sortable { cursor: pointer; user-select: none; }
 .sortable:hover { color: var(--ink); }
 .sortable .arrow { opacity: 0.5; font-size: 9px; margin-left: 2px; }
-.subtabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.subtabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs .btn { flex: 0 0 auto; white-space: nowrap; }
 .link-btn { background: none; border: none; color: var(--link); cursor: pointer; font-size: 13px; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 hr.rule { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 </style>
@@ -2099,6 +2103,13 @@ function renderApp() {
   else content = renderSettingsTab();
   document.getElementById("app").innerHTML = renderShell(content);
   saveViewState();
+  /* 横スクロールのサブタブは、選択中のボタンが隠れないよう横方向だけ寄せる */
+  document.querySelectorAll(".subtabs").forEach(function (bar) {
+    var on = bar.querySelector(".btn-primary");
+    if (!on) return;
+    var br = bar.getBoundingClientRect(), or = on.getBoundingClientRect();
+    if (or.right > br.right || or.left < br.left) bar.scrollLeft += or.left - br.left - 8;
+  });
   if (UI.scrollAfterEdit && !UI.confirmDialog) {
     var sae = UI.scrollAfterEdit;
     UI.scrollAfterEdit = null;
@@ -4830,6 +4841,7 @@ function renderPlayerDetail(pid) {
   return head
     + '<div class="card">' + batHtml + pitHtml + fldHtml + "</div>"
     + renderPlayerYearly(pid)
+    + renderPlayerPositionBatting(games, pid)
     + '<div class="card">' + perGameHtml + "</div>";
 }
 
@@ -4927,7 +4939,7 @@ function renderTeamTab() {
 
   var tsub = UI.teamSubtab || "summary";
   var teamSubtabs = '<div class="subtabs">'
-    + [["summary", "シーズン成績"], ["innings", "イニング別"], ["order", "打順別"], ["opponent", "対戦相手別"]].map(function (o) {
+    + [["summary", "シーズン成績"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"]].map(function (o) {
       return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
     }).join("") + "</div>";
   var teamHead = '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
@@ -4935,6 +4947,7 @@ function renderTeamTab() {
   if (tsub === "innings") return teamHead + renderInningAnalysis(games);
   if (tsub === "order") return teamHead + renderBattingOrderAnalysis(games);
   if (tsub === "opponent") return teamHead + renderOpponentAnalysis(games);
+  if (tsub === "position") return teamHead + renderPositionAnalysis(games);
 
   return teamHead
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
@@ -5175,6 +5188,130 @@ function renderInningAnalysis(games) {
 
 /* 打順（打撃成績表の並び順）ごとの成績。途中出場の選手は表の末尾に入るため、
    その位置の打順として数える */
+/* ---------- 守備位置別の打撃 ----------
+   打席の記号は「何回の打席か」、守備位置は「何回からどこを守ったか」を記録しているので、
+   1打席ずつ「その回に守っていた位置」に振り分けて集計する。打席の記号がない試合
+   （古い取り込み）は、その試合の数字をまとめて先発の守備位置に入れる。
+   pid を渡すとその選手だけ */
+var POS_UNSET = "未設定";
+function computePositionBatting(games, pid) {
+  var map = {};
+  var slot = function (pos) {
+    pos = pos || POS_UNSET;
+    return map[pos] || (map[pos] = { pos: pos, pa: 0, ab: 0, h: 0, d2: 0, d3: 0, hr: 0, bb: 0, hbp: 0, sac: 0, sf: 0, rbi: 0, so: 0, players: {} });
+  };
+  games.forEach(function (g) {
+    var span = Math.max(POS_INNINGS, (g.innings && g.innings.top || []).length, (g.innings && g.innings.bottom || []).length);
+    (g.batting || []).forEach(function (b) {
+      if (!b.playerId || (pid && b.playerId !== pid)) return;
+      var hasTokens = (b.atbats || []).some(function (t) { return t && String(t).trim() !== ""; });
+      if (!hasTokens) {
+        var pa = n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf);
+        if (pa <= 0) return;
+        var s0 = slot(b.position);
+        s0.pa += pa; s0.ab += n0(b.ab); s0.h += n0(b.h); s0.d2 += n0(b.d2); s0.d3 += n0(b.d3); s0.hr += n0(b.hr);
+        s0.bb += n0(b.bb); s0.hbp += n0(b.hbp); s0.sac += n0(b.sac); s0.sf += n0(b.sf); s0.rbi += n0(b.rbi); s0.so += n0(b.so);
+        s0.players[b.playerId] = (s0.players[b.playerId] || 0) + pa;
+        return;
+      }
+      var posAt = {};
+      positionSegments(b, Math.max(span, (b.atbats || []).length)).forEach(function (seg) {
+        for (var i = seg.from; i <= seg.to; i++) posAt[i] = seg.position || "";
+      });
+      (b.atbats || []).forEach(function (cell, inn) {
+        if (!cell) return;
+        String(cell).split("・").forEach(function (tok) {
+          var c = classifyAtbatToken(tok);
+          if (c === null) return;
+          var st = slot(posAt[inn + 1]);
+          st.pa++;
+          st.rbi += atbatTokenRbi(tok);
+          if (c === "BB") st.bb++;
+          else if (c === "HBP") st.hbp++;
+          else if (c === "SAC") st.sac++;
+          else if (c === "SACFLY") st.sf++;
+          else {
+            st.ab++;
+            if (c === "SO") st.so++;
+            if (c === "H1" || c === "H2" || c === "H3" || c === "HR") st.h++;
+            if (c === "H2") st.d2++;
+            if (c === "H3") st.d3++;
+            if (c === "HR") st.hr++;
+          }
+          st.players[b.playerId] = (st.players[b.playerId] || 0) + 1;
+        });
+      });
+    });
+  });
+  var order = POSITIONS.concat([POS_UNSET]);
+  return Object.keys(map).map(function (k) {
+    var st = map[k];
+    st.rates = battingRates(st);
+    st.topPlayers = Object.keys(st.players).map(function (id) { return { id: id, n: st.players[id] }; })
+      .sort(function (a, b) { return b.n - a.n; });
+    return st;
+  }).sort(function (a, b) {
+    var ia = order.indexOf(a.pos), ib = order.indexOf(b.pos);
+    var rank = function (pos, i) { return pos === POS_UNSET ? 999 : (i === -1 ? 500 : i); };
+    return rank(a.pos, ia) - rank(b.pos, ib);
+  });
+}
+function renderPositionAnalysis(games) {
+  var rows = computePositionBatting(games);
+  if (rows.length === 0) {
+    return '<div class="card"><p style="color:var(--ink-muted);">この期間の打撃記録がありません。</p></div>';
+  }
+  /* 傾向の対象は、チーム試合数ぶん（1試合1打席）以上の打席がある守備位置 */
+  var minPA = Math.max(10, computeTeamRecord(games).gp);
+  var pool = rows.filter(function (r) { return r.pa >= minPA && r.pos !== POS_UNSET && r.rates.ops != null; });
+  var byOps = pool.slice().sort(function (a, b) { return b.rates.ops - a.rates.ops; });
+  var tile = function (label, r, cls) {
+    return '<div class="tile"><div class="tile-label">' + label + '</div><div class="tile-value text' + (r ? cls : "") + '">' + (r ? esc(r.pos) : "-") + '</div><div class="tile-sub">' + (r ? "OPS " + fmtRate(r.rates.ops) + "・" + r.pa + "打席" : "") + "</div></div>";
+  };
+  var tiles = '<div class="tile-grid">'
+    + tile("一番打っている守備位置", byOps[0], " win")
+    + tile("一番打てていない守備位置", byOps.length > 1 ? byOps[byOps.length - 1] : null, " loss")
+    + "</div>";
+  var maxOps = 0;
+  rows.forEach(function (r) { if (r.rates.ops != null) maxOps = Math.max(maxOps, r.rates.ops); });
+  var tableRows = rows.map(function (r) {
+    var few = r.pa < minPA;
+    var who = r.topPlayers.slice(0, 3).map(function (p) { return esc(playerName(p.id)) + '<span class="order-count">' + p.n + "</span>"; }).join("、");
+    var barW = r.rates.ops != null && maxOps > 0 ? Math.round(r.rates.ops / maxOps * 100) : 0;
+    return "<tr" + (few ? ' class="order-few"' : "") + "><td style=\"white-space:nowrap;\"><b>" + esc(r.pos) + "</b></td>"
+      + '<td class="num mono stat-headline" style="white-space:nowrap;">' + fmtRate(r.rates.ops)
+        + '<span class="pos-ops-bar"><span style="width:' + barW + '%;"></span></span></td>'
+      + tdnum(r.pa)
+      + '<td class="num mono">' + fmtRate(r.rates.avg) + "</td>"
+      + '<td class="num mono">' + fmtRate(r.rates.obp) + "</td>"
+      + '<td class="num mono">' + fmtRate(r.rates.slg) + "</td>"
+      + tdnum(r.hr) + tdnum(r.rbi, "stat-rbi")
+      + '<td style="white-space:normal;min-width:150px;font-size:12.5px;">' + who + "</td></tr>";
+  }).join("");
+  var table = '<div class="table-scroll"><table class="stat-table"><thead><tr>'
+    + '<th>守備位置</th><th class="num">OPS</th><th class="num">打席</th><th class="num">打率</th><th class="num">出塁率</th><th class="num">長打率</th><th class="num">本塁打</th><th class="num">打点</th><th>主な選手（打席数）</th>'
+    + "</tr></thead><tbody>" + tableRows + "</tbody></table></div>"
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">1打席ずつ、その回に守っていた位置で数えています（途中で守備が変わった選手も正しく分かれます）。打席数が' + minPA + '未満の守備位置は薄く表示しています（参考値）。打席の記号がない古い試合は先発の守備位置でまとめて数えています。</p>';
+  return '<div class="card"><div class="section-title">守備位置別の傾向</div>' + tiles + "</div>"
+    + '<div class="card"><div class="section-title">守備位置別の打撃</div>' + table + "</div>";
+}
+/* 選手ページ：守備位置ごとの打撃（上で選んだシーズン） */
+function renderPlayerPositionBatting(games, pid) {
+  var rows = computePositionBatting(games, pid).filter(function (r) { return r.pa > 0; });
+  if (rows.length === 0) return "";
+  var body = rows.map(function (r) {
+    return "<tr" + (r.pa < 10 ? ' class="order-few"' : "") + "><td><b>" + esc(r.pos) + "</b></td>"
+      + '<td class="num mono stat-headline">' + fmtRate(r.rates.ops) + "</td>"
+      + tdnum(r.pa)
+      + '<td class="num mono">' + fmtRate(r.rates.avg) + "</td>"
+      + '<td class="num mono">' + fmtRate(r.rates.obp) + "</td>"
+      + tdnum(r.h, "stat-hit") + tdnum(r.hr) + tdnum(r.rbi, "stat-rbi") + "</tr>";
+  }).join("");
+  return '<div class="card"><div class="section-title">守備位置別の打撃（' + (UI.statsYear === "all" ? "通算" : esc(UI.statsYear) + "年") + "）</div>"
+    + '<div class="table-scroll"><table class="stat-table"><thead><tr><th>守備位置</th><th class="num">OPS</th><th class="num">打席</th><th class="num">打率</th><th class="num">出塁率</th><th class="num">安打</th><th class="num">本塁打</th><th class="num">打点</th></tr></thead><tbody>'
+    + body + "</tbody></table></div>"
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">1打席ずつ、その回に守っていた位置で数えています。10打席未満は薄く表示しています（参考値）。</p></div>';
+}
 function computeBattingOrderAnalysis(games) {
   var slots = [];
   games.forEach(function (g) {
