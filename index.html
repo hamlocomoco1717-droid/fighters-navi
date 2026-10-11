@@ -1656,15 +1656,15 @@ function computeHitStreaks(games) {
    三振・四死球・打撃妨害など打球のない打席は数えない。方向なしで記録した打席は「方向不明」 */
 var SPRAY_ZONES = [
   /* 外野：レフト・センター・ライトの3方向（左中間はレフト、右中間はライトに含める） */
-  { key: "左", label: "レフト", r0: 118, r1: 205, a0: -45, a1: -15 },
-  { key: "中", label: "センター", r0: 118, r1: 205, a0: -15, a1: 15 },
-  { key: "右", label: "ライト", r0: 118, r1: 205, a0: 15, a1: 45 },
+  { key: "左", label: "レフト", r0: 128, r1: 210, a0: -45, a1: -15 },
+  { key: "中", label: "センター", r0: 128, r1: 210, a0: -15, a1: 15 },
+  { key: "右", label: "ライト", r0: 128, r1: 210, a0: 15, a1: 45 },
   /* 内野：三遊間・二遊間で4分割 */
-  { key: "三", label: "サード", r0: 32, r1: 118, a0: -45, a1: -22.5 },
-  { key: "遊", label: "ショート", r0: 32, r1: 118, a0: -22.5, a1: 0 },
-  { key: "二", label: "セカンド", r0: 32, r1: 118, a0: 0, a1: 22.5 },
-  { key: "一", label: "ファースト", r0: 32, r1: 118, a0: 22.5, a1: 45 },
-  { key: "投捕", label: "投・捕", r0: 0, r1: 32, a0: -45, a1: 45 }
+  { key: "三", label: "サード", r0: 46, r1: 128, a0: -45, a1: -22.5 },
+  { key: "遊", label: "ショート", r0: 46, r1: 128, a0: -22.5, a1: 0 },
+  { key: "二", label: "セカンド", r0: 46, r1: 128, a0: 0, a1: 22.5 },
+  { key: "一", label: "ファースト", r0: 46, r1: 128, a0: 22.5, a1: 45 },
+  { key: "投捕", label: "投・捕", r0: 0, r1: 46, a0: -45, a1: 45 }
 ];
 var SPRAY_SIDE = { "左": "L", "三": "L", "遊": "L", "中": "C", "投捕": "C", "二": "R", "一": "R", "右": "R" };
 function atbatTokenDir(tok) {
@@ -1705,7 +1705,7 @@ function renderSprayChart(d) {
   if (d.total === 0) {
     return '<p style="color:var(--ink-muted);font-size:13px;">打球方向の記録がありません。</p>';
   }
-  var hx = 150, hy = 238;
+  var hx = 150, hy = 248;
   function pt(r, deg) {
     var a = deg * Math.PI / 180;
     return (hx + r * Math.sin(a)).toFixed(1) + " " + (hy - r * Math.cos(a)).toFixed(1);
@@ -1724,17 +1724,19 @@ function renderSprayChart(d) {
       + esc(z.label) + "：" + zd.n + "本（安打" + zd.h + "）</title></path>";
     var mid = (z.a0 + z.a1) / 2;
     var infield = z.r0 > 0 && z.r1 < 200;
-    var lr = z.r0 === 0 ? 18 : (infield ? z.r0 + (z.r1 - z.r0) * 0.7 : (z.r0 + z.r1) / 2);
+    /* 外野は帯の真ん中、内野は外寄り（二遊間の2つが離れるように）、投捕は扇の要の少し上 */
+    var lr = z.r0 === 0 ? 30 : (infield ? z.r0 + (z.r1 - z.r0) * 0.6 : (z.r0 + z.r1) / 2);
     var xy = pt(lr, mid).split(" ");
     var pct = Math.round(zd.n / d.total * 100);
     labels += '<text x="' + xy[0] + '" y="' + (+xy[1] - 4) + '" class="spray-num' + (infield || z.r0 === 0 ? " spray-num-sm" : "") + '">' + (zd.n > 0 ? pct + "%" : "") + "</text>"
-      + '<text x="' + xy[0] + '" y="' + (+xy[1] + 9) + '" class="spray-sub">' + (zd.n > 0 ? zd.n + "本" + (zd.h > 0 ? "・安" + zd.h : "") : "") + "</text>";
+      /* 投捕の扇は細いので、本数は扇の要（ホーム）の下に出す */
+      + '<text x="' + xy[0] + '" y="' + (z.r0 === 0 ? hy + 12 : +xy[1] + 9) + '" class="spray-sub">' + (zd.n > 0 ? zd.n + "本" + (zd.h > 0 ? "・安" + zd.h : "") : "") + "</text>";
   });
   var side = { L: 0, C: 0, R: 0 };
   SPRAY_ZONES.forEach(function (z) { side[SPRAY_SIDE[z.key]] += d.zones[z.key].n; });
   function sp(v) { return Math.round(v / d.total * 100); }
   return '<div class="spray-wrap">'
-    + '<svg viewBox="0 0 300 245" class="spray-svg" role="img" aria-label="打球方向">' + shapes + labels + "</svg>"
+    + '<svg viewBox="0 0 300 264" class="spray-svg" role="img" aria-label="打球方向">' + shapes + labels + "</svg>"
     + '<div class="spray-bar">'
       + '<span class="spray-seg" style="flex:' + Math.max(side.L, 0.001) + ';">左 ' + sp(side.L) + "%</span>"
       + '<span class="spray-seg" style="flex:' + Math.max(side.C, 0.001) + ';">中 ' + sp(side.C) + "%</span>"
