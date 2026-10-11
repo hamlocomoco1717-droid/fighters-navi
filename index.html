@@ -583,6 +583,15 @@ input.cell-input.wide { width: 66px; }
 /* チーム成績: 打順別分析 */
 .tile-value.text { font-family: inherit; font-size: 19px; line-height: 1.3; }
 table.stat-table tr.order-few td { color: var(--ink-muted); }
+table.stat-table tr.opp-row { cursor: pointer; }
+table.stat-table tr.opp-open td { background: var(--accent-soft); }
+.opp-caret { display: inline-block; width: 1em; color: var(--ink-muted); }
+table.stat-table tr.opp-games > td { padding: 6px 4px 10px; background: var(--surface-2); white-space: normal; }
+.opp-game-list { position: sticky; left: 4px; width: min(330px, calc(100vw - 72px)); display: flex; flex-direction: column; gap: 4px; }
+.opp-game { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; font-size: 13px; }
+.opp-game-date { color: var(--ink-muted); white-space: nowrap; }
+.opp-game-score { font-weight: 700; white-space: nowrap; }
+.opp-game-ground { color: var(--ink-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 table.stat-table tr.order-few td.stat-headline { color: var(--ink-muted); }
 .order-count { font-family: "Roboto Mono", monospace; font-size: 11px; color: var(--ink-muted); margin-left: 2px; }
 .lineup-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
@@ -4500,18 +4509,120 @@ function renderTeamTab() {
 
   var tsub = UI.teamSubtab || "summary";
   var teamSubtabs = '<div class="subtabs">'
-    + [["summary", "シーズン成績"], ["innings", "イニング別"], ["order", "打順別"]].map(function (o) {
+    + [["summary", "シーズン成績"], ["innings", "イニング別"], ["order", "打順別"], ["opponent", "対戦相手別"]].map(function (o) {
       return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
     }).join("") + "</div>";
   var teamHead = '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
     + teamSubtabs;
   if (tsub === "innings") return teamHead + renderInningAnalysis(games);
   if (tsub === "order") return teamHead + renderBattingOrderAnalysis(games);
+  if (tsub === "opponent") return teamHead + renderOpponentAnalysis(games);
 
   return teamHead
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
     + '<div class="card"><div class="section-title">チーム全体の打率・防御率</div>' + teamTiles + "</div>"
     + '<div class="card"><div class="section-title">直近の試合</div>' + recentHtml + "</div>";
+}
+
+/* 対戦相手ごとの勝敗・得失点・チーム打率。相手名は空白の有無を無視して
+   同じチームにまとめ、表示名は一番新しい試合の書き方を使う。結果のない（予定の）試合は数えない */
+function opponentKey(name) { return String(name || "").replace(/[\s\u3000]/g, "") || "(相手未設定)"; }
+function computeOpponentAnalysis(games) {
+  var map = new Map();
+  sortGamesByDate(games).forEach(function (g) {
+    var res = gameResult(g);
+    if (!res) return;
+    var key = opponentKey(g.opponent);
+    var o = map.get(key);
+    if (!o) {
+      o = { key: key, name: "", games: [], w: 0, l: 0, t: 0, rf: 0, ra: 0, ab: 0, h: 0 };
+      map.set(key, o);
+    }
+    o.name = g.opponent ? String(g.opponent).trim() : "(相手未設定)";
+    var tot = gameTotals(g);
+    o.games.push(g);
+    if (res === "W") o.w++; else if (res === "L") o.l++; else o.t++;
+    o.rf += tot.us; o.ra += tot.them;
+    (g.batting || []).forEach(function (b) { o.ab += n0(b.ab); o.h += n0(b.h); });
+  });
+  var rows = [];
+  map.forEach(function (o) {
+    o.gp = o.games.length;
+    o.pct = (o.w + o.l) > 0 ? o.w / (o.w + o.l) : null;
+    o.avg = o.ab > 0 ? o.h / o.ab : null;
+    o.last = o.games[o.games.length - 1];
+    rows.push(o);
+  });
+  rows.sort(function (a, b) {
+    if (b.gp !== a.gp) return b.gp - a.gp;
+    return (b.last.date || "").localeCompare(a.last.date || "");
+  });
+  return rows;
+}
+function renderOpponentAnalysis(games) {
+  var rows = computeOpponentAnalysis(games);
+  if (rows.length === 0) {
+    return '<div class="card"><p style="color:var(--ink-muted);">この期間の試合結果がありません。</p></div>';
+  }
+  var signed = function (v) { return (v > 0 ? "+" : "") + v; };
+  var diffCls = function (v) { return v > 0 ? " win" : (v < 0 ? " loss" : ""); };
+  /* 得意・苦手は2試合以上戦った相手から（1試合だけだと勝率が0か10割になってしまうため） */
+  var pool = rows.filter(function (o) { return o.gp >= 2 && o.pct != null; });
+  var byPct = function (dir) {
+    return pool.slice().sort(function (a, b) {
+      return dir * (a.pct - b.pct) || dir * ((a.rf - a.ra) - (b.rf - b.ra));
+    })[0];
+  };
+  /* 得意＝勝ち越している相手、苦手＝負け越している相手だけから選ぶ */
+  var best = pool.length ? byPct(-1) : null, worst = pool.length ? byPct(1) : null;
+  if (best && best.w <= best.l) best = null;
+  if (worst && worst.l <= worst.w) worst = null;
+  var most = rows[0];
+  var tile = function (label, o, sub, cls, emptyMsg) {
+    return '<div class="tile"><div class="tile-label">' + label + '</div><div class="tile-value text' + (o ? (cls || "") : "") + '">' + (o ? esc(o.name) : "-") + '</div><div class="tile-sub">' + (o ? sub(o) : emptyMsg) + "</div></div>";
+  };
+  var rec = function (o) { return o.w + "勝" + o.l + "敗" + (o.t ? o.t + "分" : ""); };
+  var tiles = '<div class="tile-grid">'
+    + tile("得意な相手", best, function (o) { return rec(o) + "・勝率 " + fmtRate(o.pct); }, " win", "2試合以上で勝ち越している相手はまだいません")
+    + tile("苦手な相手", worst, function (o) { return rec(o) + "・勝率 " + fmtRate(o.pct); }, " loss", "2試合以上で負け越している相手はまだいません")
+    + tile("一番多く戦った相手", most, function (o) { return o.gp + "試合・" + rec(o); }, "", "")
+    + "</div>";
+
+  var tableRows = rows.map(function (o) {
+    var open = UI.openOpponent === o.key;
+    var diff = o.rf - o.ra;
+    var lastRes = gameResult(o.last);
+    var lastBadge = lastRes === "W" ? '<span class="badge badge-win">勝</span>' : lastRes === "L" ? '<span class="badge badge-loss">敗</span>' : '<span class="badge badge-tie">分</span>';
+    var html = '<tr class="opp-row' + (open ? " opp-open" : "") + '" data-action="toggle-opponent" data-key="' + esc(o.key) + '">'
+      + '<td style="white-space:nowrap;"><span class="opp-caret">' + (open ? "▾" : "▸") + "</span> <b>" + esc(o.name) + "</b></td>"
+      + tdnum(o.gp)
+      + '<td class="num mono" style="white-space:nowrap;">' + o.w + "-" + o.l + (o.t ? "-" + o.t : "") + "</td>"
+      + '<td class="num mono stat-headline">' + (o.pct == null ? "-" : fmtRate(o.pct)) + "</td>"
+      + tdnum(o.rf) + tdnum(o.ra)
+      + '<td class="num mono' + diffCls(diff) + '">' + signed(diff) + "</td>"
+      + '<td class="num mono">' + (o.rf / o.gp).toFixed(1) + "</td>"
+      + '<td class="num mono">' + (o.ra / o.gp).toFixed(1) + "</td>"
+      + '<td class="num mono">' + fmtRate(o.avg) + "</td>"
+      + '<td style="white-space:nowrap;font-size:12.5px;">' + esc(fmtDate(o.last.date)) + " " + lastBadge + "</td></tr>";
+    if (open) {
+      /* 表は横にスクロールするので、試合一覧は左端に固定して画面幅に収める */
+      html += '<tr class="opp-games"><td colspan="11"><div class="opp-game-list">' + o.games.slice().reverse().map(function (g) {
+        var tot = gameTotals(g), res = gameResult(g);
+        var badge = res === "W" ? '<span class="badge badge-win">勝</span>' : res === "L" ? '<span class="badge badge-loss">敗</span>' : '<span class="badge badge-tie">分</span>';
+        return '<div class="opp-game" data-action="open-game" data-id="' + g.id + '">'
+          + '<span class="opp-game-date">' + esc(fmtDate(g.date)) + "</span>"
+          + '<span class="opp-game-score mono">' + tot.us + " - " + tot.them + "</span>" + badge
+          + '<span class="opp-game-ground">' + esc(g.ground || "") + "</span></div>";
+      }).join("") + "</div></td></tr>";
+    }
+    return html;
+  }).join("");
+  var table = '<div class="table-scroll"><table class="stat-table"><thead><tr>'
+    + '<th>相手</th><th class="num">試合</th><th class="num">勝-敗</th><th class="num">勝率</th><th class="num">得点</th><th class="num">失点</th><th class="num">得失点差</th><th class="num">平均得点</th><th class="num">平均失点</th><th class="num">打率</th><th>最近の対戦</th>'
+    + "</tr></thead><tbody>" + tableRows + "</tbody></table></div>"
+    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">相手の名前を押すと、その相手との試合の一覧が開きます。平均得点・平均失点は1試合あたり、打率はその相手との試合だけのチーム打率です。</p>';
+  return '<div class="card"><div class="section-title">対戦相手別の傾向</div>' + tiles + "</div>"
+    + '<div class="card"><div class="section-title">対戦相手別の成績</div>' + table + "</div>";
 }
 
 /* イニングごとの得点・失点。コールド等で途中終了した試合は、その回の列が
@@ -5314,6 +5425,10 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "stat-subtab") {
     UI.statSubtab = el.getAttribute("data-sub");
+    renderApp();
+  } else if (action === "toggle-opponent") {
+    var oppKey = el.getAttribute("data-key");
+    UI.openOpponent = UI.openOpponent === oppKey ? null : oppKey;
     renderApp();
   } else if (action === "team-subtab") {
     UI.teamSubtab = el.getAttribute("data-sub");
