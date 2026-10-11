@@ -34,6 +34,7 @@ if ("serviceWorker" in navigator) {
   --ink: #15213E;
   --ink-muted: #5B6585;
   --accent: #1D2E58;
+  --link: #1D2E58;
   --accent-ink: #FFFFFF;
   --accent-soft: #E0E6F3;
   --accent-strong: #1D2E58;
@@ -61,6 +62,7 @@ if ("serviceWorker" in navigator) {
     --ink: #E9ECF6;
     --ink-muted: #9AA4C2;
     --accent: #3A4F8C;
+    --link: #B4CCF7;
     --accent-ink: #FFFFFF;
     --accent-soft: #1F2C4E;
     --accent-strong: #E8C56C;
@@ -88,6 +90,7 @@ if ("serviceWorker" in navigator) {
   --ink: #E9ECF6;
   --ink-muted: #9AA4C2;
   --accent: #3A4F8C;
+  --link: #B4CCF7;
   --accent-ink: #FFFFFF;
   --accent-soft: #1F2C4E;
   --accent-strong: #E8C56C;
@@ -130,7 +133,7 @@ h1, h2, h3, .display {
   font-family: "Roboto Mono", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
-a { color: var(--accent); }
+a { color: var(--link); }
 button { font-family: inherit; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
@@ -681,7 +684,7 @@ table.stat-table tr.order-few td.stat-headline { color: var(--ink-muted); }
 .sortable:hover { color: var(--ink); }
 .sortable .arrow { opacity: 0.5; font-size: 9px; margin-left: 2px; }
 .subtabs { display: flex; gap: 8px; margin-bottom: 14px; }
-.link-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 13px; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn { background: none; border: none; color: var(--link); cursor: pointer; font-size: 13px; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 hr.rule { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 </style>
 
