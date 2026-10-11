@@ -1219,6 +1219,19 @@ var MILESTONE_LABEL = { h: "安打", hr: "本塁打", d2: "二塁打", d3: "三�
 /* 「あと少し」とみなす残り（これ以下なら一覧に出す） */
 var MILESTONE_NEAR = { h: 5, hr: 2, d2: 2, d3: 1, rbi: 5, sb: 3, so: 5, w: 1, s: 1 };
 var MILESTONE_UNIT = { h: "本", hr: "本", d2: "本", d3: "本", rbi: "点", sb: "個", so: "個", w: "勝", s: "" };
+/* 選手ごとの最後の出場日（打席に立った・投げた試合の日付） */
+function lastAppearanceDates() {
+  var last = {};
+  STATE.games.forEach(function (g) {
+    var d = g.date || "";
+    var mark = function (pid) { if (pid && (!last[pid] || last[pid] < d)) last[pid] = d; };
+    (g.batting || []).forEach(function (b) {
+      if (n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf) > 0 || n0(b.h) > 0) mark(b.playerId);
+    });
+    (g.pitching || []).forEach(function (p) { mark(p.playerId); });
+  });
+  return last;
+}
 /* 通算（全試合）の成績から、各選手・各記録の「次の区切りまであと何」を出す */
 function computeMilestoneCountdown() {
   var totals = new Map();
@@ -1259,10 +1272,17 @@ function renderPlayerNextMilestones(pid) {
     }).join("") + "</div>";
 }
 function renderMilestoneCountdown() {
-  /* 登録が「在籍中」でない選手は一覧に出さない */
+  /* 登録が「在籍中」でない選手は出さない。1年以上出場していない選手も、
+     チェックを入れたときだけ出す */
   var inactive = {};
   STATE.players.forEach(function (pl) { if (pl.active === false) inactive[pl.id] = true; });
-  var near = computeMilestoneCountdown().filter(function (it) { return it.near && !inactive[it.pid]; });
+  var lastPlayed = lastAppearanceDates();
+  var y = new Date(); y.setFullYear(y.getFullYear() - 1);
+  var cutoff = y.getFullYear() + "-" + String(y.getMonth() + 1).padStart(2, "0") + "-" + String(y.getDate()).padStart(2, "0");
+  var all = computeMilestoneCountdown().filter(function (it) { return it.near && !inactive[it.pid]; });
+  var isAway = function (it) { return !lastPlayed[it.pid] || lastPlayed[it.pid] < cutoff; };
+  var awayCount = all.filter(isAway).length;
+  var near = UI.msShowAway ? all : all.filter(function (it) { return !isAway(it); });
   var MS_PREVIEW = 8;
   var total = near.length;
   if (!UI.msShowAll) near = near.slice(0, MS_PREVIEW);
@@ -1276,7 +1296,8 @@ function renderMilestoneCountdown() {
         + '<span class="ms-cur mono">' + it.cur + " / " + it.target + "</span></div>";
     }).join("") + "</div>"
     + (total > MS_PREVIEW ? '<button class="btn btn-sm" data-action="toggle-ms-all" style="width:100%;margin-top:8px;justify-content:center;">'
-      + (UI.msShowAll ? "少なく表示" : "すべて見る（" + total + "件）") + "</button>" : "");
+      + (UI.msShowAll ? "少なく表示" : "すべて見る（" + total + "件）") + "</button>" : "")
+    + (awayCount > 0 || UI.msShowAway ? '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;"><input type="checkbox" id="ms-show-away"' + (UI.msShowAway ? " checked" : "") + "> 1年以上出場していない選手も表示（" + awayCount + "件）</label>" : "");
   return '<div class="card"><div class="section-title">記録まであと少し</div>'
     + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">シーズンに関係なく、通算（全試合）の数字で数えています。</div>'
     + body + "</div>";
@@ -6028,6 +6049,9 @@ function onAppChange(e) {
     if (key === "inningsPerGame") STATE.team.inningsPerGame = Math.max(1, n0(t.value) || 7);
     else STATE.team[key] = t.value;
     persist();
+  } else if (t.id === "ms-show-away") {
+    UI.msShowAway = t.checked;
+    renderApp();
   } else if (t.id === "show-all-batters") {
     UI.showAllBatters = t.checked;
     renderApp();
