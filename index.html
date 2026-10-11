@@ -389,7 +389,7 @@ table.stat-table td.cell-input-wrap { padding: 4px 6px; }
 .spray-num-sm { font-size: 11px; }
 .spray-sub { font-size: 9.5px; fill: var(--ink-muted); text-anchor: middle; font-family: inherit; }
 .spray-bar { display: flex; gap: 3px; margin-top: 6px; font-size: 12px; }
-.spray-seg { min-width: 54px; text-align: center; padding: 4px 2px; border-radius: 4px; background: var(--info-soft); color: var(--ink); white-space: nowrap; }
+.spray-seg { flex: 1 1 0; min-width: 54px; text-align: center; padding: 4px 2px; border-radius: 4px; background: var(--info-soft); color: var(--ink); white-space: nowrap; }
 .risp-sub { display: block; font-size: 10.5px; color: var(--ink-muted); font-weight: 400; letter-spacing: 0; }
 .atbat-chip-rbi {
   display: inline-flex; align-items: center; gap: 2px;
@@ -1738,9 +1738,9 @@ function renderSprayChart(d) {
   return '<div class="spray-wrap">'
     + '<svg viewBox="0 0 300 264" class="spray-svg" role="img" aria-label="打球方向">' + shapes + labels + "</svg>"
     + '<div class="spray-bar">'
-      + '<span class="spray-seg" style="flex:' + Math.max(side.L, 0.001) + ';">左 ' + sp(side.L) + "%</span>"
-      + '<span class="spray-seg" style="flex:' + Math.max(side.C, 0.001) + ';">中 ' + sp(side.C) + "%</span>"
-      + '<span class="spray-seg" style="flex:' + Math.max(side.R, 0.001) + ';">右 ' + sp(side.R) + "%</span>"
+      + '<span class="spray-seg">左 ' + sp(side.L) + "%</span>"
+      + '<span class="spray-seg">中 ' + sp(side.C) + "%</span>"
+      + '<span class="spray-seg">右 ' + sp(side.R) + "%</span>"
     + "</div>"
     + '<div class="page-lede" style="margin-top:6px;font-size:12px;">打球 ' + d.total + "本（うち安打 " + d.hits + "）"
       + (d.unknown > 0 ? "・方向不明 " + d.unknown + "本は除く" : "") + "。三振・四死球は含みません。</div>"
