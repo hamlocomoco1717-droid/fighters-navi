@@ -1892,6 +1892,7 @@ function buildGameRecap(d) {
             while (zTo + 1 < nInn && pitcherAt(zTo + 1) === 0 && n0(theirs[zTo + 1]) === 0 && theirs[zTo + 1] !== undefined) zTo++;
             zeroSaid[0] = true;
             if (zTo >= 1) { (usAlreadyThisInning ? addLine : newPara)(pName(0) + "も完璧なピッチングで" + (zTo + 1) + "回まで無失点！"); }
+            else if (usAlreadyThisInning) { addLine("その裏、" + pName(0) + "も無失点に抑える！"); themSaid = true; }
             else { newPara("初回、" + pName(0) + "が無失点スタート！"); cur.zeroStart = true; themSaid = true; }
             return;
           }
