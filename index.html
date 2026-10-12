@@ -1135,6 +1135,16 @@ function skippedLastBottom(g) {
   return sum(bottom.slice(0, last)) > sum(top.slice(0, last + 1));
 }
 
+/* 最終回の裏、後攻チームが同点か負けている状態から逆転・勝ち越して試合が終わった（サヨナラ）なら true。
+   スコアボードの最終回の裏に「2x」のように表示するのに使う */
+function walkOffLastBottom(g) {
+  if (!gameResult(g)) return false;
+  var top = (g.innings && g.innings.top) || [], bottom = (g.innings && g.innings.bottom) || [];
+  var last = gameFinalInning(g) - 1;
+  if (last < 0 || n0(bottom[last]) <= 0) return false;
+  return sum(bottom.slice(0, last)) <= sum(top.slice(0, last + 1)) && sum(bottom.slice(0, last + 1)) > sum(top.slice(0, last + 1));
+}
+
 function gameResult(g) {
   var hasInnings = g.innings && ((g.innings.top && g.innings.top.length) || (g.innings.bottom && g.innings.bottom.length));
   if (!hasInnings) return null;
@@ -3785,6 +3795,10 @@ function renderGameDetail(g) {
       /* 後攻チームが攻撃せずに勝った最終回の裏は「×」（編集モード中は数字の入力欄のまま） */
       if (side === "bottom" && i === idxs.length - 1 && (UI.readOnly || !canEditInnings) && skippedLastBottom(d)) {
         return '<td title="後攻チームが勝っているため、この回の裏の攻撃はなし" style="font-size:15px;font-weight:700;">×</td>';
+      }
+      /* サヨナラで終わった最終回の裏は「2x」のように表示 */
+      if (side === "bottom" && i === idxs.length - 1 && (UI.readOnly || !canEditInnings) && walkOffLastBottom(d)) {
+        return '<td title="サヨナラ" style="font-weight:700;">' + v + "x</td>";
       }
       return '<td>' + (UI.readOnly
         ? String(v)
