@@ -1105,6 +1105,16 @@ function gameTotals(g) {
   var bottom = sum(g.innings && g.innings.bottom);
   return g.venue === "away" ? { us: top, them: bottom } : { us: bottom, them: top };
 }
+/* 最終回の表が終わった時点で後攻チームが勝っていて、その裏の攻撃をしていない（0か未入力）なら true。
+   スコアボードの最終回の裏に「×」を出すのに使う */
+function skippedLastBottom(g) {
+  if (!gameResult(g)) return false;
+  var top = (g.innings && g.innings.top) || [], bottom = (g.innings && g.innings.bottom) || [];
+  var last = Math.max(top.length, bottom.length) - 1;
+  if (last < 0 || n0(bottom[last]) !== 0) return false;
+  return sum(bottom.slice(0, last)) > sum(top.slice(0, last + 1));
+}
+
 function gameResult(g) {
   var hasInnings = g.innings && ((g.innings.top && g.innings.top.length) || (g.innings.bottom && g.innings.bottom.length));
   if (!hasInnings) return null;
@@ -3750,6 +3760,10 @@ function renderGameDetail(g) {
   function inningCells(side) {
     return idxs.map(function (i) {
       var v = n0(d.innings[side][i]);
+      /* 後攻チームが攻撃せずに勝った最終回の裏は「×」（編集モード中は数字の入力欄のまま） */
+      if (side === "bottom" && i === idxs.length - 1 && (UI.readOnly || !canEditInnings) && skippedLastBottom(d)) {
+        return '<td title="後攻チームが勝っているため、この回の裏の攻撃はなし" style="font-size:15px;font-weight:700;">×</td>';
+      }
       return '<td>' + (UI.readOnly
         ? String(v)
         : '<input class="cell-input" type="number" min="0" inputmode="numeric" data-inning-side="' + side + '" data-inning-idx="' + i + '" value="' + v + '">') + "</td>";
