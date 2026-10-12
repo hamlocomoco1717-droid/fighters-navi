@@ -1105,12 +1105,32 @@ function gameTotals(g) {
   var bottom = sum(g.innings && g.innings.bottom);
   return g.venue === "away" ? { us: top, them: bottom } : { us: bottom, them: top };
 }
+/* 実際に試合が終わった回（1始まり）。入力欄は7回分あっても、6回で終わった試合などがあるので、
+   自チームの投手の投球回（アウト数）から相手が攻撃した回数を求めて判断する。
+   後ろの回に得点が入っている・投手の記録がないときは、入力欄の回数そのまま */
+function gameFinalInning(g) {
+  var top = (g.innings && g.innings.top) || [], bottom = (g.innings && g.innings.bottom) || [];
+  var n = Math.max(top.length, bottom.length);
+  var outs = (g.pitching || []).reduce(function (a, p) { return a + n0(p && p.ipOuts); }, 0);
+  if (!n || !outs) return n;
+  var played = Math.ceil(outs / 3);        /* 相手が攻撃した回の数 */
+  var fin = n;
+  if (g.venue === "away") {
+    /* 自チームは裏を守る。相手（後攻）が played 回まで攻撃し、次の回の表で後攻がリードしていれば、そこで試合終了 */
+    if (played < n) fin = sum(bottom.slice(0, played)) > sum(top.slice(0, played + 1)) ? played + 1 : n;
+  } else if (played < n) {
+    fin = played;                         /* 自チームは表を守る。相手（先攻）が攻撃した回が最終回 */
+  }
+  for (var k = fin; k < n; k++) if (n0(top[k]) || n0(bottom[k])) return n;
+  return Math.max(1, fin);
+}
+
 /* 最終回の表が終わった時点で後攻チームが勝っていて、その裏の攻撃をしていない（0か未入力）なら true。
    スコアボードの最終回の裏に「×」を出すのに使う */
 function skippedLastBottom(g) {
   if (!gameResult(g)) return false;
   var top = (g.innings && g.innings.top) || [], bottom = (g.innings && g.innings.bottom) || [];
-  var last = Math.max(top.length, bottom.length) - 1;
+  var last = gameFinalInning(g) - 1;
   if (last < 0 || n0(bottom[last]) !== 0) return false;
   return sum(bottom.slice(0, last)) > sum(top.slice(0, last + 1));
 }
@@ -3754,6 +3774,8 @@ function renderGameDetail(g) {
   }
 
   var canEditInnings = UI.isNewUnsavedGame || UI.gameMetaEditMode;
+  /* 見るときは実際に試合が終わった回まで表示（編集モード中は入力欄をすべて出す） */
+  if (!canEditInnings) idxs = idxs.slice(0, gameFinalInning(d));
   var scoreboardHead = idxs.map(function (i) {
     return '<th>' + (i + 1) + ((UI.readOnly || !canEditInnings) ? "" : '<span class="rm-inning" data-action="rm-inning" data-idx="' + i + '" title="この回を削除">×</span>') + "</th>";
   }).join("");
