@@ -1752,7 +1752,7 @@ function buildGameRecap(d) {
   /* 言い回しの「核になる言葉」。1つの試合で同じ言葉は1回だけにする */
   var CONCEPTS = ["粘り", "力投", "猛攻", "完璧", "踏ん張", "つかま", "締め", "快投", "好投", "ピシャリ", "援護", "爆発", "ビッグイニング", "集中打", "勢い",
     "追撃", "反撃", "食らいつ", "意地", "迫る", "詰め寄", "縮める", "リードを広げ", "貴重", "一気", "一挙", "寄せ付け", "立て直", "抑え", "しのぎ", "守り切",
-    "追加", "さらに", "着実", "無失点", "0に", "0を並べ", "先取", "追い上げ", "封じ", "見事", "下を向", "切り替え", "声を掛け", "強気", "懸命"];
+    "追加", "さらに", "着実", "無失点", "0に", "0を並べ", "先取", "追い上げ", "封じ", "見事", "下を向", "切り替え", "声を掛け", "強気", "懸命", "腕を振る"];
   var usedConcept = {}, usedPhrase = {};
   var conceptsOf = function (t) { return CONCEPTS.filter(function (c) { return t.indexOf(c) !== -1; }); };
   var markConcepts = function (t) { conceptsOf(t).forEach(function (c) { usedConcept[c] = true; }); };
@@ -1771,6 +1771,10 @@ function buildGameRecap(d) {
   };
   /* 言い回しは前向きなものだけ（選手を責める・落ち込ませる言い方は使わない） */
   var CONCEDE = ["力投を見せるが", "粘りの投球を見せるが", "懸命に腕を振るが", "最後まで強気に攻めるが"];
+  /* 「流れを引き戻そうと」は、すでに追う展開（1〜5点差のビハインド）で2回以降に投げるときだけ使う */
+  var concedeFor = function (bf, inn) {
+    return uniq("concede", (bf < 0 && bf >= -5 && inn > 0) ? CONCEDE.concat(["流れを引き戻そうと腕を振るが"]) : CONCEDE, null, "");
+  };
   var BIG_LOSS = ["相手打線の猛攻で{n}失点。", "{n}点を失うも、下を向かずに次の攻撃へ！", "{n}失点も、全員で声を掛け合い次の攻撃へ！"];
   var SMALL_LOSS = ["{n}失点も、すぐに切り替える！", "相手に{n}点を許す。", "{n}点を失うも、気持ちを切らさず次の攻撃へ！"];
   var CHASE = ["追撃！", "反撃！", "食らいつく！", "意地を見せる！", "追い上げる！"];
@@ -1858,7 +1862,7 @@ function buildGameRecap(d) {
     if (!lostRun) return;
     var who = lostRun.pi >= 0 ? pName(lostRun.pi) : "";
     var rangeTxt = lostRun.to > lostRun.from ? (lostRun.from + 1) + "〜" + (lostRun.to + 1) + "回は" : (lostRun.sameInning ? "その裏、" : (lostRun.from + 1) + "回、");
-    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + (lostRun.pi > 0 || lostRun.sameInning ? "も" : "が") + uniq("concede", CONCEDE, null, "") : "相手に") + "失点。");
+    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + (lostRun.sameInning || (lostRun.pi > 0 && spans[lostRun.pi].from === lostRun.from) ? "も" : "が") + concedeFor(lostRun.bf, lostRun.from) : "相手に") + "失点。");
     lostRun = null;
   };
   var zeroSaid = {};
@@ -1982,14 +1986,14 @@ function buildGameRecap(d) {
         if (lostRun) flushLostRun();
         var nextAlsoLost = i + 1 < nInn && pitcherAt(i + 1) === pi && n0(theirs[i + 1]) > 0 && !(us - them + 0 > 0 && false);
         var who = pi >= 0 ? pName(pi) : "";
-        /* 「〇〇さんも」の「も」は、同じ回にファイターズの攻撃を書いた後か、2人目以降の投手のときだけ */
-        var mo = (usAlreadyThisInning || pi > 0) ? "も" : "が";
+        /* 「〇〇さんも」の「も」は、同じ回にファイターズの攻撃を書いた後か、2人目以降の投手が登板した回だけ（同じ投手に「も」を続けない） */
+        var mo = (usAlreadyThisInning || (pi > 0 && spans[pi].from === i)) ? "も" : "が";
         var lineD;
         if (bf > 0 && af < 0) lineD = preTxt + (who ? who + mo + uniq("concede", CONCEDE, null, "") : "") + uniq("reverse", REVERSE);
         else if (bf > 0 && af === 0) lineD = preTxt + "同点に追い付かれる。";
-        else if (nextAlsoLost && bf <= 0 && i > 0) { lostRun = { pi: pi, from: i, to: i, sameInning: usAlreadyThisInning }; themSaid = true; return; }
+        else if (nextAlsoLost && bf <= 0 && i > 0) { lostRun = { pi: pi, from: i, to: i, sameInning: usAlreadyThisInning, bf: bf }; themSaid = true; return; }
         else if (i === 0 && who) lineD = "初回、" + who + "が" + uniq("concede", CONCEDE, null, "") + (rr === 1 ? "1失点。" : "失点。");
-        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + mo + uniq("concede", CONCEDE, null, "") + "失点。";
+        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + mo + concedeFor(bf, i) + "失点。";
         else if (rr >= 4) lineD = preTxt + uniq("bigLoss", BIG_LOSS, rr);
         else lineD = preTxt + uniq("smallLoss", SMALL_LOSS, rr);
         if (bf > 0 && af < 0 && everLed && /援護|奮起|逆転に成功/.test((cur || []).join(""))) lineD = lineD.replace("逆転を許す。", "再逆転を許す。");
