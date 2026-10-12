@@ -1747,13 +1747,15 @@ function buildGameRecap(d) {
   var usedConcept = {}, usedPhrase = {};
   var conceptsOf = function (t) { return CONCEPTS.filter(function (c) { return t.indexOf(c) !== -1; }); };
   var markConcepts = function (t) { conceptsOf(t).forEach(function (c) { usedConcept[c] = true; }); };
-  var uniq = function (slot, list, n) {
+  var uniq = function (slot, list, n, fallback) {
     var u = usedPhrase[slot] || (usedPhrase[slot] = {});
     var start = Math.floor(pick([0, 1, 2, 3, 4, 5, 6, 7]) % list.length);
     var order = list.map(function (x, k) { return list[(start + k) % list.length]; });
     var fresh = function (c) { return conceptsOf(c).every(function (w) { return !usedConcept[w]; }); };
-    var chosen = order.filter(function (c) { return !u[c] && fresh(c); })[0]
-      || order.filter(function (c) { return !u[c]; })[0] || order[0];
+    var chosen = order.filter(function (c) { return !u[c] && fresh(c); })[0];
+    /* 候補を使い切ったら、fallback（飾りなしの言い方）があればそれにする */
+    if (!chosen && fallback != null) return fallback;
+    chosen = chosen || order.filter(function (c) { return !u[c]; })[0] || order[0];
     u[chosen] = true;
     markConcepts(chosen);
     return n == null ? chosen : chosen.replace(/\{n\}/g, n);
@@ -1837,7 +1839,7 @@ function buildGameRecap(d) {
     if (!lostRun) return;
     var who = lostRun.pi >= 0 ? pName(lostRun.pi) : "";
     var rangeTxt = lostRun.to > lostRun.from ? (lostRun.from + 1) + "〜" + (lostRun.to + 1) + "回は" : (lostRun.from + 1) + "回、";
-    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + "も" + uniq("concede", CONCEDE) : "相手に") + "失点。");
+    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + "も" + uniq("concede", CONCEDE, null, "") : "相手に") + "失点。");
     lostRun = null;
   };
   var zeroSaid = {};
@@ -1961,11 +1963,11 @@ function buildGameRecap(d) {
         var nextAlsoLost = i + 1 < nInn && pitcherAt(i + 1) === pi && n0(theirs[i + 1]) > 0 && !(us - them + 0 > 0 && false);
         var who = pi >= 0 ? pName(pi) : "";
         var lineD;
-        if (bf > 0 && af < 0) lineD = preTxt + (who ? who + "も" + uniq("concede", CONCEDE) : "") + uniq("reverse", REVERSE);
+        if (bf > 0 && af < 0) lineD = preTxt + (who ? who + "も" + uniq("concede", CONCEDE, null, "") : "") + uniq("reverse", REVERSE);
         else if (bf > 0 && af === 0) lineD = preTxt + "同点に追い付かれる。";
         else if (nextAlsoLost && bf <= 0 && i > 0) { lostRun = { pi: pi, from: i, to: i, sameInning: usAlreadyThisInning }; themSaid = true; return; }
-        else if (i === 0 && who) lineD = "初回、" + who + "が" + uniq("concede", CONCEDE) + (rr === 1 ? "1失点。" : "失点。");
-        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + "も" + uniq("concede", CONCEDE) + "失点。";
+        else if (i === 0 && who) lineD = "初回、" + who + "が" + uniq("concede", CONCEDE, null, "") + (rr === 1 ? "1失点。" : "失点。");
+        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + "も" + uniq("concede", CONCEDE, null, "") + "失点。";
         else if (rr >= 4) lineD = preTxt + uniq("bigLoss", BIG_LOSS, rr);
         else lineD = preTxt + uniq("smallLoss", SMALL_LOSS, rr);
         if (bf > 0 && af < 0 && everLed && /援護|奮起|逆転に成功/.test((cur || []).join(""))) lineD = lineD.replace("逆転を許す。", "再逆転を許す。");
