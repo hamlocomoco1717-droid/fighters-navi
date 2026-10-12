@@ -3978,11 +3978,11 @@ function renderGameDetail(g) {
     + (liveHtml
         ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card" id="sec-meta">' + metaHtml + "</div>")
         : ('<div class="card" id="sec-meta">' + metaHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>"))
-    + recapHtml
     + (highlightsHtml ? '<div class="card">' + highlightsHtml + "</div>" : "")
     + '<div class="card" id="sec-batting">' + battingHtml + "</div>"
     + '<div class="card" id="sec-position">' + posHtml + "</div>"
     + '<div class="card" id="sec-pitching">' + pitchingHtml + "</div>"
+    + recapHtml
     + (liveEntryHtml ? '<div class="card">' + liveEntryHtml + "</div>" : "")
     + editMenuHtml
     + footer;
