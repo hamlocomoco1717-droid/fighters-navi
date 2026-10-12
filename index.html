@@ -1638,7 +1638,15 @@ function buildGameShareText(d, weAreAway, ourScore, theirScore, highlightLines, 
    負け：失点と反撃・追撃 → 最終回の粘り → 敗戦 → 仕切り直しの一言
    守備の好プレーなど記号に残らないことは、送る前に書き足せるよう入力欄で編集できる */
 /* 名前は「（仁）」などの区別をとって呼ぶ。書く人本人には「さん」を付けない */
-function recapAuthorId() { try { return localStorage.getItem("fn-recap-author") || ""; } catch (e) { return ""; } }
+/* 書く人：この端末で選んだ人。まだ選んでいなければ、今の報告担当の木村さんにする */
+var RECAP_DEFAULT_AUTHOR = "木村";
+function recapAuthorId() {
+  var v = null;
+  try { v = localStorage.getItem("fn-recap-author"); } catch (e) { v = null; }
+  if (v !== null) return v;
+  var def = STATE.players.filter(function (pl) { return pl.name === RECAP_DEFAULT_AUTHOR; })[0];
+  return def ? def.id : "";
+}
 function sanName(pid) {
   var nm = playerName(pid).replace(/[（(].*?[）)]/g, "").trim();
   return pid === recapAuthorId() ? nm : nm + "さん";
