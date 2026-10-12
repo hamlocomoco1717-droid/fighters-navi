@@ -1643,55 +1643,94 @@ function sanName(pid) {
   var nm = playerName(pid).replace(/[（(].*?[）)]/g, "").trim();
   return pid === recapAuthorId() ? nm : nm + "さん";
 }
-function recapPlay(tok, pid) {
+/* 打席1つを「〇〇さん2点タイムリーツーベース」「〇〇さんの3ランHR」などの句にする材料に */
+function recapPlay(tok, pid, hrCount, pitcherPid) {
   var cls = classifyAtbatToken(tok), rbi = atbatTokenRbi(tok), name = sanName(pid);
-  if (cls === "HR") return { name: name, desc: ["HR", "ソロHR", "ツーランHR", "スリーランHR", "満塁HR"][Math.min(rbi, 4)], rbi: rbi, of: true };
+  /* 投げている投手が自分で打点を挙げたら「峯田さん自らの犠牲フライ」 */
+  if (pid === pitcherPid && rbi > 0 && (cls === "H1" || cls === "H2" || cls === "H3" || cls === "SACFLY" || cls === "FLY" || cls === "SAC")) {
+    var self = recapPlay(tok, pid, hrCount, null);
+    return self ? { name: name + "自ら", desc: self.desc, rbi: self.rbi, of: true, kind: self.kind } : null;
+  }
+  var pts = rbi >= 2 ? rbi + "点" : "";
+  if (cls === "HR") {
+    var hr = ["HR", "HR", "2ランHR", "3ランHR", "グランドスラム"][Math.min(rbi, 4)];
+    return { name: name, desc: hrCount >= 2 ? "今日" + hrCount + "本目のHR" : hr, rbi: rbi, of: true, kind: "HR" };
+  }
   if (rbi > 0) {
-    if (cls === "H1") return { name: name, desc: "タイムリー", rbi: rbi };
-    if (cls === "H2") return { name: name, desc: "タイムリーツーベース", rbi: rbi };
-    if (cls === "H3") return { name: name, desc: "タイムリースリーベース", rbi: rbi };
-    if (cls === "SACFLY" || cls === "FLY") return { name: name, desc: "犠牲フライ", rbi: rbi };
-    if (cls === "BB") return { name: name, desc: "押し出し四球", rbi: rbi, of: true };
-    if (cls === "HBP") return { name: name, desc: "押し出し死球", rbi: rbi, of: true };
-    if (cls === "SAC") return { name: name, desc: "スクイズ", rbi: rbi };
-    if (cls === "FC") return { name: name, desc: "野選", rbi: rbi, of: true };
+    if (cls === "H1") return { name: name, desc: pts + "タイムリー", rbi: rbi };
+    if (cls === "H2") return { name: name, desc: pts + "タイムリーツーベース", rbi: rbi };
+    if (cls === "H3") return { name: name, desc: pts + "タイムリースリーベース", rbi: rbi };
+    if (cls === "SACFLY" || cls === "FLY") return { name: name, desc: "犠牲フライ", rbi: rbi, of: true };
+    if (cls === "BB") return { name: "", desc: "押し出し四球", rbi: rbi };
+    if (cls === "HBP") return { name: "", desc: "押し出し死球", rbi: rbi };
+    if (cls === "SAC") return { name: name, desc: "スクイズ", rbi: rbi, of: true };
+    if (cls === "FC") return { name: name, desc: "野選の間の得点", rbi: rbi, of: true };
     if (cls === "ROE") return { name: "", desc: "相手エラー", rbi: rbi };
-    return { name: name, desc: "内野ゴロ", rbi: rbi, of: true };
+    var pos = { "一": "ファースト", "二": "セカンド", "三": "サード", "遊": "ショート", "投": "ピッチャー", "捕": "キャッチャー" }[stripAtbatRbiMark(tok).charAt(0)];
+    return { name: name, desc: (pos || "内野") + "ゴロの間の得点", rbi: rbi, of: true };
   }
   if (cls === "H2") return { name: name, desc: "ツーベース", rbi: 0 };
   if (cls === "H3") return { name: name, desc: "スリーベース", rbi: 0 };
   return null;
 }
 /* その回の自チームの攻撃（打順どおり）から、得点に絡んだ打席を拾う */
-function recapInningPlays(rows, inn, prevLast) {
+function recapInningPlays(rows, inn, prevLast, hrSeen, pitcherPid) {
   var seq = orderInningAtbats(rows, inn, prevLast);
-  var items = [], rbiSum = 0, errors = 0;
-  seq.forEach(function (pa) {
+  var items = [], rbiSum = 0, errors = 0, walks = 0;
+  seq.forEach(function (pa, si) {
     var tok = String(rows[pa.ri].atbats[inn]).split("・")[pa.tidx] || "";
-    if (classifyAtbatToken(tok) === "ROE") errors++;
-    var it = recapPlay(tok, rows[pa.ri].playerId);
+    var cls = classifyAtbatToken(tok);
+    if (cls === "ROE") errors++;
+    if (cls === "BB" || cls === "HBP") walks++;
+    var pid = rows[pa.ri].playerId;
+    if (cls === "HR") hrSeen[pid] = (hrSeen[pid] || 0) + 1;
+    var it = recapPlay(tok, pid, cls === "HR" ? hrSeen[pid] : 0, pitcherPid);
     if (!it) return;
+    it.pos = si;
     rbiSum += it.rbi;
     items.push(it);
   });
-  return { seq: seq, items: items, rbiSum: rbiSum, errors: errors, last: seq.length ? seq[seq.length - 1].ri : prevLast };
+  return { seq: seq, items: items, rbiSum: rbiSum, errors: errors, walks: walks, last: seq.length ? seq[seq.length - 1].ri : prevLast };
 }
-/* 同じ内容が続く打席はまとめる（「星さん、峯田さん、三澤さんタイムリー」） */
+/* 同じ内容が続く打席はまとめる。打順が続いていれば「加藤さん、山田さんの連続タイムリー」
+   「大内さん、渡辺さん、三澤さんの3者連続タイムリー」、離れていれば「星さん、峯田さんタイムリー」 */
 function joinPlays(items) {
   if (!items.length) return "";
+  /* 名前のある打席があれば、押し出し・相手エラーは「等」に含めて省く。押し出しだけなら「押し出し四球2得点」 */
+  var named = items.filter(function (x) { return x.name; });
+  if (named.length) items = named;
+  else {
+    var sumR = 0; items.forEach(function (x) { sumR += x.rbi; });
+    var kinds = {}; items.forEach(function (x) { kinds[x.desc] = 1; });
+    var ks = Object.keys(kinds);
+    return ks.length === 1 && ks[0].indexOf("押し出し") === 0 ? ks[0] + (sumR >= 2 ? sumR + "得点" : "") : ks.join("、");
+  }
   var lead = "";
   if (items.length > 1 && items[0].rbi === 0) { lead = items[0].name + items[0].desc + "から"; items = items.slice(1); }
   var groups = [];
   items.forEach(function (it) {
     var g = groups[groups.length - 1];
-    if (g && g.desc === it.desc && !it.of && it.name) g.names.push(it.name);
-    else groups.push({ desc: it.desc, names: it.name ? [it.name] : [], of: it.of });
+    if (g && g.desc === it.desc && !it.of && !g.of && it.name && g.names.length) {
+      if (it.pos !== g.lastPos + 1) g.adjacent = false;
+      g.names.push(it.name); g.lastPos = it.pos;
+    } else groups.push({ desc: it.desc, names: it.name ? [it.name] : [], of: it.of, lastPos: it.pos, adjacent: true });
   });
-  return lead + groups.map(function (g) { return g.names.length ? g.names.join("、") + (g.of ? "の" : "") + g.desc : g.desc; }).join("、");
+  return lead + groups.map(function (g) {
+    if (!g.names.length) return g.desc;
+    if (g.names.length >= 2 && g.adjacent) return g.names.join("、") + "の" + (g.names.length >= 3 ? g.names.length + "者" : "") + "連続" + g.desc;
+    return g.names.join("、") + (g.of ? "の" : "") + g.desc;
+  }).join("、");
+}
+/* 文の言い回しを試合ごとに少し変える（同じ試合なら毎回同じ文になる） */
+function recapPicker(seed) {
+  var h = 0;
+  for (var c = 0; c < seed.length; c++) h = (h * 31 + seed.charCodeAt(c)) >>> 0;
+  return function (arr) { h = (h * 1103515245 + 12345) >>> 0; return arr[(h >>> 8) % arr.length]; };
 }
 function buildGameRecap(d) {
   var res = gameResult(d);
   if (!res) return "";
+  var pick = recapPicker(String(d.id || d.date || ""));
   var away = d.venue === "away";
   var ours = (away ? d.innings.top : d.innings.bottom) || [];
   var theirs = (away ? d.innings.bottom : d.innings.top) || [];
@@ -1699,7 +1738,25 @@ function buildGameRecap(d) {
   var rows = d.batting || [];
   var tot = gameTotals(d);
   var team = STATE.team.name || "ファイターズ";
-  var paras = ["皆さん試合お疲れ様でした！\n成績表を更新しました。\n間違いないか確認して下さい。"];
+  var opp = d.opponent || "相手";
+
+  /* この試合がシーズン何戦目か、大会の何試合目か（「練習試合」は大会扱いしない） */
+  var year = (d.date || "").slice(0, 4);
+  var upTo = sortGamesByDate(STATE.games.filter(function (g) {
+    return gameResult(g) && (g.date || "").slice(0, 4) === year && (g.id === d.id || (g.date || "") < (d.date || "") || ((g.date || "") === (d.date || "") && (g._seq || 0) < (d._seq || 0)));
+  })).map(function (g) { return g.id === d.id ? d : g; });
+  var seasonNo = upTo.length;
+  var tourRaw = String(d.tournament || "").trim();
+  var tourName = /練習試合/.test(tourRaw) ? "" : tourRaw.replace(/[0-9０-９一二三四五六七八九]+回戦$/, "").trim();
+  var tourNo = 0;
+  if (tourName) tourNo = upTo.filter(function (g) { return String(g.tournament || "").indexOf(tourName) === 0; }).length;
+  var nth = function (n) { return n === 1 ? "初戦" : n + "戦目"; };
+
+  var paras = [];
+  if (tourName) paras.push("皆さん試合お疲れ様でした！\n" + tourName + "の" + (tourNo === 1 ? "初戦、" : tourNo + "戦目の") + "成績表を更新しました。\n間違いないか確認して下さい。");
+  else if (seasonNo <= 2) paras.push("皆さん今シーズンの" + nth(seasonNo) + "お疲れ様でした！\n成績表を更新しました。\n間違いないか確認して下さい。");
+  else paras.push("皆さん試合お疲れ様でした！\n成績表を更新しました。\n間違いないか確認して下さい。");
+  var intro = (!tourName && seasonNo <= 3) ? "今シーズン" + nth(seasonNo) + "の" + opp + "戦" : "";
 
   /* 投手：登板順と投球回から「何回を誰が投げたか」を割り出す */
   var pitchers = (d.pitching || []).filter(function (p) { return p.playerId; });
@@ -1708,149 +1765,254 @@ function buildGameRecap(d) {
     for (var k = 0; k < pitchers.length; k++) { cum += n0(pitchers[k].ipOuts); if (cum > inn * 3) return k; }
     return pitchers.length - 1;
   };
-  var closerIdx = (res === "W" && pitchers.length >= 2) ? pitchers.length - 1 : -1;
+  var lastIdx = pitchers.length - 1;
   var starts = {};
-  gamesForYear((d.date || "").slice(0, 4)).forEach(function (g) { var p0 = (g.pitching || [])[0]; if (p0 && p0.playerId) starts[p0.playerId] = (starts[p0.playerId] || 0) + 1; });
+  gamesForYear(year).forEach(function (g) { var p0 = (g.pitching || [])[0]; if (p0 && p0.playerId) starts[p0.playerId] = (starts[p0.playerId] || 0) + 1; });
   var acePid = Object.keys(starts).sort(function (a, b) { return starts[b] - starts[a]; })[0];
-  var pName = function (idx) {
+  var pName = function (idx, plain) {
     var pid = pitchers[idx].playerId;
+    if (plain) return sanName(pid);
     if (idx === 0) return (pid === acePid ? "エース" : "先発") + sanName(pid);
-    if (idx === closerIdx) return "抑え" + sanName(pid);
-    return sanName(pid);
+    return "リリーフ" + sanName(pid);
   };
-  /* 投手ごとの、登板直後から続いた無失点イニング（区間の最初の回で1文にする） */
-  var zeroRun = {};
-  if (pitchers.length) {
-    var k0 = 0;
-    while (k0 < nInn) {
-      var pi0 = pitcherAt(k0), k1 = k0;
-      while (k1 < nInn && pitcherAt(k1) === pi0 && n0(theirs[k1]) === 0 && theirs[k1] !== undefined) k1++;
-      var firstOfPitcher = k0 === 0 || pitcherAt(k0 - 1) !== pi0;
-      var lastOfPitcher = k1 - 1;
-      while (lastOfPitcher + 1 < nInn && pitcherAt(lastOfPitcher + 1) === pi0) lastOfPitcher++;
-      /* 先発は2イニング以上の無失点、リリーフは登板した回を全部無失点のときだけ書く */
-      var okZero = pi0 === 0 ? (k1 - k0 >= 2) : (k1 - 1 === lastOfPitcher);
-      if (firstOfPitcher && k1 > k0 && okZero) zeroRun[k0] = { pi: pi0, to: k1 };
-      k0 = Math.max(k1, k0 + 1);
-      while (k0 < nInn && pitcherAt(k0) === pi0) k0++;
-    }
+  /* 各投手の担当イニング */
+  var spans = pitchers.map(function () { return { from: -1, to: -1, runs: 0 }; });
+  for (var q = 0; q < nInn; q++) {
+    if (!pitchers.length || theirs[q] === undefined) continue;
+    var pq = pitcherAt(q), sp = spans[pq];
+    if (sp.from < 0) sp.from = q;
+    sp.to = q; sp.runs += n0(theirs[q]);
   }
+  var closerSpan = (pitchers.length >= 2 && res === "W") ? spans[lastIdx] : null;
 
-  var us = 0, them = 0, prevLast = null, scored = false;
-  var lost = null;   /* 続けて失点した回をまとめるためのバッファ */
-  var flushLost = function () {
-    if (!lost) return;
-    var who = lost.pi >= 0 ? pName(lost.pi) : "";
-    var innName = function (x) { return x === 1 ? "初回" : x + "回"; };
-    var li = lost.inns, n = li.length;
-    var innTxt = n >= 3 ? innName(li[0]) + "から" + li[n - 1] + "回まで"
-      : n === 2 ? innName(li[0]) + "、" + li[1] + "回と"
-      : (lost.sono ? "その裏、" : lost.label + "、");
-    if (lost.runs >= 4 && lost.inns.length >= 2) paras.push(innTxt + (who ? who + "も力投を見せるが" : "") + "相手打線の猛攻で失点。");
-    else if (lost.runs >= 4) paras.push(innTxt + "相手打線の猛攻で" + lost.runs + "失点。");
-    else if (who && lost.first) paras.push(innTxt + who + "が力投を見せるが、" + lost.runs + "点を失う。");
-    else paras.push(innTxt + "相手に" + lost.runs + "点を奪われる。");
-    lost = null;
+  var cur = null;                       /* 今まとめている段落（回ごとに1段落、守りの文は同じ段落に続ける） */
+  var newPara = function (line) { cur = [line]; paras.push(cur); };
+  var addLine = function (line) { if (cur) cur.push(line); else newPara(line); };
+  var us = 0, them = 0, prevLast = null, scored = false, everLed = false, hrSeen = {}, bigSaid = false, themSaid = false;
+  var lastScoreInn = -1;
+  for (var ls0 = 0; ls0 < nInn; ls0++) if (n0(ours[ls0]) > 0) lastScoreInn = ls0;
+  var lostRun = null;                   /* 同じ投手が続けて失点した回（「5〜7回は〇〇さんも…失点」） */
+  var flushLostRun = function () {
+    if (!lostRun) return;
+    var who = lostRun.pi >= 0 ? pName(lostRun.pi) : "";
+    var rangeTxt = lostRun.to > lostRun.from ? (lostRun.from + 1) + "〜" + (lostRun.to + 1) + "回は" : (lostRun.from + 1) + "回、";
+    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + "も" + pick(["粘りの投球を見せるが", "力投を見せるが"]) : "相手に") + "失点。");
+    lostRun = null;
   };
+  var zeroSaid = {};
+
   for (var i = 0; i < nInn; i++) {
     var label = i === 0 ? "初回" : (i + 1) + "回";
-    var last = i === nInn - 1;
-    var usScored = false;
+    var lastInn = i === nInn - 1;
+    var oppAlreadyThisInning = false, usAlreadyThisInning = false;
+    themSaid = false;
     (away ? ["us", "them"] : ["them", "us"]).forEach(function (h) {
       if (h === "us") {
         var r = n0(ours[i]);
-        var pl = recapInningPlays(rows, i, prevLast);
+        var pl = recapInningPlays(rows, i, prevLast, hrSeen, pitchers.length ? pitchers[pitcherAt(i)].playerId : null);
         if (pl.seq.length) prevLast = pl.last;
         if (r <= 0) return;
+        usAlreadyThisInning = true;
         var before = us - them;
-        us += r; usScored = true;
+        us += r;
         var after = us - them;
         var plays = joinPlays(pl.items);
-        var how = plays ? plays + (r > pl.rbiSum ? "等" : "") : (pl.errors ? "相手エラー等" : "相手のミス等");
-        var sono = !away && lost && lost.inns[lost.inns.length - 1] === i + 1;
-        /* 直前が失点の文なら「〜失点するが、…で追撃！」とつなぐ */
-        var mergeWithLost = lost && scored && before < 0 && after < 0 && !(last && res !== "W");
-        if (mergeWithLost) {
-          flushLost();
-          var prevP = paras.pop();
-          paras.push(prevP.replace(/失点。$/, "失点するが、").replace(/。$/, "が、") + (sono ? "" : label + "に") + how + "で追撃！");
-          scored = true;
-          return;
+        var walksTxt = (pl.walks >= 2 && plays.indexOf("押し出し") === -1) ? "四死球を絡めて" : "";
+        /* how は「〜で」まで含める（打席の記録がない得点は「四死球を絡めて」「相手エラー等で」） */
+        var droppedUnnamed = pl.items.some(function (x) { return !x.name; }) && pl.items.some(function (x) { return x.name; });
+        if (plays && pl.items.every(function (x) { return x.rbi === 0; })) {
+          /* 打点の付いた打席がない回：「荒井ツーベースから四死球を絡めて2得点」 */
+          var lead0 = pl.items[0];
+          plays = ""; pl.walks = Math.max(pl.walks, 1);
+          walksTxt = lead0.name + lead0.desc + "から";
         }
-        flushLost();
-        if (last && res !== "W" && after < 0) paras.push("最終回も" + how + "で追撃するも及ばず敗戦。");
-        else if (r >= 4 && !(last && res === "W" && before > 0)) paras.push((sono ? "その裏、" : label + "には") + "打線が爆発！\n" + how + "で一挙に" + r + "得点" + (before <= 0 && after > 0 ? "で逆転！" : (res === "W" && after >= 4 ? "で試合を決める！" : "！")));
-        else if (!scored && before === 0) paras.push(label + how + "で" + team + "が" + r + "点先制！");
-        else if (before < 0 && after > 0) paras.push(label + "、" + how + "で逆転！");
-        else if (before < 0 && after === 0) paras.push(label + "、" + how + "で同点に追いつく！");
-        else if (before < 0 && !scored) paras.push(label + "には" + team + "が反撃開始！\n" + how + "で" + r + "得点！");
-        else if (before < 0) paras.push(label + "にも" + how + "で追撃！");
-        else paras.push(label + (r >= 2 ? "にも" : "も") + how + "で" + (r >= 2 ? r + "点追加！" : "追加点！") + (after >= 3 && before < 3 && !last ? "\n優位に試合を進める。" : ""));
+        var how = plays ? walksTxt + plays + (r > pl.rbiSum || droppedUnnamed ? "等" : "") + "で" : (walksTxt.slice(-2) === "から" ? walksTxt : "") + (pl.walks ? "四死球を絡めて" : (pl.errors ? "相手エラー等で" : "相手のミス等で"));
+        /* 打点の合計がその回の得点より多い（スコアの書き方で回がずれている）ときは点数を言わない */
+        var sure = pl.rbiSum <= r;
+        var sono = themSaid;
+        var at = sono ? "その裏、" : label;
+        var line;
+        if (lostRun) flushLostRun();
+        if (lastInn && res !== "W" && after < 0) {
+          line = (r >= 2 && sure ? "最終回、" + how + r + "点を返すが" : "最終回も" + how + "追撃するも") + "あと一歩及ばず敗戦。";
+          newPara(line); cur.final = true; scored = true; return;
+        }
+        if (!scored && before === 0) {
+          if (r >= 4) line = (i === 0 ? "初回から" : label + "に") + team + "打線が猛攻を見せ、" + how + "一挙" + r + "点先取！";
+          else line = (cur && cur.zeroStart ? "打線も" : at + (sono ? "" : pick(["", team + "が"]))) + how + pick(["", "幸先良く"]) + r + "点" + pick(["を先制！", "先制！"]);
+          if (cur && cur.zeroStart) { addLine(line); cur.zeroStart = false; scored = true; if (after > 0) everLed = true; return; }
+        } else if (before < 0 && after > 0) {
+          line = (sono || i === 0 ? pick(["その後、打線がすぐに援護！", "打線がすぐに援護！"]) : label + "に打線が援護！") + "\n" + how + (!sure ? "" : (r >= 4 ? "一挙" + r + "得点で" : r + "点取り")) + "逆転に成功！";
+        } else if (before < 0 && after === 0) {
+          line = !scored ? (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + "同点！" : at + (sono ? "" : "、") + how + "同点！";
+        } else if (before < 0 && !scored) {
+          line = (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + (sure ? r + "点を返す！" : "反撃！");
+        } else if (before < 0) {
+          line = (sono ? "その裏、" : label + "も") + how + (-after <= 3 ? (-after) + "点差に縮める。" : "追撃！");
+        } else if (before === 0) {
+          line = (sono ? "その裏、" : label + "に") + how + "勝ち越しに成功！";
+        } else if (r >= 5 && !bigSaid && before < 7) {
+          bigSaid = true;
+          line = label + "には打線が爆発！\n" + how + (sure ? "一挙" + r + "得点" : "大量得点") + (after >= 7 ? "で試合を決める！" : "！");
+        } else if (r >= 5) {
+          line = (sono ? "その裏も" : label + "も") + how + (sure ? "一挙" + r + "得点！" : "大量得点！");
+        } else if (before >= 5 && i >= 4 && i === lastScoreInn) {
+          line = (sono ? "その裏、" : label + "にも") + how + "ダメ押し！";
+        } else {
+          line = (sono ? "その裏、" : label + (r >= 2 ? "にも" : "も")) + how + (r >= 2 && sure ? r + "点追加！" : "追加点！") + (before < 3 && after >= 3 && !lastInn ? "\n優位に試合を進める。" : "");
+        }
+        if (cur && cur.zeroStart && sono) {
+          /* 「4回、三澤さんが完璧リリーフ！／打線も〜で3点追加！」と同じ段落にする */
+          cur.zeroStart = false;
+          addLine("打線も" + line.replace(/^(その裏、|その裏も|\d+回(には|にも|も|に|、)?|初回(には|にも|も|に|、)?)/, ""));
+        } else if (before === 0 && scored && cur && /同点に追い付かれる。$/.test(cur[cur.length - 1])) {
+          /* 「2回同点に追い付かれるも3回に〜で勝ち越しに成功！」 */
+          cur[cur.length - 1] = cur[cur.length - 1].replace(/、?同点に追い付かれる。$/, "同点に追い付かれるも").replace(/^(\d+回|初回)、/, "$1") + (sono ? "その裏、" : label + "に") + how + "勝ち越しに成功！";
+        } else newPara(line);
+        if (after > 0) everLed = true;
         scored = true;
       } else {
         var rr = n0(theirs[i]);
         var pi = pitchers.length ? pitcherAt(i) : -1;
-        if (zeroRun[i] && zeroRun[i].pi !== closerIdx) {
-          flushLost();
-          var z = zeroRun[i], who = pName(z.pi);
-          if (z.pi === 0) paras.push(who + "も完璧なピッチングで" + z.to + "回まで無失点！");
-          else if (z.to - i === 1) paras.push(label + "も" + who + "が完璧なリリーフ！");
-          else paras.push(label + "から" + who + "が完璧なリリーフ！");
+        var sp2 = pi >= 0 ? spans[pi] : null;
+        var preTxt = usAlreadyThisInning ? "その裏、" : label + "、";
+        oppAlreadyThisInning = true;
+        if (rr <= 0) {
+          /* 失点した次の回を同じ投手が0に抑えた（接戦のとき）：「2回は峯田さんが無失点ピッチング！」 */
+          if (pi >= 0 && i > 0 && n0(theirs[i - 1]) > 0 && pitcherAt(i - 1) === pi && Math.abs(us - them) <= 3 && !(pi === lastIdx && closerSpan)) {
+            (usAlreadyThisInning ? addLine : newPara)((usAlreadyThisInning ? "その裏は" : label + "は") + pName(pi, true) + "が無失点ピッチング！");
+            themSaid = true; zeroSaid[pi] = true;
+            return;
+          }
+          /* 無失点：先発の立ち上がり、リリーフが登板した回を全部0に抑えたとき */
+          if (pi < 0 || zeroSaid[pi]) return;
+          if (pi === lastIdx && closerSpan) return;            /* 抑えは最後の一文で */
+          if (pi === 0 && i === 0) {
+            var zTo = 0;
+            while (zTo + 1 < nInn && pitcherAt(zTo + 1) === 0 && n0(theirs[zTo + 1]) === 0 && theirs[zTo + 1] !== undefined) zTo++;
+            zeroSaid[0] = true;
+            if (zTo >= 1) { (usAlreadyThisInning ? addLine : newPara)(pName(0) + "も完璧なピッチングで" + (zTo + 1) + "回まで無失点！"); }
+            else { newPara("初回、" + pName(0) + "が無失点スタート！"); cur.zeroStart = true; themSaid = true; }
+            return;
+          }
+          if (pi > 0 && sp2 && sp2.from === i && sp2.runs === 0) {
+            zeroSaid[pi] = true;
+            var range = sp2.to > sp2.from ? (sp2.from + 1) + "回、" + (sp2.to + 1) + "回は" : (usAlreadyThisInning ? "その裏、" : (sp2.from + 1) + "回、");
+            themSaid = true;
+            (usAlreadyThisInning ? addLine : newPara)(sp2.to > sp2.from
+              ? range + pName(pi) + "が" + pick(["無失点に抑える快投を見せる！", "完璧な無失点ピッチング！"])
+              : range + pName(pi, true) + "が" + pick(["完璧リリーフ！", "完璧なリリーフ！"]));
+            if (!usAlreadyThisInning) cur.zeroStart = true;
+          }
+          return;
         }
-        if (rr <= 0) return;
+        var bf = us - them;
         them += rr;
-        /* 勝ち試合の抑えの少ない失点は、最後の一文（あと一歩の◯失点）に任せる */
-        if (pi === closerIdx && res === "W" && rr <= 1) return;
-        if (lost && lost.pi === pi && lost.inns[lost.inns.length - 1] === i) { lost.inns.push(i + 1); lost.runs += rr; }
-        else { flushLost(); lost = { inns: [i + 1], runs: rr, pi: pi, label: label, sono: away && usScored, first: them === rr }; }
+        var af = us - them;
+        if (pi === lastIdx && closerSpan) return;              /* 勝ち試合の抑えの失点は最後の一文に任せる */
+        if (res === "W" && af >= 4 && rr <= 2) return;        /* 大きくリードしている勝ち試合の小さな失点は省く */
+        /* 同じ投手が2イニング以上続けて失点したら「5〜7回は〇〇さんも…失点」にまとめる */
+        if (lostRun && lostRun.pi === pi && lostRun.to === i - 1) { lostRun.to = i; return; }
+        if (lostRun) flushLostRun();
+        var nextAlsoLost = i + 1 < nInn && pitcherAt(i + 1) === pi && n0(theirs[i + 1]) > 0 && !(us - them + 0 > 0 && false);
+        var who = pi >= 0 ? pName(pi) : "";
+        var lineD;
+        if (bf > 0 && af < 0) lineD = preTxt + (who ? who + "も力投を見せるが" : "") + (everLed && them - rr > 0 ? "逆転を許す。" : pick(["逆転を許す。", "逆転を許す。"]));
+        else if (bf > 0 && af === 0) lineD = preTxt + "同点に追い付かれる。";
+        else if (nextAlsoLost && bf <= 0 && i > 0) { lostRun = { pi: pi, from: i, to: i, sameInning: usAlreadyThisInning }; themSaid = true; return; }
+        else if (i === 0 && who) lineD = "初回、" + who + "が" + pick(["粘りの投球を見せるが", "力投を見せるが"]) + (rr === 1 ? "1失点。" : "失点。");
+        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + "も" + pick(["力投を見せるが失点。", "失点するが粘りのピッチング。"]);
+        else if (rr >= 4) lineD = preTxt + "相手打線の猛攻で" + rr + "失点。";
+        else lineD = preTxt + (who && pi > 0 && spans[pi].from === i ? who + "も" + pick(["失点するが粘りのピッチング。", "力投を見せるが失点。"]) : "相手に" + rr + "点を奪われる。");
+        if (bf > 0 && af < 0 && everLed && /援護|逆転に成功/.test((cur || []).join(""))) lineD = lineD.replace("逆転を許す。", "再逆転を許す。");
+        (usAlreadyThisInning ? addLine : newPara)(lineD);
+        themSaid = true;
       }
     });
   }
-  flushLost();
+  if (lostRun) flushLostRun();
 
+  /* 締め：抑えの投手と結果 */
   var margin = tot.us - tot.them;
+  var finalDone = paras.some(function (x) { return x.final; });
+  var close = [];
+  /* 粘り勝ち：2点以上リードされた場面があったか、4回以降にリードされていた */
+  var comeback = (function () {
+    var cu = 0, ct = 0, behind = false;
+    for (var k = 0; k < nInn; k++) { cu += n0(ours[k]); ct += n0(theirs[k]); if (ct - cu >= 2 || (k >= 3 && cu < ct)) behind = true; }
+    return behind;
+  })();
+  var special = res === "W" && ((tot.them <= 1 && pitchers.length >= 2) || tot.us >= 25);
   if (res === "W") {
-    var pitchLine = "";
-    if (tot.them === 0) pitchLine = pitchers.length >= 2 ? "完封リレーで" : "完封で";
-    else if (tot.them === 1) pitchLine = "完封" + (pitchers.length >= 2 ? "リレー" : "") + "まであと一歩の1失点と" + (pitchers.length >= 2 ? "ピッチャー陣" : "ピッチャー") + "がほぼ完璧に守り切って";
-    var winWord = margin >= 7 ? "快勝！" : (margin <= 1 ? "接戦を制して勝利！" : "勝利！");
-    var closer = closerIdx >= 0 ? pitchers[closerIdx] : null;
-    paras.push((closer && n0(closer.r) <= 1 ? pName(closerIdx) + "も力投を見せる！\n" : "") + (pitchLine || tot.us + "-" + tot.them + "で") + winWord);
+    if (closerSpan && special) close.push(pick(["リリーフ", "抑えの"]) + pName(lastIdx, true) + "も相手に流れを渡さないピッチングを披露！");
+    else if (closerSpan) {
+      var cn = pName(lastIdx, true);
+      if (closerSpan.runs === 0) close.push("最後は" + cn + "が" + pick(["しっかり締めて", "無失点に抑えて"]) + (margin >= 7 ? "快勝！" : "勝利！"));
+      else if (closerSpan.runs >= 4) close.push("最後は相手打線の猛攻を" + cn + "が振り切って勝利！");
+      else if (closerSpan.runs <= 1 || margin >= 7) close.push(cn + "も" + pick(["きっちり抑えて", "しっかり締めて"]) + (margin >= 7 ? "快勝！" : "勝利！"));
+      else if (closerSpan.to > closerSpan.from) close.push((closerSpan.from + 1) + "〜" + (closerSpan.to + 1) + "回は" + cn + "が何とか粘り、勝利！");
+      else close.push(pick(["リリーフエースの", "抑えの"]) + cn + "も" + pick(["しっかり繋ぎ", "きっちり抑えて"]) + "勝利！");
+    }
+    if (tot.them <= 1 && pitchers.length >= 2) close.push("完封リレーまであと一歩の" + tot.them + "失点とピッチャー陣がほぼ完璧に守り切って快勝！");
+    else if (tot.us >= 25) close.push(tot.us + "得点の猛攻で快勝！");
+    else if (!closerSpan) close.push(margin >= 7 ? "快勝！" : (margin <= 2 ? "接戦を制して勝利！" : "勝利！"));
   } else if (res === "L") {
-    if (!paras.some(function (x) { return /及ばず敗戦/.test(x); })) paras.push(tot.us + "-" + tot.them + "で敗戦。");
-  } else paras.push(tot.us + "-" + tot.them + "の引き分け。");
+    if (!finalDone) close.push(everLed && them > 0 ? "悔しい逆転負け。" : (margin >= -2 ? pick(["あと一歩及ばず敗戦。", "最後まで追い詰めましたが、悔しい敗戦。"]) : tot.us + "-" + tot.them + "で敗戦。"));
+  } else close.push(tot.us + "-" + tot.them + "の引き分け。");
+  if (close.length) paras.push(close.join("\n"));
 
-  var ms = computeGameMilestones(d).bullets.filter(function (b) { return /初本塁打|初安打|通算|猛打賞/.test(b); }).slice(0, 2);
-  if (ms.length) {
-    /* 同じ選手の記録は「設楽さんが初安打・初本塁打」のように1つにまとめる */
-    var byName = [], seen = {};
-    computeGameMilestones(d).bullets.forEach(function (b) {
-      var m = b.match(/^(.+?)が(.+)$/);
-      if (!m || !/初本塁打|初安打|通算|猛打賞/.test(m[2])) return;
-      if (!seen[m[1]]) { seen[m[1]] = []; byName.push(m[1]); }
-      seen[m[1]].push(m[2]);
-    });
-    paras.push(byName.slice(0, 2).map(function (nm) {
-      var pl = STATE.players.filter(function (x) { return x.name === nm; })[0];
-      return (pl ? sanName(pl.id) : nm + "さん") + "が" + seen[nm].join("・");
-    }).join("、") + "！おめでとうございます！");
-  }
+  /* 記録（猛打賞・初〇〇・通算到達） */
+  var byName = [], seen = {};
+  computeGameMilestones(d).bullets.forEach(function (b) {
+    var m = b.match(/^(.+?)が(.+)$/);
+    if (!m || !/初本塁打|初安打|通算|猛打賞/.test(m[2])) return;
+    if (!seen[m[1]]) { seen[m[1]] = []; byName.push(m[1]); }
+    if (/猛打賞/.test(m[2])) seen[m[1]].unshift(m[2]); else seen[m[1]].push(m[2]);
+  });
+  if (byName.length) paras.push(byName.slice(0, 2).map(function (nm) {
+    var pl = STATE.players.filter(function (x) { return x.name === nm; })[0];
+    var who = pl ? sanName(pl.id) : nm + "さん";
+    var mt = seen[nm].join("・");
+    var gm = mt.match(/猛打賞（(\d+)安打）/);
+    if (gm && seen[nm].length === 1) return who + "は" + gm[1] + "安打猛打賞で" + (res === "W" ? "勝利に大貢献！さすがです！！" : "気を吐きました！");
+    return who + "が" + seen[nm].map(function (x) { return x.replace(/猛打賞（(\d+)安打）/, "$1安打猛打賞"); }).join("、") + "！おめでとうございます！";
+  }).join("\n"));
 
-  var hist = sortGamesByDate(STATE.games.filter(function (g) { return gameResult(g) && (g.id === d.id || (g.date || "") < (d.date || "") || ((g.date || "") === (d.date || "") && (g._seq || 0) < (d._seq || 0))); }))
-    .map(function (g) { return g.id === d.id ? res : gameResult(g); });
+  /* 連勝・シーズン成績・次戦 */
+  var hist = upTo.map(function (g) { return g.id === d.id ? res : gameResult(g); });
   var streakOf = function (want, arr) { var n = 0; for (var k = arr.length - 1; k >= 0; k--) { if (arr[k] === "T") continue; if (arr[k] === want) n++; else break; } return n; };
+  var rec = { w: 0, l: 0, t: 0 };
+  hist.forEach(function (r0) { if (r0 === "W") rec.w++; else if (r0 === "L") rec.l++; else rec.t++; });
+  var recTxt = rec.w + "勝" + rec.l + "敗" + (rec.t ? rec.t + "分" : "");
   var nextGame = sortGamesByDate(STATE.games.filter(function (g) { return !gameResult(g) && (g.date || "") > (d.date || "") && g.opponent; }))[0];
-  var nextLine = nextGame ? "次戦は" + Number(nextGame.date.slice(5, 7)) + "月" + Number(nextGame.date.slice(8, 10)) + "日の" + nextGame.opponent + "戦。" : "";
+  var nextTxt = nextGame ? "次戦" + Number(nextGame.date.slice(5, 7)) + "/" + Number(nextGame.date.slice(8, 10)) + "の" + nextGame.opponent + "戦" : "";
+  var endP = [];
   if (res === "W") {
     var ws = streakOf("W", hist);
-    paras.push((ws >= 2 ? "これで" + ws + "連勝！" + (ws >= 5 && ws < 10 ? "(10連勝まであと" + (10 - ws) + ")" : "") + "\n" : "")
-      + (nextLine ? nextLine + "\n" : "") + (ws >= 2 ? "次戦も" + (ws + 1) + "連勝を目指して" : "次戦も") + "全員で勝ちにいきましょう！");
+    if (ws >= 2) endP.push((comeback && margin <= 3 ? "粘り勝ちで" : "これで") + ws + "連勝！" + (ws >= 5 && ws < 10 ? "(10連勝まであと" + (10 - ws) + ")" : ""));
+    endP.push((ws >= 2 ? "" : "これで") + "今シーズン" + recTxt + (hist.length >= 5 && rec.w / Math.max(1, rec.w + rec.l) >= 0.8 ? "で勝率" + Math.floor(rec.w / (rec.w + rec.l) * 10) + "割！" : "。"));
+    var milestoneWin = [10, 15, 20, 25, 30].indexOf(rec.w + 1) !== -1;
+    if (milestoneWin) endP.push((nextTxt ? nextTxt + "も" : "次戦も") + "勝って今シーズン" + (rec.w + 1) + "勝目をもぎ取りにいきましょう！");
+    else if (ws >= 2) endP.push((nextTxt ? nextTxt + "も" : "次戦も") + (ws + 1) + "連勝を目指して全員で勝ちにいきましょう！");
+    else endP.push((nextTxt ? nextTxt + "も" : "次戦も") + pick(["全員で楽しみながら束になって勝ちにいきましょう！", "全員で勝ちにいきましょう！"]));
   } else if (res === "L") {
-    var prevW = streakOf("W", hist.slice(0, -1)), ls = streakOf("L", hist);
-    paras.push((prevW >= 3 ? "連勝は" + prevW + "でストップ。\n" : (ls >= 3 ? ls + "連敗となりましたが、\n" : ""))
-      + (nextLine ? nextLine + "\n" : "") + "仕切り直して、もう一度全員で勝ちにいきましょう！");
-  } else paras.push((nextLine ? nextLine + "\n" : "") + "次戦は全員で勝ちにいきましょう！");
-  return paras.join("\n\n");
+    var prevW = streakOf("W", hist.slice(0, -1));
+    if (prevW >= 3) endP.push("連勝は" + prevW + "でストップ。");
+    if (tourName && tourNo >= 2 && hist.length >= 2 && hist[hist.length - 2] === "L") endP.push(tourNo + "試合目も悔しい敗戦になりました。");
+    endP.push("これで今シーズン" + recTxt + "。");
+    if (rec.w === 0) endP.push((nextTxt ? nextTxt + "も" : "次戦も") + "全員で楽しみながら束になって初勝利をつかみにいきましょう！");
+    else if (tourName && STATE.games.some(function (g) { return g.id !== d.id && String(g.tournament || "").indexOf(tourName) === 0 && ((g.date || "") > (d.date || "") || ((g.date || "") === (d.date || "") && (g._seq || 0) > (d._seq || 0))); })) endP.push((tourNo + 1) + "試合目は全員で勝ちに行きましょう！");
+    else endP.push(nextTxt ? nextTxt + "は全員で勝ちをもぎ取りにいきましょう！" : "仕切り直して、もう一度全員で勝ちにいきましょう！");
+  } else {
+    endP.push("これで今シーズン" + recTxt + "。");
+    endP.push((nextTxt ? nextTxt + "は" : "次戦は") + "全員で勝ちにいきましょう！");
+  }
+  paras.push(endP.join("\n"));
+
+  /* 本文の最初の段落に「今シーズン〇戦目の〇〇戦」を添える */
+  var out = paras.map(function (x) { return Array.isArray(x) ? x.join("\n") : x; });
+  if (intro && out.length > 1) out[1] = intro + "\n" + out[1];
+  return out.join("\n\n");
 }
 
 /* 在籍中で、1年以内に出場している選手の「あと少し」の記録（近い順） */
