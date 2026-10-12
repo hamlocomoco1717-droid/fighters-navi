@@ -1739,6 +1739,39 @@ function buildGameRecap(d) {
   var res = gameResult(d);
   if (!res) return "";
   var pick = recapPicker(String(d.id || d.date || ""));
+  /* 同じ試合の中で同じ言い回しを2回使わないよう、表現ごとの候補から未使用のものを順に使う */
+  /* 言い回しの「核になる言葉」。1つの試合で同じ言葉は1回だけにする */
+  var CONCEPTS = ["粘り", "力投", "猛攻", "完璧", "踏ん張", "つかま", "締め", "快投", "好投", "ピシャリ", "援護", "爆発", "ビッグイニング", "集中打", "勢い",
+    "追撃", "反撃", "食らいつ", "意地", "迫る", "詰め寄", "縮める", "リードを広げ", "貴重", "一気", "一挙", "寄せ付け", "立て直", "抑え", "しのぎ", "守り切",
+    "追加", "さらに", "着実", "無失点", "0に", "0を並べ", "逆転を許す", "ひっくり返", "リードを奪われ", "先取", "追い上げ", "封じ", "見事"];
+  var usedConcept = {}, usedPhrase = {};
+  var conceptsOf = function (t) { return CONCEPTS.filter(function (c) { return t.indexOf(c) !== -1; }); };
+  var markConcepts = function (t) { conceptsOf(t).forEach(function (c) { usedConcept[c] = true; }); };
+  var uniq = function (slot, list, n) {
+    var u = usedPhrase[slot] || (usedPhrase[slot] = {});
+    var start = Math.floor(pick([0, 1, 2, 3, 4, 5, 6, 7]) % list.length);
+    var order = list.map(function (x, k) { return list[(start + k) % list.length]; });
+    var fresh = function (c) { return conceptsOf(c).every(function (w) { return !usedConcept[w]; }); };
+    var chosen = order.filter(function (c) { return !u[c] && fresh(c); })[0]
+      || order.filter(function (c) { return !u[c]; })[0] || order[0];
+    u[chosen] = true;
+    markConcepts(chosen);
+    return n == null ? chosen : chosen.replace(/\{n\}/g, n);
+  };
+  var CONCEDE = ["力投を見せるが", "粘りの投球を見せるが", "踏ん張りきれず", "相手打線につかまり", "要所を締めきれず", "懸命に腕を振るも"];
+  var BIG_LOSS = ["相手打線の猛攻で{n}失点。", "相手打線に集中打を浴び{n}失点。", "ビッグイニングを作られ{n}失点。", "相手の勢いを止められず{n}失点。"];
+  var SMALL_LOSS = ["相手に{n}点を奪われる。", "相手に{n}点を許す。", "{n}失点。"];
+  var CHASE = ["追撃！", "反撃！", "食らいつく！", "意地を見せる！", "追い上げる！"];
+  var NARROW = ["{n}点差に縮める。", "{n}点差まで迫る！", "{n}点差に詰め寄る！", "{n}点差まで追い上げる！", "じわじわと{n}点差に。"];
+  var ADD_MANY = ["{n}点追加！", "さらに{n}点！", "リードを広げる！", "着実に{n}点を重ねる！", "{n}点を奪う！"];
+  var ADD_ONE = ["追加点！", "さらに1点！", "貴重な1点！", "リードを広げる！", "着実に1点を重ねる！"];
+  var BIG_RUN = ["一挙{n}得点", "{n}点のビッグイニング", "一気に{n}得点", "打線がつながり{n}得点", "怒涛の攻撃で{n}得点"];
+  var WALKS = ["四死球を絡めて", "四死球も絡めて", "四死球をきっかけに", "相手の四死球に乗じて"];
+  var ZERO_MID = ["無失点ピッチング！", "立て直して0に抑える！", "ピシャリと抑える！", "相手打線を封じ込める！", "見事なピッチングで0点！"];
+  var RELIEF_ONE = ["完璧リリーフ！", "好リリーフ！", "ピシャリと抑える！", "危なげなく抑える！", "見事なリリーフ！"];
+  var RELIEF_MANY = ["無失点に抑える快投を見せる！", "相手打線を寄せ付けない！", "スコアボードに0を並べる！"];
+  var REVERSE = ["逆転を許す。", "試合をひっくり返される。", "リードを奪われる。"];
+  var SUPPORT = ["打線が援護！", "打線がすぐに援護！", "打線が奮起！"];
   var away = d.venue === "away";
   var ours = (away ? d.innings.top : d.innings.bottom) || [];
   var theirs = (away ? d.innings.bottom : d.innings.top) || [];
@@ -1794,8 +1827,8 @@ function buildGameRecap(d) {
   var closerSpan = (pitchers.length >= 2 && res === "W") ? spans[lastIdx] : null;
 
   var cur = null;                       /* 今まとめている段落（回ごとに1段落、守りの文は同じ段落に続ける） */
-  var newPara = function (line) { cur = [line]; paras.push(cur); };
-  var addLine = function (line) { if (cur) cur.push(line); else newPara(line); };
+  var newPara = function (line) { markConcepts(line); cur = [line]; paras.push(cur); };
+  var addLine = function (line) { markConcepts(line); if (cur) cur.push(line); else newPara(line); };
   var us = 0, them = 0, prevLast = null, scored = false, everLed = false, hrSeen = {}, bigSaid = false, themSaid = false;
   var lastScoreInn = -1;
   for (var ls0 = 0; ls0 < nInn; ls0++) if (n0(ours[ls0]) > 0) lastScoreInn = ls0;
@@ -1804,7 +1837,7 @@ function buildGameRecap(d) {
     if (!lostRun) return;
     var who = lostRun.pi >= 0 ? pName(lostRun.pi) : "";
     var rangeTxt = lostRun.to > lostRun.from ? (lostRun.from + 1) + "〜" + (lostRun.to + 1) + "回は" : (lostRun.from + 1) + "回、";
-    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + "も" + pick(["粘りの投球を見せるが", "力投を見せるが"]) : "相手に") + "失点。");
+    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + "も" + uniq("concede", CONCEDE) : "相手に") + "失点。");
     lostRun = null;
   };
   var zeroSaid = {};
@@ -1817,7 +1850,9 @@ function buildGameRecap(d) {
     (away ? ["us", "them"] : ["them", "us"]).forEach(function (h) {
       if (h === "us") {
         var r = n0(ours[i]);
-        var pl = recapInningPlays(rows, i, prevLast, hrSeen, pitchers.length ? pitchers[pitcherAt(i)].playerId : null);
+        /* 「自ら」はその時点で投げている投手だけ（先攻なら直前の裏を投げた投手） */
+        var nowP = pitchers.length ? pitchers[pitcherAt(away ? Math.max(0, i - 1) : i)].playerId : null;
+        var pl = recapInningPlays(rows, i, prevLast, hrSeen, nowP);
         if (pl.seq.length) prevLast = pl.last;
         if (r <= 0) return;
         usAlreadyThisInning = true;
@@ -1825,7 +1860,7 @@ function buildGameRecap(d) {
         us += r;
         var after = us - them;
         var plays = joinPlays(pl.items);
-        var walksTxt = (pl.walks >= 2 && plays.indexOf("押し出し") === -1) ? "四死球を絡めて" : "";
+        var walksTxt = (pl.walks >= 2 && plays.indexOf("押し出し") === -1) ? uniq("walks", WALKS) : "";
         /* how は「〜で」まで含める（打席の記録がない得点は「四死球を絡めて」「相手エラー等で」） */
         var droppedUnnamed = pl.items.some(function (x) { return !x.name; }) && pl.items.some(function (x) { return x.name; });
         if (plays && pl.items.every(function (x) { return x.rbi === 0; })) {
@@ -1834,7 +1869,7 @@ function buildGameRecap(d) {
           plays = ""; pl.walks = Math.max(pl.walks, 1);
           walksTxt = lead0.name + lead0.desc + "から";
         }
-        var how = plays ? walksTxt + plays + (r > pl.rbiSum || droppedUnnamed ? "等" : "") + "で" : (walksTxt.slice(-2) === "から" ? walksTxt : "") + (pl.walks ? "四死球を絡めて" : (pl.errors ? "相手エラー等で" : "相手のミス等で"));
+        var how = plays ? walksTxt + plays + (r > pl.rbiSum || droppedUnnamed ? "等" : "") + "で" : (walksTxt.slice(-2) === "から" ? walksTxt : "") + (pl.walks ? uniq("walks", WALKS) : (pl.errors ? "相手エラー等で" : "相手のミス等で"));
         /* 打点の合計がその回の得点より多い（スコアの書き方で回がずれている）ときは点数を言わない */
         var sure = pl.rbiSum <= r;
         var sono = themSaid;
@@ -1842,32 +1877,32 @@ function buildGameRecap(d) {
         var line;
         if (lostRun) flushLostRun();
         if (lastInn && res !== "W" && after < 0) {
-          line = (r >= 2 && sure ? "最終回、" + how + r + "点を返すが" : "最終回も" + how + "追撃するも") + "あと一歩及ばず敗戦。";
+          line = (r >= 2 && sure ? "最終回、" + how + r + "点を返すが" : "最終回も" + how + "追撃するも") + uniq("lossEnd", ["あと一歩及ばず敗戦。", "反撃及ばず敗戦。"]);
           newPara(line); cur.final = true; scored = true; return;
         }
         if (!scored && before === 0) {
-          if (r >= 4) line = (i === 0 ? "初回から" : label + "に") + team + "打線が猛攻を見せ、" + how + "一挙" + r + "点先取！";
+          if (r >= 4) line = (i === 0 ? "初回から" : label + "に") + uniq("attackStart", ["{n}打線が猛攻を見せ、", "{n}打線が序盤から爆発し、"], team) + how + uniq("bigrun", ["一挙{n}点先取！", "一気に{n}点を先取！", "{n}点を先取！"], r);
           else line = (cur && cur.zeroStart ? "打線も" : at + (sono ? "" : pick(["", team + "が"]))) + how + pick(["", "幸先良く"]) + r + "点" + pick(["を先制！", "先制！"]);
           if (cur && cur.zeroStart) { addLine(line); cur.zeroStart = false; scored = true; if (after > 0) everLed = true; return; }
         } else if (before < 0 && after > 0) {
-          line = (sono || i === 0 ? pick(["その後、打線がすぐに援護！", "打線がすぐに援護！"]) : label + "に打線が援護！") + "\n" + how + (!sure ? "" : (r >= 4 ? "一挙" + r + "得点で" : r + "点取り")) + "逆転に成功！";
+          line = (sono || i === 0 ? "その後、" : label + "に") + uniq("support", SUPPORT) + "\n" + how + (!sure ? "" : (r >= 4 ? uniq("bigrun", BIG_RUN, r) + "で" : r + "点取り")) + "逆転に成功！";
         } else if (before < 0 && after === 0) {
           line = !scored ? (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + "同点！" : at + (sono ? "" : "、") + how + "同点！";
         } else if (before < 0 && !scored) {
-          line = (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + (sure ? r + "点を返す！" : "反撃！");
+          line = (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + (sure ? r + "点を返す！" : uniq("chase", CHASE));
         } else if (before < 0) {
-          line = (sono ? "その裏、" : label + "も") + how + (-after <= 3 ? (-after) + "点差に縮める。" : "追撃！");
+          line = (sono ? "その裏、" : label + "も") + how + (-after <= 3 ? uniq("narrow", NARROW, -after) : uniq("chase", CHASE));
         } else if (before === 0) {
           line = (sono ? "その裏、" : label + "に") + how + "勝ち越しに成功！";
         } else if (r >= 5 && !bigSaid && before < 7) {
           bigSaid = true;
-          line = label + "には打線が爆発！\n" + how + (sure ? "一挙" + r + "得点" : "大量得点") + (after >= 7 ? "で試合を決める！" : "！");
+          line = label + "には打線が爆発！\n" + how + (sure ? uniq("bigrun", BIG_RUN, r) : "大量得点") + (after >= 7 ? "で試合を決める！" : "！");
         } else if (r >= 5) {
-          line = (sono ? "その裏も" : label + "も") + how + (sure ? "一挙" + r + "得点！" : "大量得点！");
+          line = (sono ? "その裏も" : label + "も") + how + (sure ? uniq("bigrun", BIG_RUN, r) + "！" : uniq("add", ADD_ONE));
         } else if (before >= 5 && i >= 4 && i === lastScoreInn) {
           line = (sono ? "その裏、" : label + "にも") + how + "ダメ押し！";
         } else {
-          line = (sono ? "その裏、" : label + (r >= 2 ? "にも" : "も")) + how + (r >= 2 && sure ? r + "点追加！" : "追加点！") + (before < 3 && after >= 3 && !lastInn ? "\n優位に試合を進める。" : "");
+          line = (sono ? "その裏、" : label + (r >= 2 ? "にも" : "も")) + how + (r >= 2 && sure ? uniq("add", ADD_MANY, r) : uniq("add", ADD_ONE)) + (before < 3 && after >= 3 && !lastInn ? "\n優位に試合を進める。" : "");
         }
         if (cur && cur.zeroStart && sono) {
           /* 「4回、三澤さんが完璧リリーフ！／打線も〜で3点追加！」と同じ段落にする */
@@ -1888,7 +1923,7 @@ function buildGameRecap(d) {
         if (rr <= 0) {
           /* 失点した次の回を同じ投手が0に抑えた（接戦のとき）：「2回は峯田さんが無失点ピッチング！」 */
           if (pi >= 0 && i > 0 && n0(theirs[i - 1]) > 0 && pitcherAt(i - 1) === pi && Math.abs(us - them) <= 3 && !(pi === lastIdx && closerSpan)) {
-            (usAlreadyThisInning ? addLine : newPara)((usAlreadyThisInning ? "その裏は" : label + "は") + pName(pi, true) + "が無失点ピッチング！");
+            (usAlreadyThisInning ? addLine : newPara)((usAlreadyThisInning ? "その裏は" : label + "は") + pName(pi, true) + "が" + uniq("zero", ZERO_MID));
             themSaid = true; zeroSaid[pi] = true;
             return;
           }
@@ -1899,8 +1934,8 @@ function buildGameRecap(d) {
             var zTo = 0;
             while (zTo + 1 < nInn && pitcherAt(zTo + 1) === 0 && n0(theirs[zTo + 1]) === 0 && theirs[zTo + 1] !== undefined) zTo++;
             zeroSaid[0] = true;
-            if (zTo >= 1) { (usAlreadyThisInning ? addLine : newPara)(pName(0) + "も完璧なピッチングで" + (zTo + 1) + "回まで無失点！"); }
-            else if (usAlreadyThisInning) { addLine("その裏、" + pName(0) + "も無失点に抑える！"); themSaid = true; }
+            if (zTo >= 1) { (usAlreadyThisInning ? addLine : newPara)(pName(0) + uniq("starterZero", ["も完璧なピッチングで{n}回まで無失点！", "も{n}回まで相手打線を0に抑える好投！"], zTo + 1)); }
+            else if (usAlreadyThisInning) { addLine(uniq("zeroFirst", ["その裏、{n}も無失点に抑える！", "その裏、{n}も0に抑える！", "その裏は{n}がピシャリ！"], pName(0))); themSaid = true; }
             else { newPara("初回、" + pName(0) + "が無失点スタート！"); cur.zeroStart = true; themSaid = true; }
             return;
           }
@@ -1909,8 +1944,8 @@ function buildGameRecap(d) {
             var range = sp2.to > sp2.from ? (sp2.from + 1) + "回、" + (sp2.to + 1) + "回は" : (usAlreadyThisInning ? "その裏、" : (sp2.from + 1) + "回、");
             themSaid = true;
             (usAlreadyThisInning ? addLine : newPara)(sp2.to > sp2.from
-              ? range + pName(pi) + "が" + pick(["無失点に抑える快投を見せる！", "完璧な無失点ピッチング！"])
-              : range + pName(pi, true) + "が" + pick(["完璧リリーフ！", "完璧なリリーフ！"]));
+              ? range + pName(pi) + "が" + uniq("reliefMany", RELIEF_MANY)
+              : range + pName(pi, true) + "が" + uniq("reliefOne", RELIEF_ONE));
             if (!usAlreadyThisInning) cur.zeroStart = true;
           }
           return;
@@ -1926,14 +1961,14 @@ function buildGameRecap(d) {
         var nextAlsoLost = i + 1 < nInn && pitcherAt(i + 1) === pi && n0(theirs[i + 1]) > 0 && !(us - them + 0 > 0 && false);
         var who = pi >= 0 ? pName(pi) : "";
         var lineD;
-        if (bf > 0 && af < 0) lineD = preTxt + (who ? who + "も力投を見せるが" : "") + (everLed && them - rr > 0 ? "逆転を許す。" : pick(["逆転を許す。", "逆転を許す。"]));
+        if (bf > 0 && af < 0) lineD = preTxt + (who ? who + "も" + uniq("concede", CONCEDE) : "") + uniq("reverse", REVERSE);
         else if (bf > 0 && af === 0) lineD = preTxt + "同点に追い付かれる。";
         else if (nextAlsoLost && bf <= 0 && i > 0) { lostRun = { pi: pi, from: i, to: i, sameInning: usAlreadyThisInning }; themSaid = true; return; }
-        else if (i === 0 && who) lineD = "初回、" + who + "が" + pick(["粘りの投球を見せるが", "力投を見せるが"]) + (rr === 1 ? "1失点。" : "失点。");
-        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + "も" + pick(["力投を見せるが失点。", "失点するが粘りのピッチング。"]);
-        else if (rr >= 4) lineD = preTxt + "相手打線の猛攻で" + rr + "失点。";
-        else lineD = preTxt + (who && pi > 0 && spans[pi].from === i ? who + "も" + pick(["失点するが粘りのピッチング。", "力投を見せるが失点。"]) : "相手に" + rr + "点を奪われる。");
-        if (bf > 0 && af < 0 && everLed && /援護|逆転に成功/.test((cur || []).join(""))) lineD = lineD.replace("逆転を許す。", "再逆転を許す。");
+        else if (i === 0 && who) lineD = "初回、" + who + "が" + uniq("concede", CONCEDE) + (rr === 1 ? "1失点。" : "失点。");
+        else if (who && pi > 0 && spans[pi].from === i) lineD = preTxt + who + "も" + uniq("concede", CONCEDE) + "失点。";
+        else if (rr >= 4) lineD = preTxt + uniq("bigLoss", BIG_LOSS, rr);
+        else lineD = preTxt + uniq("smallLoss", SMALL_LOSS, rr);
+        if (bf > 0 && af < 0 && everLed && /援護|奮起|逆転に成功/.test((cur || []).join(""))) lineD = lineD.replace("逆転を許す。", "再逆転を許す。");
         (usAlreadyThisInning ? addLine : newPara)(lineD);
         themSaid = true;
       }
@@ -1953,17 +1988,18 @@ function buildGameRecap(d) {
   })();
   var special = res === "W" && ((tot.them <= 1 && pitchers.length >= 2) || tot.us >= 25);
   if (res === "W") {
-    if (closerSpan && special) close.push(pick(["リリーフ", "抑えの"]) + pName(lastIdx, true) + "も相手に流れを渡さないピッチングを披露！");
+    if (closerSpan && special) close.push("リリーフ" + pName(lastIdx, true) + "も相手に流れを渡さないピッチングを披露！");
     else if (closerSpan) {
       var cn = pName(lastIdx, true);
-      if (closerSpan.runs === 0) close.push("最後は" + cn + "が" + pick(["しっかり締めて", "無失点に抑えて"]) + (margin >= 7 ? "快勝！" : "勝利！"));
-      else if (closerSpan.runs >= 4) close.push("最後は相手打線の猛攻を" + cn + "が振り切って勝利！");
-      else if (closerSpan.runs <= 1 || margin >= 7) close.push(cn + "も" + pick(["きっちり抑えて", "しっかり締めて"]) + (margin >= 7 ? "快勝！" : "勝利！"));
-      else if (closerSpan.to > closerSpan.from) close.push((closerSpan.from + 1) + "〜" + (closerSpan.to + 1) + "回は" + cn + "が何とか粘り、勝利！");
-      else close.push(pick(["リリーフエースの", "抑えの"]) + cn + "も" + pick(["しっかり繋ぎ", "きっちり抑えて"]) + "勝利！");
+      if (closerSpan.runs === 0) close.push("最後は" + cn + "が" + uniq("closer", ["しっかり締めて", "無失点に抑えて", "ピシャリと抑えて", "危なげなく投げ切って"]) + (margin >= 7 ? "快勝！" : "勝利！"));
+      else if (closerSpan.runs >= 4) close.push(uniq("closerBig", ["最後は相手打線の猛攻を{n}が振り切って勝利！", "最後は{n}が相手の反撃をしのぎ切って勝利！", "最後は{n}が相手の追い上げを振り切って勝利！"], cn));
+      else if (closerSpan.runs <= 1 || margin >= 7) close.push(cn + "も" + uniq("closer", ["きっちり抑えて", "しっかり締めて", "最後まで投げ切って"]) + (margin >= 7 ? "快勝！" : "勝利！"));
+      else if (closerSpan.to > closerSpan.from) close.push((closerSpan.from + 1) + "〜" + (closerSpan.to + 1) + "回は" + cn + "が" + uniq("closerHold", ["何とか粘り、勝利！", "リードを守り切り、勝利！"]));
+      else close.push(pick(["リリーフエースの", "最後を任された"]) + cn + "も" + uniq("closer", ["しっかり繋ぎ", "きっちり抑えて", "最後まで投げ切って"]) + "勝利！");
     }
-    if (tot.them <= 1 && pitchers.length >= 2) close.push("完封リレーまであと一歩の" + tot.them + "失点とピッチャー陣がほぼ完璧に守り切って快勝！");
-    else if (tot.us >= 25) close.push(tot.us + "得点の猛攻で快勝！");
+    if (tot.them === 0 && pitchers.length >= 2) close.push("ピッチャー陣の完封リレーで快勝！");
+    else if (tot.them === 1 && pitchers.length >= 2) close.push("完封リレーまであと一歩の1失点とピッチャー陣が" + (usedConcept["完璧"] ? "しっかり" : "ほぼ完璧に") + "守り切って快勝！");
+    else if (tot.us >= 25) close.push(usedConcept["猛攻"] ? tot.us + "得点の大勝！" : tot.us + "得点の猛攻で快勝！");
     else if (!closerSpan) close.push(margin >= 7 ? "快勝！" : (margin <= 2 ? "接戦を制して勝利！" : "勝利！"));
   } else if (res === "L") {
     if (!finalDone) close.push(everLed && them > 0 ? "悔しい逆転負け。" : (margin >= -2 ? pick(["あと一歩及ばず敗戦。", "最後まで追い詰めましたが、悔しい敗戦。"]) : tot.us + "-" + tot.them + "で敗戦。"));
@@ -1998,7 +2034,7 @@ function buildGameRecap(d) {
   var endP = [];
   if (res === "W") {
     var ws = streakOf("W", hist);
-    if (ws >= 2) endP.push((comeback && margin <= 3 ? "粘り勝ちで" : "これで") + ws + "連勝！" + (ws >= 5 && ws < 10 ? "(10連勝まであと" + (10 - ws) + ")" : ""));
+    if (ws >= 2) endP.push((comeback && margin <= 3 ? (usedConcept["粘り"] ? "逆転勝ちで" : "粘り勝ちで") : "これで") + ws + "連勝！" + (ws >= 5 && ws < 10 ? "(10連勝まであと" + (10 - ws) + ")" : ""));
     endP.push((ws >= 2 ? "" : "これで") + "今シーズン" + recTxt + (hist.length >= 5 && rec.w / Math.max(1, rec.w + rec.l) >= 0.8 ? "で勝率" + Math.floor(rec.w / (rec.w + rec.l) * 10) + "割！" : "。"));
     var milestoneWin = [10, 15, 20, 25, 30].indexOf(rec.w + 1) !== -1;
     if (milestoneWin) endP.push((nextTxt ? nextTxt + "も" : "次戦も") + "勝って今シーズン" + (rec.w + 1) + "勝目をもぎ取りにいきましょう！");
