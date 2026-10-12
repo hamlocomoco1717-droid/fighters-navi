@@ -654,7 +654,7 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-season .title-row.rank-1 { font-size: 18px; }
 .title-empty { font-size: 12.5px; color: var(--ink-muted); margin: 0; }
 .edit-menu-toggle { width: 100%; justify-content: center; }
-#sec-meta, #sec-batting, #sec-position, #sec-pitching { scroll-margin-top: 120px; }
+#sec-meta, #sec-batting, #sec-position, #sec-pitching, #sec-recap { scroll-margin-top: 120px; }
 .edit-menu-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
 .edit-menu-item { justify-content: center; text-align: center; flex-direction: column; line-height: 1.35; }
 .edit-menu-item.editing { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 700; }
@@ -3725,8 +3725,10 @@ function renderGameDetail(g) {
     + (heroRes ? '<details class="form-table"><summary>共有する文章を見る</summary><pre class="share-preview">' + esc(highlightText) + "</pre></details>" : "")
     + '<textarea id="highlight-copy-src" readonly aria-hidden="true" tabindex="-1" class="share-src">' + esc(highlightText) + "</textarea>"
   ) : "";
-  var recapText = heroRes ? ((UI.recapEdit && UI.recapEdit.id === d.id) ? UI.recapEdit.text : buildGameRecap(d)) : "";
-  var recapHtml = recapText ? ('<div class="card"><div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">試合レポート（チームLINE用）'
+  /* 試合レポートは編集の画面でだけ出す（下部の「✎ 編集」から開く／新しく追加中の試合） */
+  var recapVisible = !UI.readOnly && (UI.isNewUnsavedGame || UI.recapOpen === d.id);
+  var recapText = (heroRes && recapVisible) ? ((UI.recapEdit && UI.recapEdit.id === d.id) ? UI.recapEdit.text : buildGameRecap(d)) : "";
+  var recapHtml = recapText ? ('<div class="card" id="sec-recap"><div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">試合レポート（チームLINE用）'
       + '<button class="btn btn-sm btn-primary" data-action="share-text" data-src="recap-text" style="font-weight:400;">📤 共有</button>'
       + '<button class="btn btn-sm" data-action="copy-recap" style="font-weight:400;">コピー</button>'
       + (UI.recapEdit && UI.recapEdit.id === d.id ? '<button class="btn btn-sm" data-action="reset-recap" style="font-weight:400;">書き直す前に戻す</button>' : "") + "</div>"
@@ -3948,6 +3950,10 @@ function renderGameDetail(g) {
       { label: "投手成績", on: UI.pitchingEditMode, req: "request-pitching-edit", off: "disable-pitching-edit", sec: "sec-pitching", mode: "pitchingEditMode" }
     ];
     var anyEditing = editItems.some(function (it) { return it.on; });
+    var recapItem = heroRes ? (UI.recapOpen === d.id
+      ? '<button type="button" class="btn btn-sm edit-menu-item editing" data-action="toggle-recap">✓ 試合レポート（LINE用）<span class="edit-menu-state">表示中・押すと閉じる</span></button>'
+      : '<button type="button" class="btn btn-sm edit-menu-item" data-action="toggle-recap">試合レポート（LINE用）</button>') : "";
+    anyEditing = anyEditing || UI.recapOpen === d.id;
     var menuOpen = UI.editMenuOpen || anyEditing;
     editMenuHtml = '<div class="card edit-menu">'
       + '<button type="button" class="btn edit-menu-toggle' + (menuOpen ? " btn-primary" : "") + '" data-action="toggle-edit-menu">'
@@ -3957,8 +3963,8 @@ function renderGameDetail(g) {
           return it.on
             ? '<button type="button" class="btn btn-sm edit-menu-item editing" data-action="' + it.off + '">✓ ' + it.label + '<span class="edit-menu-state">編集中・押すと終了</span></button>'
             : '<button type="button" class="btn btn-sm edit-menu-item" data-action="' + it.req + '" data-scroll="' + it.sec + '" data-scroll-mode="' + it.mode + '">' + it.label + "</button>";
-        }).join("")
-        + '<p class="edit-menu-note">編集には暗証番号が必要です。選ぶとその欄に移動します。</p>'
+        }).join("") + recapItem
+        + '<p class="edit-menu-note">編集には暗証番号が必要です（試合レポートは不要）。選ぶとその欄に移動します。</p>'
         + "</div>")
       + "</div>";
   }
@@ -6988,6 +6994,10 @@ function onAppClick(e) {
   } else if (action === "stat-subtab") {
     UI.statSubtab = el.getAttribute("data-sub");
     renderApp();
+  } else if (action === "toggle-recap") {
+    UI.recapOpen = UI.recapOpen === UI.currentGameId ? null : UI.currentGameId;
+    renderApp();
+    if (UI.recapOpen) { var rcCard = document.getElementById("sec-recap"); if (rcCard) rcCard.scrollIntoView({ block: "start", behavior: "smooth" }); }
   } else if (action === "toggle-ms-all") {
     UI.msShowAll = !UI.msShowAll;
     renderApp();
