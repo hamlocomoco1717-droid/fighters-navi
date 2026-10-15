@@ -2247,7 +2247,7 @@ function buildGameRecap(d) {
         } else if (before < 0 && !scored) {
           line = (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + (sure ? r + "点を返す！" : uniq("chase", CHASE));
         } else if (before < 0) {
-          line = (sono ? "その裏、" : label + (prevScored ? "も" : "に")) + how + (-after <= 3 ? uniq("narrow", r <= 2 ? NARROW : NARROW.filter(function (x) { return x.indexOf("じわじわ") === -1; }), -after) : uniq("chase", CHASE));
+          line = (sono ? "その裏、" : label + (prevScored ? "も" : "に")) + how + (-after <= 3 ? uniq("narrow", r <= 2 && !/HR|本塁打|グランドスラム/.test(how) ? NARROW : NARROW.filter(function (x) { return x.indexOf("じわじわ") === -1; }), -after) : uniq("chase", CHASE));
         } else if (before === 0) {
           line = (sono ? "その裏、" : label + "に") + how + "勝ち越しに成功！";
         } else if (r >= 5 && !bigSaid && before < 7) {
@@ -2298,7 +2298,8 @@ function buildGameRecap(d) {
           }
           if (pi > 0 && sp2 && sp2.from === i && sp2.runs === 0) {
             zeroSaid[pi] = true;
-            var range = sp2.to > sp2.from ? (sp2.from + 1) + "回、" + (sp2.to + 1) + "回は" : (usAlreadyThisInning ? "その裏、" : (sp2.from + 1) + "回、");
+            var range = sp2.to - sp2.from >= 2 ? (sp2.from + 1) + "〜" + (sp2.to + 1) + "回は"
+              : sp2.to > sp2.from ? (sp2.from + 1) + "回、" + (sp2.to + 1) + "回は" : (usAlreadyThisInning ? "その裏、" : (sp2.from + 1) + "回、");
             themSaid = true;
             (usAlreadyThisInning ? addLine : newPara)(sp2.to > sp2.from
               ? range + pName(pi) + "が" + uniq("reliefMany", RELIEF_MANY)
@@ -5243,7 +5244,8 @@ function liveSheetOutcome(sh, bases, outsBefore) {
   if ((sh.key === "FLY" || (sh.key === "LINE" && /^[左中右]$/.test(sh.dir || ""))) && sh.dest.B === -1 && runs > 0 && outsBefore + outs < 3
       && (!sh.dir || /^[左中右]$/.test(sh.dir))) tokenKey = "SF";
   var autoRbi = (sh.key === "ROE" || tokenKey === "DP") ? 0 : runs;
-  return { bases: nb, outs: outs, runs: runs, err: err, tokenKey: tokenKey, rbi: sh.rbi == null ? autoRbi : sh.rbi, autoRbi: autoRbi };
+  var scored = movers.filter(function (k) { return sh.dest[k] === 3; });   /* 生還した人（"B"=打者、0〜2=元の塁） */
+  return { bases: nb, outs: outs, runs: runs, err: err, tokenKey: tokenKey, rbi: sh.rbi == null ? autoRbi : sh.rbi, autoRbi: autoRbi, scored: scored };
 }
 /* 試合中モードの「経過」と取り消しバーの文言 */
 function liveLogInning(d, e) {
@@ -5348,6 +5350,7 @@ function liveSteal(baseIdx, creditSb) {
     if (!Array.isArray(d.innings[side])) d.innings[side] = [];
     while (d.innings[side].length <= inn) d.innings[side].push(0);
     d.innings[side][inn] = n0(d.innings[side][inn]) + 1;
+    if (row) { row.r = n0(row.r) + 1; entry.scored = [rid]; }
   } else {
     nb[baseIdx + 1] = rid;
   }
@@ -5715,6 +5718,21 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec, sheetOutcome
     while (d.innings[side].length <= inn) d.innings[side].push(0);
     d.innings[side][inn] = n0(d.innings[side][inn]) + runsThisPlay;
   }
+  /* 得点（生還した選手）を数える：確定シートなら選んだ通り、それ以外は塁から消えた走者を三塁側から（本塁打は打者も） */
+  var scoredRids = [];
+  if (runsThisPlay > 0) {
+    if (sheetOutcome && sheetOutcome.scored) {
+      scoredRids = sheetOutcome.scored.map(function (k) { return k === "B" ? rid : snapBases[k]; });
+    } else {
+      var outIdx = (goOutSpec && goOutSpec.runners) || [];
+      [2, 1, 0].forEach(function (i) {
+        if (snapBases[i] && play.bases.indexOf(snapBases[i]) === -1 && outIdx.indexOf(i) === -1) scoredRids.push(snapBases[i]);
+      });
+      if (play.bases.indexOf("B") === -1 && (tokenKey === "HR" || playKey === "HR")) scoredRids.push(rid);
+      scoredRids = scoredRids.slice(0, runsThisPlay);
+    }
+    scoredRids.forEach(function (sr) { var srow = d.batting.filter(function (b) { return b._rid === sr; })[0]; if (srow) srow.r = n0(srow.r) + 1; });
+  }
 
   UI.liveBases = play.bases.map(function (x) { return x === "B" ? rid : x; });
   UI.liveOuts = snapOuts + play.outs;
@@ -5725,7 +5743,7 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec, sheetOutcome
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push({
-    type: "atbat", rid: rid, inn: inn, token: token, rbi: rbi, prevRbi: prevRbi,
+    type: "atbat", rid: rid, inn: inn, token: token, rbi: rbi, prevRbi: prevRbi, scored: scoredRids,
     snapInnings: snapInnings, snapOuts: snapOuts, snapBases: snapBases, snapInning: snapInning, snapHalfDone: snapHalfDone
   });
 
@@ -5840,6 +5858,7 @@ function liveUndoAtbat() {
   if (log.length === 0) { showToast("取り消せる記録がありません", true); return; }
   var last = log.pop();
   UI.liveSheet = null;
+  (last.scored || []).forEach(function (sr) { var srow = (d.batting || []).filter(function (b) { return b._rid === sr; })[0]; if (srow) srow.r = Math.max(0, n0(srow.r) - 1); });
   if (last.type === "atbat") {
     var row = (d.batting || []).filter(function (b) { return b._rid === last.rid; })[0];
     if (row && Array.isArray(row.atbats) && row.atbats[last.inn]) {
