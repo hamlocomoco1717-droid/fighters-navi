@@ -1,10 +1,14 @@
 /* Fighters navi — service worker (オフライン起動用) */
-var CACHE = "fighters-navi-v3";
+var CACHE = "fighters-navi-v4";
 var SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon.svg",
+  "./icon-180.png",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-maskable-512.png",
   "https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js",
   "https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js",
   "https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Oswald:wght@400;500;600;700&family=Libre+Franklin:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap"
