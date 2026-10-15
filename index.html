@@ -790,6 +790,12 @@ body.lv-on #app::after { content: ""; display: block; height: 90px; }
 .lv-skip { flex: none; font-size: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-muted); }
 .lv-addp { display: flex; gap: 8px; align-items: center; }
 .lv-pick.lv-pick2 { grid-template-columns: repeat(2, 1fr); }
+.lv-opp { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; }
+.lv-opp-step { flex: none; width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font-size: 18px; font-family: inherit; cursor: pointer; }
+.lv-opp-no { font-size: 20px; min-width: 46px; text-align: center; font-family: "Roboto Mono", monospace; }
+.lv-opp .lv-batter-lbl { white-space: nowrap; }
+.lv-opp-size { margin-left: auto; white-space: nowrap; font-size: 12px; color: var(--ink-muted); display: flex; align-items: center; gap: 4px; }
+.lv-opp-size select { font-size: 13px; padding: 4px; }
 .lv-pick .lv-sub-fp { border-color: #E8C56C; font-weight: 700; }
 .sub-tag { display: inline-block; flex: none; font-size: 10.5px; font-weight: 700; line-height: 1; padding: 3px 5px; border-radius: 4px; background: var(--accent-soft); color: var(--ink); white-space: nowrap; }
 .lv-defsub { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
@@ -1197,6 +1203,8 @@ var UI = {
   /* 代打・代走の選手選び（{type: "PH"|"PR", rid, base}） */
   liveSubSheet: null,
   liveDefPitcherRid: null,
+  /* 守備中の相手の打順（1始まり）。相手の打者の名前は追わず、番号だけ数える */
+  liveOppBatter: 1,
   livePendingResult: null,
   livePendingDir: null,
   livePendingGoOuts: [],
@@ -4367,12 +4375,21 @@ function renderGameDetail(g) {
           + '<button class="btn btn-primary" data-action="live-claim-control" style="width:100%;justify-content:center;">入力を引き継ぐ</button>'
           + (UI.liveTakeover ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="width:100%;margin-top:6px;justify-content:center;">試合中モードを終了</button>' : "");
       } else if (UI.liveHalfDone) {
-        /* 守備（相手の攻撃）：投手成績を自動集計。相手の打者は追わない */
+        /* 守備（相手の攻撃）：投手成績を自動集計。相手の打者は名前を追わず、打順の番号だけ数える */
         var lvDefNeedP = d.pitching.length === 0;
         liveBatterHtml = '<div class="lv-batter"><span class="lv-tag lv-tag-def">守備中</span>'
             + (lvDefNeedP ? '<span class="lv-batter-note">先に今の投手を登録してください</span>'
               : '<span class="lv-batter-lbl">投手</span><select id="live-def-pitcher-select" class="lv-select">' + defPitcherOptions + "</select>")
           + "</div>"
+          + (lvDefNeedP ? "" : (function () {
+            var oSize = liveOppSize(d), sizeOpts = "";
+            for (var on = 9; on <= 15; on++) sizeOpts += '<option value="' + on + '"' + (on === oSize ? " selected" : "") + ">" + on + "人</option>";
+            return '<div class="lv-opp"><span class="lv-batter-lbl">相手の打者</span>'
+              + '<button class="lv-opp-step" data-action="live-opp-batter" data-delta="-1" aria-label="1つ前の打者">‹</button>'
+              + '<b class="lv-opp-no">' + liveOppNo(d) + "番</b>"
+              + '<button class="lv-opp-step" data-action="live-opp-batter" data-delta="1" aria-label="次の打者">›</button>'
+              + '<label class="lv-opp-size">打順<select id="live-opp-size">' + sizeOpts + "</select></label></div>";
+          })())
           + (lvDefNeedP
             ? '<div class="lv-addp"><select id="live-add-pitcher-select" class="lv-select"><option value="">投手を選択…</option>' + defAddPitcherOptions + "</select>"
               + '<button class="btn btn-primary btn-sm" data-action="live-add-def-pitcher">＋ 登板</button></div>'
@@ -4483,7 +4500,7 @@ function renderGameDetail(g) {
         liveBatterHtml += '<div class="lv-sheet-bg" data-action="live-runner-menu-close"></div>'
           + '<div class="lv-sheet" role="dialog">'
             + '<div class="lv-sheet-head"><div><b>' + ["一塁", "二塁", "三塁"][rmB] + "走者</b>"
-              + '<div class="lv-sheet-sub">' + (rmRow ? (rmNo ? rmNo + "番 " : "") + esc(playerName(rmRow.playerId)) : "相手の走者") + "</div></div>"
+              + '<div class="lv-sheet-sub">' + (rmRow ? (rmNo ? rmNo + "番 " : "") + esc(playerName(rmRow.playerId)) : "相手の走者" + (liveOppRunnerNo(rmRid) ? "（" + liveOppRunnerNo(rmRid) + "番）" : "")) + "</div></div>"
               + '<button class="lv-sheet-x" data-action="live-runner-menu-close">閉じる</button></div>'
             + '<div class="lv-pick">'
               + (rmCanSteal && rmRow ? '<button class="btn" data-action="live-steal-pick" data-base="' + rmB + '">盗塁（記録する）</button>' : "")
@@ -5202,6 +5219,7 @@ function liveDirColorStyle(code) {
 function liveResultShort(key) { return LIVE_RESULT_SHORT[key] || key; }
 function resetLiveInput() {
   UI.liveBatterRid = null;
+  UI.liveOppBatter = 1;
   UI.liveDefPitcherRid = null;
   UI.livePendingResult = null;
   UI.livePendingDir = null;
@@ -5352,11 +5370,22 @@ function liveRetreatHalf() {
   UI.liveOuts = 0;
   UI.liveBases = [null, null, null];
 }
+/* 相手の打順の人数（既定9人）と、今の相手の打者の番号 */
+function liveOppSize(d) { var n = parseInt(d && d.oppOrderSize, 10); return n >= 1 && n <= 20 ? n : 9; }
+function liveOppNo(d) {
+  var n = parseInt(UI.liveOppBatter, 10), size = liveOppSize(d);
+  return n >= 1 && n <= size ? n : 1;
+}
+/* 相手の走者（"opp:打順:id"）の打順。わからなければ 0 */
+function liveOppRunnerNo(rid) {
+  var m = /^opp:(\d+):/.exec(String(rid || ""));
+  return m ? parseInt(m[1], 10) : 0;
+}
 /* 走者の短い表示名（背番号があれば背番号、無ければ氏名先頭2文字） */
 function liveRunnerShort(d, rid) {
   if (!rid || !d) return "";
   var row = (d.batting || []).filter(function (b) { return b._rid === rid; })[0];
-  if (!row) return "";
+  if (!row) return liveOppRunnerNo(rid) ? liveOppRunnerNo(rid) + "番" : "";
   var p = playerById(row.playerId);
   if (p && p.number != null && p.number !== "") return String(p.number);
   return (playerName(row.playerId) || "").slice(0, 2);
@@ -5422,12 +5451,12 @@ function liveLogInning(d, e) {
 function liveLogText(d, e) {
   var who = function (rid) {
     var row = (d.batting || []).filter(function (b) { return b._rid === rid; })[0];
-    return row ? playerName(row.playerId) : "走者";
+    return row ? playerName(row.playerId) : liveOppRunnerNo(rid) ? "相手 " + liveOppRunnerNo(rid) + "番" : "走者";
   };
   var DEF = { H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", BB: "四球", ROE: "エラー", GO: "ゴロアウト", FLY: "フライアウト", SO: "三振" };
   switch (e.type) {
     case "atbat": return who(e.rid) + " " + (e.token || "") + (n0(e.rbi) ? " " + n0(e.rbi) + "打点" : "");
-    case "defatbat": return "相手の打者 " + (DEF[e.key] || "");
+    case "defatbat": return (e.oppNo ? "相手 " + e.oppNo + "番 " : "相手の打者 ") + (DEF[e.key] || "");
     case "steal": return who(e.snapBases && e.snapBases[e.base] || e.rid) + (e.credit ? " 盗塁" : " 進塁");
     case "retreat": return "走者を1つ戻す";
     case "clearbaseout": return "走者アウト（走塁死）";
@@ -5447,7 +5476,9 @@ function liveFieldSvg(bases, d, canTap) {
     var row = (d.batting || []).filter(function (b) { return b._rid === rid; })[0];
     var sno = row ? battingSlotNo(d.batting, rid) : 0;
     var no = sno ? String(sno) : "";
-    var nm = row ? playerName(row.playerId) : "走者";
+    var oppNoR = row ? 0 : liveOppRunnerNo(rid);
+    if (oppNoR) no = String(oppNoR);
+    var nm = row ? playerName(row.playerId) : oppNoR ? "相手" : "走者";
     if (nm.length > 5) nm = nm.slice(0, 5);
     var x = P[bi][0], y = P[bi][1];
     var lw = Math.max(46, nm.length * 12 + (no ? 22 : 10));
@@ -6037,7 +6068,10 @@ function liveCommitDefAtbat(resultKey) {
     d.innings[side][inn] = n0(d.innings[side][inn]) + runsThisPlay;
   }
 
-  var oppRunnerToken = "opp:" + uid();
+  var oppNo = liveOppNo(d);
+  var oppRunnerToken = "opp:" + oppNo + ":" + uid();
+  var snapOppBatter = oppNo;
+  UI.liveOppBatter = oppNo % liveOppSize(d) + 1;
   UI.liveBases = play.bases.map(function (x) { return x === "B" ? oppRunnerToken : x; });
   UI.liveOuts = snapOuts + play.outs;
   if (UI.liveOuts >= 3) {
@@ -6047,7 +6081,7 @@ function liveCommitDefAtbat(resultKey) {
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push({
-    type: "defatbat", prid: prid, prevStat: prevStat, key: resultKey,
+    type: "defatbat", prid: prid, prevStat: prevStat, key: resultKey, oppNo: oppNo, snapOppBatter: snapOppBatter,
     snapInnings: snapInnings, snapOuts: snapOuts, snapBases: snapBases, snapInning: snapInning, snapHalfDone: snapHalfDone
   });
   UI.livePendingAdvance = 0;
@@ -6305,6 +6339,7 @@ function liveUndoAtbat() {
       prow2.bb = last.prevStat.bb; prow2.so = last.prevStat.so; prow2.ipOuts = last.prevStat.ipOuts;
     }
     UI.liveDefPitcherRid = last.prid;
+    if (last.snapOppBatter) UI.liveOppBatter = last.snapOppBatter;
   }
   if (last.snapInnings) d.innings = clone(last.snapInnings);
   UI.liveOuts = last.snapOuts || 0;
@@ -8174,7 +8209,7 @@ function onAppClick(e) {
   } else if (action === "su-start") {
     if (!UI.draftGame) return;
     UI.setupStep = null;
-    UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null];
+    UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null]; UI.liveOppBatter = 1;
     if (UI.draftGame.batting.length) UI.liveBatterRid = liveSlotActiveRid(UI.draftGame, 0);
     if ((UI.draftGame.pitching || []).length) UI.liveDefPitcherRid = UI.draftGame.pitching[0]._rid;
     persistDraft();
@@ -8206,6 +8241,11 @@ function onAppClick(e) {
     liveCommitAtbat(UI.liveSheet.key, UI.liveSheet.dir || "", null, null, shOut);
   } else if (action === "live-runner-menu") {
     UI.liveRunnerMenu = parseInt(el.getAttribute("data-base"), 10);
+    renderApp();
+  } else if (action === "live-opp-batter") {
+    if (!UI.draftGame || UI.readOnly) return;
+    var obSize = liveOppSize(UI.draftGame);
+    UI.liveOppBatter = ((liveOppNo(UI.draftGame) - 1 + parseInt(el.getAttribute("data-delta"), 10) + obSize) % obSize) + 1;
     renderApp();
   } else if (action === "live-sub-open") {
     var soD = UI.draftGame;
@@ -8932,6 +8972,12 @@ function onAppChange(e) {
   }
   if (t.matches(".bulk-lineup-slot")) {
     syncBulkLineupOptions();
+    return;
+  }
+  if (t.id === "live-opp-size" && UI.draftGame) {
+    UI.draftGame.oppOrderSize = parseInt(t.value, 10) || 9;
+    if (liveOppNo(UI.draftGame) !== parseInt(UI.liveOppBatter, 10)) UI.liveOppBatter = 1;
+    persistDraft();
     return;
   }
   if (t.id === "live-batter-select") {
