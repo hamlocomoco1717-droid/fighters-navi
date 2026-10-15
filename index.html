@@ -675,6 +675,25 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-game-head > span:last-child { white-space: nowrap; flex-shrink: 0; }
 .mvp-game-mine { font-size: 11.5px; color: var(--ink-muted); }
 .mvp-game-mine b { color: var(--ink); }
+/* ===== 公式スコアとの照合 ===== */
+.rc-lede { font-size: 12.5px; color: var(--ink-muted); margin: 0 0 8px; }
+.rc-json { width: 100%; min-height: 90px; font-size: 12px; font-family: "Roboto Mono", monospace; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); box-sizing: border-box; }
+.rc-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.rc-file { cursor: pointer; }
+.rc-err { margin-top: 8px; color: var(--loss); font-size: 13px; white-space: pre-wrap; }
+.rc-ok { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--win-soft); color: var(--win); font-weight: 700; }
+.rc-sum { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 8px; font-size: 14px; }
+.rc-sum b { color: var(--loss); font-size: 17px; }
+.rc-block { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
+.rc-block-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; font-size: 14px; }
+.rc-line { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
+.rc-line > span:first-child:not(.rc-app):not(.rc-off) { min-width: 4.5em; color: var(--ink-muted); font-size: 12px; }
+.rc-wrap { flex-wrap: wrap; }
+.rc-app { color: var(--ink-muted); text-decoration: line-through; text-decoration-color: rgba(192, 57, 43, 0.6); }
+.rc-off { color: var(--win); font-weight: 700; }
+.rc-arrow { color: var(--ink-muted); }
+.rc-legend { font-size: 11.5px; color: var(--ink-muted); margin: 8px 0 0; }
+.rc-legend .rc-app, .rc-legend .rc-off { font-weight: 400; }
 /* ===== 試合前の準備画面 ===== */
 .su-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
 .su-head h1 { margin: 0; font-size: 22px; flex: 1; }
@@ -3492,6 +3511,150 @@ function parseIkzAtbat(raw) {
   };
 }
 
+/* ===== 公式スコアとの照合 =====
+   試合中モードで入力した記録と、スコア表のJSON（ChatGPTで変換したもの）を比べて違いを出し、
+   項目ごと（または全部）を公式に合わせる。照合しているあいだは名簿に選手を足さない（合わせるときだけ足す） */
+function reconcileParse(raw) {
+  var parsed = parseImportJsonText(String(raw || "").trim());
+  if (parsed.error) return { error: parsed.error === "nobrace" ? "JSONが見つかりません。「{」から始まるJSON全体を貼り付けてください。" : "JSONの形式が正しくありません（" + parsed.error + "）" };
+  if (!parsed.obj || !Array.isArray(parsed.obj.lineup)) return { error: "打順（lineup）が見つかりません。スコア表のJSON全体を貼り付けてください。" };
+  var before = STATE.players.slice();
+  var built = buildGameFromImport(parsed.obj);
+  var createdIds = {};
+  STATE.players.forEach(function (p) { if (before.indexOf(p) === -1) createdIds[p.id] = { name: p.name, number: p.number }; });
+  STATE.players = before;   /* 照合の時点では名簿を変えない */
+  var off = built.game;
+  if (!parsed.obj.innings) off.innings = null;   /* 回ごとの得点がないJSONなら、得点は照合しない */
+  else ["top", "bottom"].forEach(function (sd) {   /* 後ろの0だけの回（取り込み時の埋め草）は落とす */
+    var src = parsed.obj.innings[sd] || [];
+    if (src.length) off.innings[sd] = off.innings[sd].slice(0, Math.max(src.length, 1));
+  });
+  return { official: off, created: createdIds, report: built.report };
+}
+function rcName(rc, pid) { return rc.created[pid] ? rc.created[pid].name + "（名簿にない）" : playerName(pid); }
+function rcCells(row) { return (row && row.atbats || []).map(function (c) { return String(c || "").trim(); }); }
+function rcBatLine(b) {
+  return n0(b.ab) + "打数" + n0(b.h) + "安打 " + n0(b.rbi) + "打点" + (n0(b.bb) ? " " + n0(b.bb) + "四球" : "") + (n0(b.so) ? " " + n0(b.so) + "三振" : "") + (n0(b.sb) ? " " + n0(b.sb) + "盗塁" : "") + (n0(b.r) ? " " + n0(b.r) + "得点" : "");
+}
+function rcPitLine(p) {
+  return outsToIpStr(p.ipOuts) + "回 被安" + n0(p.h) + " 失" + n0(p.r) + " 自責" + n0(p.er) + " 四" + n0(p.bb) + " 振" + n0(p.so) + (p.decision ? " " + ({ W: "勝", L: "負", S: "S" }[p.decision] || "") : "");
+}
+var RC_BAT_KEYS = ["ab", "h", "d2", "d3", "hr", "rbi", "bb", "hbp", "so", "sac", "sf", "sb", "r"];
+var RC_PIT_KEYS = ["ipOuts", "h", "r", "er", "bb", "so", "decision"];
+/* 違いの一覧を作る */
+function reconcileDiff(d, rc) {
+  var off = rc.official, out = { innings: [], batters: [], extraOfficial: [], extraApp: [], order: false, pitchers: [], total: 0 };
+  var n = off.innings ? Math.max((d.innings.top || []).length, (d.innings.bottom || []).length, off.innings.top.length, off.innings.bottom.length) : 0;
+  for (var i = 0; i < n; i++) ["top", "bottom"].forEach(function (sd) {
+    var a = n0((d.innings[sd] || [])[i]), o = n0((off.innings[sd] || [])[i]);
+    if (a !== o) out.innings.push({ inn: i, side: sd, app: a, off: o });
+  });
+  off.batting.forEach(function (ob, oi) {
+    var ab = d.batting.filter(function (b) { return b.playerId === ob.playerId; })[0];
+    if (!ab) { out.extraOfficial.push({ ob: ob, order: oi }); return; }
+    var ac = rcCells(ab), oc = rcCells(ob), cells = [];
+    for (var k = 0; k < Math.max(ac.length, oc.length); k++) if ((ac[k] || "") !== (oc[k] || "")) cells.push({ inn: k, app: ac[k] || "", off: oc[k] || "" });
+    var stats = RC_BAT_KEYS.filter(function (key) { return n0(ab[key]) !== n0(ob[key]); });
+    if (cells.length || stats.length) out.batters.push({ ab: ab, ob: ob, cells: cells, stats: stats });
+  });
+  d.batting.forEach(function (ab) { if (!off.batting.some(function (ob) { return ob.playerId === ab.playerId; })) out.extraApp.push(ab); });
+  var appOrder = d.batting.map(function (b) { return b.playerId; }).filter(function (pid) { return off.batting.some(function (ob) { return ob.playerId === pid; }); });
+  var offOrder = off.batting.map(function (b) { return b.playerId; }).filter(function (pid) { return d.batting.some(function (ab) { return ab.playerId === pid; }); });
+  out.order = appOrder.join(",") !== offOrder.join(",");
+  off.pitching.forEach(function (op) {
+    var ap = (d.pitching || []).filter(function (p) { return p.playerId === op.playerId; })[0];
+    if (!ap) { out.pitchers.push({ op: op, ap: null }); return; }
+    var diffK = RC_PIT_KEYS.filter(function (key) { return key === "decision" ? (ap.decision || "") !== (op.decision || "") : n0(ap[key]) !== n0(op[key]); });
+    if (diffK.length) out.pitchers.push({ op: op, ap: ap, keys: diffK });
+  });
+  out.total = out.innings.length + out.batters.length + out.extraOfficial.length + out.extraApp.length + (out.order ? 1 : 0) + out.pitchers.length;
+  return out;
+}
+/* 合わせる：名簿にない選手は、このときに名簿へ足す */
+function rcEnsurePlayer(rc, pid) {
+  if (!rc.created[pid] || playerById(pid)) return;
+  STATE.players.push({ id: pid, number: rc.created[pid].number == null ? "" : String(rc.created[pid].number), name: rc.created[pid].name, position: "", active: true });
+}
+function rcApplyBatter(d, rc, pid) {
+  var ob = rc.official.batting.filter(function (b) { return b.playerId === pid; })[0];
+  if (!ob) return;
+  rcEnsurePlayer(rc, pid);
+  var ab = d.batting.filter(function (b) { return b.playerId === pid; })[0];
+  if (!ab) {
+    ab = clone(ob); ab._rid = uid();
+    var oi = rc.official.batting.indexOf(ob);
+    d.batting.splice(Math.min(oi, d.batting.length), 0, ab);
+    return;
+  }
+  /* 走者の記録（atbatBases）は、公式にあればそれ、無ければ打席数が同じ回だけアプリのものを残す */
+  var keepBases = Array.isArray(ab.atbatBases) ? ab.atbatBases.slice() : [];
+  var oc = rcCells(ob), ac = rcCells(ab);
+  ab.atbats = (ob.atbats || []).slice();
+  if (Array.isArray(ob.atbatBases)) ab.atbatBases = ob.atbatBases.slice();
+  else ab.atbatBases = oc.map(function (c, k) { return (c.split("・").length === (ac[k] || "").split("・").length && (ac[k] || "")) ? (keepBases[k] || "") : ""; });
+  RC_BAT_KEYS.forEach(function (key) { ab[key] = n0(ob[key]); });
+  if (ob.position) ab.position = ob.position;
+  if (Array.isArray(ob.posChanges) && ob.posChanges.length) ab.posChanges = clone(ob.posChanges);
+}
+function rcApplyPitcher(d, rc, pid) {
+  var op = rc.official.pitching.filter(function (p) { return p.playerId === pid; })[0];
+  if (!op) return;
+  rcEnsurePlayer(rc, pid);
+  var ap = (d.pitching || []).filter(function (p) { return p.playerId === pid; })[0];
+  if (!ap) { d.pitching.push(Object.assign(clone(op), { _rid: uid() })); return; }
+  RC_PIT_KEYS.forEach(function (key) { ap[key] = key === "decision" ? (op.decision || "") : n0(op[key]); });
+}
+function rcApplyOrder(d, rc) {
+  var pos = {};
+  rc.official.batting.forEach(function (b, i) { pos[b.playerId] = i; });
+  d.batting.sort(function (a, b) { return (pos[a.playerId] == null ? 999 : pos[a.playerId]) - (pos[b.playerId] == null ? 999 : pos[b.playerId]); });
+}
+function renderReconcile(d) {
+  var rc = UI.reconcile && UI.reconcile.gameId === d.id ? UI.reconcile : null;
+  var html = '<div class="section-title">公式スコアと照合</div>'
+    + '<p class="rc-lede">スコア表を変換したJSON（取り込みと同じもの）を貼ると、この試合の記録との違いを並べます。「公式に合わせる」を押したところだけ直ります。</p>'
+    + '<textarea id="rc-json" class="rc-json" placeholder="{ &quot;date&quot;: ..., &quot;lineup&quot;: [...] } を貼り付け">' + esc(UI.reconcileRaw || "") + "</textarea>"
+    + '<div class="rc-actions"><label class="btn btn-sm rc-file">ファイルを選ぶ<input type="file" id="rc-file" accept=".json,.txt,application/json,text/plain" hidden></label>'
+      + '<button class="btn btn-primary" data-action="rc-run">照合する</button>'
+      + '<button class="btn btn-sm" data-action="disable-reconcile">閉じる</button></div>'
+    + (UI.reconcileError ? '<div class="rc-err">' + esc(UI.reconcileError) + "</div>" : "");
+  if (!rc) return html;
+  var df = reconcileDiff(d, rc);
+  var away = d.venue === "away";
+  var sideName = function (sd) { return (sd === "top") === away ? (STATE.team.name || "自チーム") : (d.opponent || "相手"); };
+  var inn = function (k, sd) { return (k + 1) + "回" + (sd === "top" ? "表" : "裏"); };
+  if (df.total === 0) return html + '<div class="rc-ok">✓ 公式スコアとすべて一致しています。</div>';
+  html += '<div class="rc-sum">違い <b>' + df.total + "件</b>"
+    + '<button class="btn btn-sm btn-primary" data-action="rc-apply-all">すべて公式に合わせる</button></div>';
+  var block = function (title, body, btn) { return '<div class="rc-block"><div class="rc-block-h"><b>' + title + "</b>" + (btn || "") + "</div>" + body + "</div>"; };
+  if (df.innings.length) html += block("回ごとの得点", df.innings.map(function (x) {
+      return '<div class="rc-line"><span>' + inn(x.inn, x.side) + " " + esc(sideName(x.side)) + '</span><span class="rc-app">' + x.app + '</span><span class="rc-arrow">→</span><span class="rc-off">' + x.off + "</span></div>";
+    }).join(""), '<button class="btn btn-sm" data-action="rc-apply" data-kind="innings">公式に合わせる</button>');
+  if (df.order) html += block("打順", '<div class="rc-line rc-wrap"><span class="rc-app">' + d.batting.map(function (b) { return esc(playerName(b.playerId)); }).join("→") + '</span></div><div class="rc-line rc-wrap"><span class="rc-off">' + rc.official.batting.map(function (b) { return esc(rcName(rc, b.playerId)); }).join("→") + "</span></div>",
+    '<button class="btn btn-sm" data-action="rc-apply" data-kind="order">公式の順に並べる</button>');
+  df.batters.forEach(function (x) {
+    html += block(esc(playerName(x.ab.playerId)),
+      x.cells.map(function (c) { return '<div class="rc-line"><span>' + (c.inn + 1) + '回</span><span class="rc-app">' + (esc(c.app) || "（なし）") + '</span><span class="rc-arrow">→</span><span class="rc-off">' + (esc(c.off) || "（なし）") + "</span></div>"; }).join("")
+      + (x.stats.length ? '<div class="rc-line rc-wrap"><span class="rc-app">' + esc(rcBatLine(x.ab)) + '</span></div><div class="rc-line rc-wrap"><span class="rc-off">' + esc(rcBatLine(x.ob)) + "</span></div>" : ""),
+      '<button class="btn btn-sm" data-action="rc-apply" data-kind="batter" data-pid="' + x.ob.playerId + '">公式に合わせる</button>');
+  });
+  df.extraOfficial.forEach(function (x) {
+    html += block(esc(rcName(rc, x.ob.playerId)) + "（この試合の記録にいない）", '<div class="rc-line rc-wrap"><span class="rc-off">' + esc(rcBatLine(x.ob)) + " ［" + esc(rcCells(x.ob).filter(Boolean).join(" ")) + "］</span></div>",
+      '<button class="btn btn-sm" data-action="rc-apply" data-kind="batter" data-pid="' + x.ob.playerId + '">打順に加える</button>');
+  });
+  df.extraApp.forEach(function (ab) {
+    html += block(esc(playerName(ab.playerId)) + "（公式のスコアにいない）", '<div class="rc-line rc-wrap"><span class="rc-app">' + esc(rcBatLine(ab)) + "</span></div>",
+      '<button class="btn btn-sm" data-action="rc-apply" data-kind="drop" data-rid="' + ab._rid + '">外す</button>');
+  });
+  df.pitchers.forEach(function (x) {
+    html += block("投手 " + esc(rcName(rc, x.op.playerId)) + (x.ap ? "" : "（記録にいない）"),
+      (x.ap ? '<div class="rc-line rc-wrap"><span class="rc-app">' + esc(rcPitLine(x.ap)) + "</span></div>" : "")
+      + '<div class="rc-line rc-wrap"><span class="rc-off">' + esc(rcPitLine(x.op)) + "</span></div>",
+      '<button class="btn btn-sm" data-action="rc-apply" data-kind="pitcher" data-pid="' + x.op.playerId + '">' + (x.ap ? "公式に合わせる" : "加える") + "</button>");
+  });
+  return html + '<p class="rc-legend"><span class="rc-app">この試合の記録</span> → <span class="rc-off">公式</span>。「外す」以外は、公式にある内容で上書きします。</p>';
+}
+
 function buildGameFromImport(obj) {
   var report = { matched: [], created: [], ambiguous: [], warnings: [] };
   var perGame = n0(STATE.team.inningsPerGame) || 7;
@@ -4559,7 +4722,8 @@ function renderGameDetail(g) {
       { label: "打席内容", on: UI.atbatEditMode, req: "request-atbat-edit", off: "disable-atbat-edit", sec: "sec-batting", mode: "atbatEditMode" },
       { label: "打席以降の数字", on: UI.battingTotalsEditMode, req: "request-batting-totals-edit", off: "disable-batting-totals-edit", sec: "sec-batting", mode: "battingTotalsEditMode" },
       { label: "守備位置の交代", on: UI.positionEditMode, req: "request-position-edit", off: "disable-position-edit", sec: "sec-position", mode: "positionEditMode" },
-      { label: "投手成績", on: UI.pitchingEditMode, req: "request-pitching-edit", off: "disable-pitching-edit", sec: "sec-pitching", mode: "pitchingEditMode" }
+      { label: "投手成績", on: UI.pitchingEditMode, req: "request-pitching-edit", off: "disable-pitching-edit", sec: "sec-pitching", mode: "pitchingEditMode" },
+      { label: "公式スコアと照合", on: UI.reconcileMode, req: "request-reconcile", off: "disable-reconcile", sec: "sec-reconcile", mode: "reconcileMode" }
     ];
     var anyEditing = editItems.some(function (it) { return it.on; });
     var recapItem = heroRes ? (UI.recapOpen === d.id
@@ -4596,6 +4760,7 @@ function renderGameDetail(g) {
     + (liveHtml
         ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>" + '<div class="card" id="sec-meta">' + metaHtml + "</div>")
         : ('<div class="card" id="sec-meta">' + metaHtml + "</div>" + '<div class="card">' + scoreboardHtml + "</div>"))
+    + (UI.reconcileMode && !UI.readOnly ? '<div class="card" id="sec-reconcile">' + renderReconcile(d) + "</div>" : "")
     + (highlightsHtml ? '<div class="card">' + highlightsHtml + "</div>" : "")
     + '<div class="card" id="sec-batting">' + battingHtml + "</div>"
     + '<div class="card" id="sec-position">' + posHtml + "</div>"
@@ -7430,6 +7595,34 @@ function onAppClick(e) {
     UI.atbatEditMode = false;
     UI.editingAtbatsRow = null;
     renderApp();
+  } else if (action === "request-reconcile") {
+    if (UI.readOnly) return;
+    UI.confirmDialog = { message: "公式スコアと照合して記録を直すには暗証番号を入力してください。", action: "enable-reconcile", requiresPin: true, okLabel: "照合する" };
+    renderApp();
+  } else if (action === "disable-reconcile") {
+    UI.reconcileMode = false; UI.reconcile = null; UI.reconcileError = ""; UI.reconcileRaw = "";
+    renderApp();
+  } else if (action === "rc-run") {
+    var rcTa = document.getElementById("rc-json");
+    UI.reconcileRaw = rcTa ? rcTa.value : "";
+    var rcRes = reconcileParse(UI.reconcileRaw);
+    if (rcRes.error) { UI.reconcileError = rcRes.error; UI.reconcile = null; }
+    else { UI.reconcileError = ""; rcRes.gameId = UI.draftGame && UI.draftGame.id; UI.reconcile = rcRes; }
+    renderApp();
+  } else if (action === "rc-apply" || action === "rc-apply-all") {
+    if (!UI.draftGame || UI.readOnly || !UI.reconcileMode || !UI.reconcile) return;
+    var rcD = UI.draftGame, rcR = UI.reconcile, kind = el.getAttribute("data-kind");
+    if (action === "rc-apply-all") {
+      UI.confirmDialog = { message: "違いをすべて公式スコアの内容で上書きします（公式にいない選手は打順から外れます）。よろしいですか？", action: "rc-apply-all-confirm", okLabel: "すべて合わせる" };
+      renderApp();
+      return;
+    }
+    if (kind === "innings" && rcR.official.innings) rcD.innings = clone(rcR.official.innings);
+    else if (kind === "order") rcApplyOrder(rcD, rcR);
+    else if (kind === "batter") rcApplyBatter(rcD, rcR, el.getAttribute("data-pid"));
+    else if (kind === "pitcher") rcApplyPitcher(rcD, rcR, el.getAttribute("data-pid"));
+    else if (kind === "drop") { var dropRid = el.getAttribute("data-rid"); rcD.batting = rcD.batting.filter(function (b) { return b._rid !== dropRid; }); }
+    persistDraft("公式に合わせました");
   } else if (action === "request-pitching-edit") {
     if (UI.readOnly) return;
     UI.confirmDialog = { message: "投手成績を編集するには暗証番号を入力してください。", action: "enable-pitching-edit", requiresPin: true, okLabel: "編集する" };
@@ -8080,6 +8273,23 @@ function onAppClick(e) {
       UI.battingTotalsEditMode = true;
       UI.confirmDialog = null;
       renderApp();
+    } else if (cd.action === "rc-apply-all-confirm") {
+      UI.confirmDialog = null;
+      var rcD2 = UI.draftGame, rcR2 = UI.reconcile;
+      if (rcD2 && rcR2) {
+        var rcAll = reconcileDiff(rcD2, rcR2);
+        if (rcR2.official.innings) rcD2.innings = clone(rcR2.official.innings);
+        rcAll.batters.forEach(function (x) { rcApplyBatter(rcD2, rcR2, x.ob.playerId); });
+        rcAll.extraOfficial.forEach(function (x) { rcApplyBatter(rcD2, rcR2, x.ob.playerId); });
+        rcD2.batting = rcD2.batting.filter(function (b) { return rcR2.official.batting.some(function (ob) { return ob.playerId === b.playerId; }); });
+        rcApplyOrder(rcD2, rcR2);
+        rcAll.pitchers.forEach(function (x) { rcApplyPitcher(rcD2, rcR2, x.op.playerId); });
+        persistDraft("公式スコアに合わせました");
+      } else renderApp();
+    } else if (cd.action === "enable-reconcile") {
+      UI.reconcileMode = true;
+      UI.confirmDialog = null;
+      renderApp();
     } else if (cd.action === "enable-pitching-edit") {
       UI.pitchingEditMode = true;
       UI.confirmDialog = null;
@@ -8183,6 +8393,14 @@ function onAppChange(e) {
       if (impBox) impBox.innerHTML = '<span style="color:var(--loss);">ファイルを読み込めませんでした。</span>';
     };
     rdr.readAsText(impFile);
+    return;
+  }
+  if (t.id === "rc-file") {
+    var rcF = t.files && t.files[0];
+    if (!rcF) return;
+    var rcRd = new FileReader();
+    rcRd.onload = function () { var ta2 = document.getElementById("rc-json"); if (ta2) ta2.value = String(rcRd.result || ""); var btn = document.querySelector('[data-action="rc-run"]'); if (btn) btn.click(); };
+    rcRd.readAsText(rcF);
     return;
   }
   if (t.id === "su-add" && UI.draftGame && t.value) {
