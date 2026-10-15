@@ -675,6 +675,9 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-game-head > span:last-child { white-space: nowrap; flex-shrink: 0; }
 .mvp-game-mine { font-size: 11.5px; color: var(--ink-muted); }
 .mvp-game-mine b { color: var(--ink); }
+.test-banner { display: block !important; background: #FFF4D6; border: 1px solid #E8C56C; color: #4A3A10; line-height: 1.6; }
+.test-banner a { margin-left: 8px; color: #15224A; font-weight: 700; }
+.test-card { border: 2px dashed #E8C56C; }
 /* ===== 公式スコアとの照合 ===== */
 .rc-lede { font-size: 12.5px; color: var(--ink-muted); margin: 0 0 8px; }
 .rc-json { width: 100%; min-height: 90px; font-size: 12px; font-family: "Roboto Mono", monospace; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); box-sizing: border-box; }
@@ -1002,6 +1005,9 @@ window.FIREBASE_PATH = "scorebook/fighters";
   var api = { enabled: false, configured: configured, connected: false,
               lastSync: null, start: function () {}, push: function () {} };
   window.FBSync = api;
+  /* テストモード（URLに ?test）：チームのデータを最初に1回読むだけで、書き込みは一切しない */
+  var TEST = /[?&]test(=|&|$)/.test(location.search);
+  api.testMode = TEST;
   if (!configured) { console.warn("[FBSync] Firebase未設定 — この端末のみに保存します"); return; }
   if (typeof firebase === "undefined" || !firebase.initializeApp) {
     console.error("[FBSync] Firebase SDK を読み込めませんでした（ネットワーク/ブロッカーを確認）"); return;
@@ -1031,23 +1037,28 @@ window.FIREBASE_PATH = "scorebook/fighters";
 
     /* サーバーが空なら、この端末の内容を最初の共有データとして書き込む。
        すでにデータがあればサーバー側を尊重する。 */
-    stateRef.transaction(function (current) {
-      if (current === null) return (window.__seedState || null);
-      return undefined;
-    }, function (err) {
+    var gotFirst = false;
+    var subscribe = function (err) {
       if (err) console.error("[FBSync] seed transaction エラー", err);
       stateRef.on("value", function (snap) {
         var val = snap.val();
         if (val == null) return;
+        if (TEST && gotFirst) return;   /* テストモードは最初の1回だけ取り込み、あとはテストの内容を残す */
+        gotFirst = true;
         api.lastSync = Date.now();
         if (JSON.stringify(val) === lastPushJson) { onStatus(); return; } /* 自分の書き込みのこだま */
         onRemote(val); onStatus();
       }, function (e) { console.error("[FBSync] 購読エラー", e); });
-    });
+    };
+    if (TEST) subscribe(null);
+    else stateRef.transaction(function (current) {
+      if (current === null) return (window.__seedState || null);
+      return undefined;
+    }, subscribe);
   };
 
   api.push = function (state) {
-    if (!api.enabled) return;
+    if (!api.enabled || TEST) return;
     var json = JSON.stringify(state);
     lastPushJson = json;
     if (pushTimer) clearTimeout(pushTimer);
@@ -2893,9 +2904,11 @@ function handlePublishError(err) {
   }
 }
 
+var TEST_MODE = /[?&]test(=|&|$)/.test(location.search);
 function persist(successMsg, skipRender) {
   STATE.updatedAt = new Date().toISOString();
-  try { localStorage.setItem("softball-scorebook-state-v1", JSON.stringify(STATE)); } catch (e) { /* ignore */ }
+  /* テストモードでは、この端末の保存もチームの保存もしない（ページを閉じると消える） */
+  if (!TEST_MODE) try { localStorage.setItem("softball-scorebook-state-v1", JSON.stringify(STATE)); } catch (e) { /* ignore */ }
   if (window.FBSync && window.FBSync.enabled) window.FBSync.push(STATE);
   if (successMsg) showToast(successMsg);
   if (!skipRender) renderApp();
@@ -3061,7 +3074,7 @@ function renderShell(contentHtml) {
   var tabsHtml = TABS.map(function (t) {
     return '<button class="tab-btn' + (UI.tab === t.id ? " active" : "") + '" data-action="tab" data-tab="' + t.id + '">' + esc(t.label) + "</button>";
   }).join("");
-  var statusHtml = UI.readOnly
+  var statusHtml = TEST_MODE ? '<span class="status-pill">🧪 テスト中</span>' : UI.readOnly
     ? '<span class="status-pill readonly">閲覧専用</span>'
     : fbStatusPill();
   return ""
@@ -3073,7 +3086,9 @@ function renderShell(contentHtml) {
     + "</div></div>"
     + "<main>"
     + (UI.readOnly ? '<div class="banner readonly">閲覧専用モードです。編集内容は保存されません。</div>' : "")
-    + ((!UI.readOnly && !(window.FBSync && window.FBSync.enabled)) ? '<div class="banner">Firebase未設定のため、この端末のブラウザにのみ記録を保存します。</div>' : "")
+    + (TEST_MODE ? '<div class="banner test-banner">🧪 <b>テストモード</b>：ここで入力した内容は、チームのデータにも、この端末にも保存されません（ページを閉じると消えます）。'
+        + '<a href="' + location.pathname + '">テストを終わる</a></div>'
+      : ((!UI.readOnly && !(window.FBSync && window.FBSync.enabled)) ? '<div class="banner">Firebase未設定のため、この端末のブラウザにのみ記録を保存します。</div>' : ""))
     + contentHtml
     + "</main>"
     + renderConfirmDialog()
@@ -3393,6 +3408,30 @@ function renderGamesList() {
 }
 
 /* ---------- add-game tab ---------- */
+/* テストモード用：ホークス戦（2026/10/14 CSファイナル第1戦）のサンプル */
+var TEST_HAWKS_OFFICIAL = "{\"date\": \"2026-10-14\", \"opponent\": \"ホークス\", \"venue\": \"away\", \"tournament\": \"CSファイナル\", \"innings\": {\"top\": [0, 1, 2, 0, 0, 0, 1, 0, 0], \"bottom\": [1, 0, 0, 5, 0, 0, 0, 0]}, \"lineup\": [{\"name\": \"山縣\", \"number\": \"4\", \"atbatsIkz\": [\"8.H\", \"6.OG/1\", \"6.OG\", \"\", \"\", \"7.OF\", \"\", \"\", \"K\"]}, {\"name\": \"奈良間\", \"number\": \"3\", \"atbatsIkz\": [\"1.G\", \"8.OF\", \"\", \"K\", \"\", \"\", \"6.OG\", \"\", \"8.H\"]}, {\"name\": \"郡司\", \"number\": \"30\", \"atbatsIkz\": [\"4.OG\", \"\", \"8.H\", \"3.OG\", \"\", \"\", \"9.HR/1\", \"\", \"3.OG\"], \"stats\": {\"r\": 2}}, {\"name\": \"野村\", \"number\": \"5\", \"atbatsIkz\": [\"D\", \"\", \"7.H\", \"8.OF\", \"\", \"\", \"K\", \"\", \"9.OF\"], \"stats\": {\"r\": 1}}, {\"name\": \"万波\", \"number\": \"66\", \"atbatsIkz\": [\"8.OF\", \"\", \"B\", \"\", \"9.H\", \"\", \"4.OF\", \"\", \"\"]}, {\"name\": \"レイエス\", \"number\": \"99\", \"atbatsIkz\": [\"\", \"9.2H\", \"K\", \"\", \"6.W\", \"\", \"\", \"8.H\", \"\"], \"stats\": {\"r\": 1}}, {\"name\": \"柴田\", \"number\": \"47\", \"atbatsIkz\": [\"\", \"7.H\", \"9.GF/1\", \"\", \"K\", \"\", \"\", \"K\", \"\"]}, {\"name\": \"進藤\", \"number\": \"2\", \"atbatsIkz\": [\"\", \"K\", \"B\", \"\", \"\", \"4.OG\", \"\", \"6.OG\", \"\"]}, {\"name\": \"水野\", \"number\": \"7\", \"atbatsIkz\": [\"\", \"6.BH\", \"B/1\", \"\", \"\", \"K\", \"\", \"7.OF\", \"\"]}], \"pitchers\": [{\"name\": \"山﨑福也\", \"number\": \"33\", \"ip\": \"3.1\", \"h\": 4, \"r\": 5, \"er\": 2, \"bb\": 2, \"so\": 3, \"decision\": \"L\"}, {\"name\": \"大川\", \"number\": \"\", \"ip\": \"4.2\", \"h\": 3, \"r\": 1, \"er\": 0, \"bb\": 0, \"so\": 3, \"decision\": \"\"}]}";
+var TEST_HAWKS_PLAYERS = [["山縣", "4", "三塁手"], ["奈良間", "3", "二塁手"], ["郡司", "30", "左翼手"], ["野村", "5", "中堅手"], ["万波", "66", "右翼手"],
+  ["レイエス", "99", "指名打者"], ["柴田", "47", "一塁手"], ["進藤", "2", "捕手"], ["水野", "7", "遊撃手"]];
+function startTestHawksGame() {
+  var pid = function (name, no) {
+    var p = STATE.players.filter(function (x) { return x.name === name; })[0];
+    if (!p) { p = { id: "test_" + name, number: no, name: name, position: "", active: true }; STATE.players.push(p); }
+    return p.id;
+  };
+  var g = { id: uid(), date: "2026-10-14", opponent: "ホークス", venue: "away", ground: "みずほPayPayドーム", tournament: "CSファイナル",
+    innings: { top: [0, 0, 0, 0, 0, 0, 0, 0, 0], bottom: [0, 0, 0, 0, 0, 0, 0, 0, 0] }, note: "テスト", batting: [], pitching: [], _seq: Date.now() };
+  g.batting = TEST_HAWKS_PLAYERS.map(function (e) {
+    return { _rid: uid(), playerId: pid(e[0], e[1]), position: e[2], posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0, atbats: [] };
+  });
+  g.pitching = [{ _rid: uid(), playerId: pid("山﨑福也", "33"), ipOuts: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, decision: "" }];
+  STATE.games.push(g);
+  UI.tab = "addgame"; UI.viewPlayerId = null;
+  UI.currentGameId = g.id; UI.draftGame = clone(g); UI.isNewUnsavedGame = true; UI.draftEverSaved = false;
+  UI.liveInning = null; resetLiveInput();
+  UI.setupStep = 2;
+  renderApp(); window.scrollTo(0, 0);
+}
+
 function renderAddGameTab() {
   if (UI.currentGameId && UI.isNewUnsavedGame) {
     var g = STATE.games.find(function (x) { return x.id === UI.currentGameId; });
@@ -3414,7 +3453,11 @@ function renderAddGameTab() {
     + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:10px;">打席は <code>atbatsIkz</code> に ikz.jp 式の記号で書けます（例 <code>"8.H/1"</code>=中前打・打点1、<code>"6.OG"</code>=遊ゴロ、<code>"90.HR/4"</code>=右超本塁打・打点4、<code>"B"</code>=四球）。打点は末尾の丸数字（③）も可。<code>G</code>=犠打なので凡打は <code>OG/OF/OL</code>。得点・盗塁は <code>stats</code> に。任意で <code>bases</code> に打つ前の走者を同じ並びで書くと得点圏打率が正確になります（<code>"0"</code>=なし、<code>"13"</code>=1・3塁、空欄=自動推定）。</p>'
     + "</details>"
     + "</div>");
+  var testCard = TEST_MODE ? ('<div class="card test-card"><div class="section-title" style="margin-top:0;">🧪 テスト用：ホークス戦（10/14 CSファイナル第1戦）で試す</div>'
+    + '<p style="font-size:12.5px;color:var(--ink-muted);margin:0 0 10px;">日本ハムの9人のスタメンと先発 山﨑福也が入った状態で、先発メンバーの画面から始まります。試合中モードで入力したあと、試合の画面の「✎ 編集 → 公式スコアと照合」で、実際の記録（テスト用の公式スコア）と照らし合わせられます。</p>'
+    + '<button class="btn btn-primary" data-action="test-hawks-game">ホークス戦で試す</button></div>') : "";
   return '<div class="page-head"><div><h1>試合を追加</h1><div class="page-lede">新しい試合のスコア・成績を入力します。</div></div></div>'
+    + testCard
     + '<div class="card"><div class="empty-state"><div class="display">新しい試合を記録しましょう</div>'
     + "<p>日付・対戦相手・スコアボード・打撃/投手成績をこの画面で入力できます。</p>"
     + (UI.readOnly ? "" : '<button class="btn btn-primary" data-action="new-game">＋ 新しい試合の入力を始める</button>')
@@ -3636,7 +3679,8 @@ function renderReconcile(d) {
     + '<textarea id="rc-json" class="rc-json" placeholder="{ &quot;date&quot;: ..., &quot;lineup&quot;: [...] } を貼り付け">' + esc(UI.reconcileRaw || "") + "</textarea>"
     + '<div class="rc-actions"><label class="btn btn-sm rc-file">ファイルを選ぶ<input type="file" id="rc-file" accept=".json,.txt,application/json,text/plain" hidden></label>'
       + '<button class="btn btn-primary" data-action="rc-run">照合する</button>'
-      + '<button class="btn btn-sm" data-action="disable-reconcile">閉じる</button></div>'
+      + '<button class="btn btn-sm" data-action="disable-reconcile">閉じる</button>'
+      + (TEST_MODE ? '<button class="btn btn-sm" data-action="rc-test-sample">🧪 テスト用の公式スコア（ホークス戦）を入れる</button>' : "") + "</div>"
     + (UI.reconcileError ? '<div class="rc-err">' + esc(UI.reconcileError) + "</div>" : "");
   if (!rc) return html;
   var df = reconcileDiff(d, rc);
@@ -7632,6 +7676,13 @@ function onAppClick(e) {
   } else if (action === "disable-atbat-edit") {
     UI.atbatEditMode = false;
     UI.editingAtbatsRow = null;
+    renderApp();
+  } else if (action === "test-hawks-game") {
+    if (!TEST_MODE) return;
+    startTestHawksGame();
+  } else if (action === "rc-test-sample") {
+    if (!TEST_MODE) return;
+    UI.reconcileRaw = TEST_HAWKS_OFFICIAL;
     renderApp();
   } else if (action === "request-reconcile") {
     if (UI.readOnly) return;
