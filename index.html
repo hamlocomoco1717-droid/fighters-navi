@@ -3041,15 +3041,39 @@ function liveStateSnap() {
     batter: UI.liveBatterRid || "-", pitcher: UI.liveDefPitcherRid || "-"
   };
 }
+/* 取り消し履歴は直前の数件だけ、1件ずつ文字列にして保存する（チームの保存先は空の値や
+   空の配列を消してしまうため、文字列にしておけば形が崩れない）。保存したときの記録の「指紋」
+   （liveUndoSig）も残し、あとで表の編集などで記録が変わっていたら履歴は使わない */
+var LIVE_UNDO_KEEP = 5;
+function liveDataSig(d) {
+  var trim = function (arr, emp) { arr = (arr || []).slice(); while (arr.length && (arr[arr.length - 1] == null || arr[arr.length - 1] === emp)) arr.pop(); return arr; };
+  var parts = [
+    trim((d.innings && d.innings.top || []).map(n0), 0).join(","),
+    trim((d.innings && d.innings.bottom || []).map(n0), 0).join(",")
+  ];
+  (d.batting || []).forEach(function (b) {
+    parts.push(b._rid + ":" + trim((b.atbats || []).map(function (x) { return x == null ? "" : String(x); }), "").join("/") + ":" + n0(b.r) + ":" + n0(b.rbi) + ":" + n0(b.sb));
+  });
+  (d.pitching || []).forEach(function (p) {
+    parts.push(p._rid + ":" + [p.ipOuts, p.h, p.r, p.er, p.bb, p.so].map(n0).join(","));
+  });
+  var src = parts.join("|"), h = 5381;
+  for (var i = 0; i < src.length; i++) h = ((h << 5) + h + src.charCodeAt(i)) | 0;
+  return String(h);
+}
+function liveUndoPack() {
+  return (Array.isArray(UI.liveLog) ? UI.liveLog : []).slice(-LIVE_UNDO_KEEP).map(function (e) { return JSON.stringify(e); });
+}
 function liveStateKey(st) { return st ? [st.inning, st.half, st.outs, (st.bases || []).join(","), st.batter, st.pitcher].join("|") : ""; }
 /* 試合中モードで入力担当のときだけ、今の状況を試合のデータに書く。変わっていれば true */
 function liveStateCapture(d) {
   if (!d || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return false;
   if (typeof UI.liveInning !== "number" || UI.liveInning < 0 || UI.setupStep) return false;
   if (!liveIHoldControl(d)) return false;
-  var st = liveStateSnap();
-  if (liveStateKey(st) === liveStateKey(d.liveState)) return false;
+  var st = liveStateSnap(), undo = liveUndoPack(), sig = liveDataSig(d);
+  if (liveStateKey(st) === liveStateKey(d.liveState) && undo.join("\n") === (d.liveUndo || []).join("\n") && (!undo.length || sig === d.liveUndoSig)) return false;
   d.liveState = st;
+  if (undo.length) { d.liveUndo = undo; d.liveUndoSig = sig; } else { delete d.liveUndo; delete d.liveUndoSig; }
   return true;
 }
 /* 保存してある状況を試合中モードに戻す。戻せたら true */
@@ -3067,6 +3091,11 @@ function liveStateRestore(d) {
   });
   if (st.batter && st.batter !== "-" && has(st.batter)) UI.liveBatterRid = st.batter;
   if (st.pitcher && st.pitcher !== "-" && (d.pitching || []).some(function (p) { return p._rid === st.pitcher; })) UI.liveDefPitcherRid = st.pitcher;
+  /* 直前の数件の取り消し履歴（保存したあとに記録が変わっていなければ） */
+  UI.liveLog = [];
+  if (Array.isArray(d.liveUndo) && d.liveUndo.length && d.liveUndoSig === liveDataSig(d)) {
+    try { UI.liveLog = d.liveUndo.map(function (x) { return JSON.parse(x); }).filter(function (e) { return e && e.type; }); } catch (e) { UI.liveLog = []; }
+  }
   return true;
 }
 function persistDraft(successMsg, skipRender) {
@@ -8221,7 +8250,7 @@ function onAppClick(e) {
     /* まだ何も記録していない試合で先攻・後攻を変えたら、試合中モードを1回表（先攻なら攻撃・後攻なら守備）からやり直す */
     var svNothing = !(UI.liveLog && UI.liveLog.length) && sum(UI.draftGame.innings.top) + sum(UI.draftGame.innings.bottom) === 0
       && !(UI.draftGame.batting || []).some(function (b) { return (b.atbats || []).some(function (t) { return t; }); });
-    if ((UI.isNewUnsavedGame || UI.liveTakeover) && svNothing) { UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null]; delete UI.draftGame.liveState; }
+    if ((UI.isNewUnsavedGame || UI.liveTakeover) && svNothing) { UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null]; delete UI.draftGame.liveState; delete UI.draftGame.liveUndo; delete UI.draftGame.liveUndoSig; }
     persistDraft();
   } else if (action === "add-inning") {
     if (!UI.draftGame) return;
@@ -8256,7 +8285,7 @@ function onAppClick(e) {
     if (!UI.draftGame) return;
     UI.setupStep = null;
     UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null];
-    delete UI.draftGame.liveState;
+    delete UI.draftGame.liveState; delete UI.draftGame.liveUndo; delete UI.draftGame.liveUndoSig;
     if (UI.draftGame.batting.length) UI.liveBatterRid = liveSlotActiveRid(UI.draftGame, 0);
     if ((UI.draftGame.pitching || []).length) UI.liveDefPitcherRid = UI.draftGame.pitching[0]._rid;
     persistDraft();
@@ -8550,7 +8579,7 @@ function onAppClick(e) {
   } else if (action === "live-claim-control") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     liveClaimControl(UI.draftGame);
-    /* 前の担当の状況（走者・アウトなど）から続ける。前の担当の取り消し履歴は引き継がない */
+    /* 前の担当の状況（走者・アウトなど）と、直前の数件の取り消し履歴から続ける */
     UI.liveInning = null; UI.liveLog = []; UI.liveSheet = null; UI.livePendingResult = null;
     liveStateRestore(UI.draftGame);
     showToast("入力担当になりました");
@@ -8829,7 +8858,7 @@ function onAppClick(e) {
         if (Array.isArray(egD.innings.top) && egD.innings.top.length > egKeepLen) egD.innings.top.length = egKeepLen;
         if (Array.isArray(egD.innings.bottom) && egD.innings.bottom.length > egKeepLen) egD.innings.bottom.length = egKeepLen;
         /* 試合が終わったら、途中の状況（走者・アウト）は残さない */
-        delete egD.liveState;
+        delete egD.liveState; delete egD.liveUndo; delete egD.liveUndoSig;
         UI.liveInning = null;
         persistDraft(null, true);
       }
