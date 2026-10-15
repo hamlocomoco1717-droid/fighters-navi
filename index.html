@@ -662,6 +662,14 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-who .rec-when { white-space: normal; line-height: 1.4; }
 .mvp-season .title-row.rank-1 { font-size: 18px; }
 .title-empty { font-size: 12.5px; color: var(--ink-muted); margin: 0; }
+.th-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; font-size: 13px; }
+.th-counts-label { font-size: 11.5px; color: var(--ink-muted); }
+.th-count { padding: 2px 9px; border-radius: 99px; background: var(--surface-2); }
+.th-year { border-top: 1px solid var(--border); padding: 8px 0; }
+.th-year summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.th-row { display: grid; grid-template-columns: 6.5em 1fr auto; align-items: center; gap: 8px; padding: 4px 2px; font-size: 13.5px; }
+.th-title { color: var(--ink-muted); font-size: 12.5px; }
+.th-val { font-weight: 700; }
 .edit-menu-toggle { width: 100%; justify-content: center; }
 #sec-meta, #sec-batting, #sec-position, #sec-pitching, #sec-recap { scroll-margin-top: 120px; }
 .edit-menu-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
@@ -5398,7 +5406,9 @@ function renderPlayerStatsTab() {
   }
   if (sub === "titles") {
     return '<div class="page-head page-head-stadium"><div><h1>個人成績</h1><div class="page-lede">記録した試合から自動集計しています。</div></div>' + yearSelectHtml() + "</div>"
-      + subtabs + renderMilestoneCountdown() + renderTitleRace(games);
+      + subtabs + (isFinishedSeason(UI.statsYear)
+        ? renderTitleRace(games, UI.statsYear) + renderTitleHistory()
+        : renderMilestoneCountdown() + renderTitleRace(games, UI.statsYear) + renderTitleHistory());
   }
   if (sub === "fielding") {
     var fmap = computeFieldingAgg(games);
@@ -5836,7 +5846,8 @@ function renderMvp(games) {
 /* ---------- タイトル争い ----------
    打率・出塁率は規定打席（チーム試合数×2.5）に届いた選手だけ。数を競うタイトルは全員。
    同じ数字は同じ順位（3位までを表示）。全員0のタイトルは出さない */
-function renderTitleRace(games) {
+/* タイトルごとの順位（3位まで）。renderTitleRace と歴代タイトルで使う */
+function computeTitleBoards(games) {
   var qualPA = regulationPA(games);
   var bat = [];
   computeBattingAgg(games).forEach(function (c) { if (c.pa > 0) bat.push({ pid: c.playerId, c: c, rt: battingRates(c), qual: qualPA > 0 && c.pa >= qualPA }); });
@@ -5852,30 +5863,43 @@ function renderTitleRace(games) {
     { name: "最多勝", label: "勝利", unit: "勝", list: pit, val: function (r) { return r.c.w; } },
     { name: "最多奪三振", label: "奪三振", unit: "個", list: pit, val: function (r) { return r.c.so; } }
   ];
-  var fmt = function (t, v) { return t.rate ? fmtRate(v) : v + t.unit; };
-  var cards = titles.map(function (t) {
-    var rows = t.list.map(function (r) { return { pid: r.pid, v: t.val(r) }; })
-      .filter(function (r) { return r.v != null && r.v > 0; })
-      .sort(function (a, b) { return b.v - a.v; });
-    if (rows.length === 0) return t.rate ? ('<div class="title-card"><div class="title-name">' + t.name + '</div><p class="title-empty">規定打席に届いた選手がまだいません</p></div>') : "";
-    var ranked = [];
-    var rank = 0;
-    for (var i = 0; i < rows.length; i++) {
-      if (i === 0 || rows[i].v < rows[i - 1].v) rank = i + 1;
-      if (rank > 3) break;
-      rows[i].rank = rank;
-      ranked.push(rows[i]);
-    }
-    var leaders = ranked.filter(function (r) { return r.rank === 1; });
-    var next = rows[leaders.length];
+  return {
+    qualPA: qualPA,
+    boards: titles.map(function (t) {
+      var rows = t.list.map(function (r) { return { pid: r.pid, v: t.val(r) }; })
+        .filter(function (r) { return r.v != null && r.v > 0; })
+        .sort(function (a, b) { return b.v - a.v; });
+      var ranked = [], rank = 0;
+      for (var i = 0; i < rows.length; i++) {
+        if (i === 0 || rows[i].v < rows[i - 1].v) rank = i + 1;
+        if (rank > 3) break;
+        rows[i].rank = rank;
+        ranked.push(rows[i]);
+      }
+      var leaders = ranked.filter(function (r) { return r.rank === 1; });
+      return { t: t, rows: rows, ranked: ranked, leaders: leaders, next: rows[leaders.length] };
+    })
+  };
+}
+function fmtTitleVal(t, v) { return t.rate ? fmtRate(v) : v + t.unit; }
+/* 終わったシーズン（今年より前の年）なら true。タイトルは「確定」として見せる */
+function isFinishedSeason(year) { return year && year !== "all" && Number(year) < new Date().getFullYear(); }
+
+function renderTitleRace(games, year) {
+  var tb = computeTitleBoards(games);
+  var final = isFinishedSeason(year);
+  var cards = tb.boards.map(function (b) {
+    var t = b.t;
+    if (b.rows.length === 0) return t.rate ? ('<div class="title-card"><div class="title-name">' + t.name + '</div><p class="title-empty">規定打席に届いた選手が' + (final ? "いませんでした" : "まだいません") + "</p></div>") : "";
+    var ranked = b.ranked, leaders = b.leaders, next = b.next;
     var gap;
-    if (leaders.length > 1) gap = leaders.length + "人が首位で並んでいます";
-    else if (!next) gap = "独走中";
+    if (leaders.length > 1) gap = final ? leaders.length + "人で同時受賞" : leaders.length + "人が首位で並んでいます";
+    else if (!next) gap = final ? "文句なしの受賞" : "独走中";
     else {
-      var d = rows[0].v - next.v;
-      gap = "2位に " + (t.rate ? Math.round(d * 1000) + "厘" : d + t.unit) + " 差";
+      var d = b.rows[0].v - next.v;
+      gap = "2位に " + (t.rate ? Math.round(d * 1000) + "厘" : d + t.unit) + " 差" + (final ? "で受賞" : "");
     }
-    var medal = ["", "🥇", "🥈", "🥉"];
+    var medal = ["", final ? "👑" : "🥇", "🥈", "🥉"];
     var hidden = Math.max(0, ranked.length - 5);
     if (hidden) ranked = ranked.slice(0, 5);
     return '<div class="title-card">'
@@ -5883,14 +5907,40 @@ function renderTitleRace(games) {
       + ranked.map(function (r) {
         return '<div class="title-row rank-' + r.rank + '"><span class="title-medal">' + medal[r.rank] + "</span>"
           + '<button class="link-btn title-player" data-action="view-player" data-id="' + r.pid + '">' + esc(playerName(r.pid)) + "</button>"
-          + '<span class="title-val mono">' + fmt(t, r.v) + "</span></div>";
+          + '<span class="title-val mono">' + fmtTitleVal(t, r.v) + "</span></div>";
       }).join("")
       + (hidden ? '<div class="title-gap">ほか ' + hidden + "人が同じ順位</div>" : "")
       + '<div class="title-gap">' + gap + "</div></div>";
   }).join("");
-  return '<div class="card"><div class="section-title">タイトル争い</div>'
-    + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">打率・出塁率は規定打席（' + Math.round(qualPA) + '打席）に届いた選手だけが対象です。選手名を押すと選手ページを開きます。</div>'
+  var head = final ? esc(year) + "年のタイトル（確定）" : (year === "all" ? "通算のタイトル争い" : "タイトル争い");
+  return '<div class="card"><div class="section-title">' + head + "</div>"
+    + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">打率・出塁率は規定打席（' + Math.round(tb.qualPA) + '打席）に届いた選手だけが対象です。選手名を押すと選手ページを開きます。'
+    + (final ? "" : "上の「シーズン」で過去の年を選ぶと、その年のタイトルを振り返れます。") + "</div>"
     + '<div class="title-grid">' + cards + "</div></div>";
+}
+
+/* 歴代のタイトル受賞者（終わったシーズンだけ）と、選手ごとの受賞回数 */
+function renderTitleHistory() {
+  var years = availableYears().filter(isFinishedSeason);
+  if (!years.length) return "";
+  var count = {};
+  var blocks = years.map(function (y, yi) {
+    var tb = computeTitleBoards(gamesForYear(y));
+    var lines = tb.boards.filter(function (b) { return b.leaders.length; }).map(function (b) {
+      b.leaders.forEach(function (r) { count[r.pid] = (count[r.pid] || 0) + 1; });
+      return '<div class="th-row"><span class="th-title">' + b.t.name + "</span>"
+        + '<span class="th-who">' + b.leaders.map(function (r) { return '<button class="link-btn" data-action="view-player" data-id="' + r.pid + '">' + esc(playerName(r.pid)) + "</button>"; }).join("・") + "</span>"
+        + '<span class="th-val mono">' + fmtTitleVal(b.t, b.leaders[0].v) + "</span></div>";
+    }).join("");
+    return '<details class="th-year"' + (yi === 0 ? " open" : "") + '><summary>' + esc(y) + "年</summary>" + (lines || '<p class="title-empty">対象の記録がありません</p>') + "</details>";
+  }).join("");
+  var rank = Object.keys(count).sort(function (a, b) { return count[b] - count[a]; });
+  var top = rank.slice(0, 5).map(function (pid, i) {
+    return '<span class="th-count"><button class="link-btn" data-action="view-player" data-id="' + pid + '">' + esc(playerName(pid)) + "</button> " + count[pid] + "回</span>";
+  }).join("");
+  return '<div class="card"><div class="section-title">歴代タイトル</div>'
+    + (top ? '<div class="th-counts"><span class="th-counts-label">受賞回数</span>' + top + "</div>" : "")
+    + blocks + "</div>";
 }
 function tdnum(v, cls) { return '<td class="num mono' + (cls ? " " + cls : "") + '">' + n0(v) + "</td>"; }
 
