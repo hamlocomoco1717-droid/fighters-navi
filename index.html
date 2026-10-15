@@ -669,6 +669,92 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-game-head > span:last-child { white-space: nowrap; flex-shrink: 0; }
 .mvp-game-mine { font-size: 11.5px; color: var(--ink-muted); }
 .mvp-game-mine b { color: var(--ink); }
+/* ===== 試合中モード（新レイアウト） ===== */
+body.lv-on { padding-bottom: 76px; }
+.lv-control { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; }
+.lv-control-lbl { color: var(--ink-muted); }
+.lv-control input { flex: 1; min-width: 0; font-size: 13px; }
+.lv-board { background: var(--scoreboard-bg); color: #E9EDF7; border-radius: 12px; padding: 8px 10px 10px; }
+.lv-board-scroll { overflow-x: auto; }
+.lv-board table { width: 100%; border-collapse: collapse; font-family: "Roboto Mono", monospace; }
+.lv-board th { font-size: 11px; font-weight: 600; color: #8C99BF; padding: 3px 0; text-align: center; }
+.lv-board td { font-size: 15px; text-align: center; padding: 6px 0; min-width: 22px; cursor: pointer; color: #E9EDF7; }
+.lv-board td.lv-cur { background: rgba(232, 197, 108, 0.2); color: #E8C56C; font-weight: 700; border-radius: 6px; }
+.lv-board .lv-team { text-align: left; max-width: 64px; min-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: inherit; font-size: 12.5px; color: #C9D2EC; padding-right: 4px; }
+.lv-board .lv-team.lv-ours { color: #E8C56C; font-weight: 700; }
+.lv-board .lv-tot { border-left: 1px solid #2C3B66; color: #E8C56C; font-weight: 700; padding-left: 4px; }
+.lv-board .lv-hits { color: #E8C56C; }
+.lv-board-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2C3B66; }
+.lv-inn { font-size: 18px; font-weight: 700; }
+.lv-chip { background: #E8C56C; color: #15224A; font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
+.lv-chip.def { background: #9AA4C4; }
+.lv-outs { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+.lv-outs b { font-size: 12px; color: #C9D2EC; margin-left: 2px; }
+.lv-out { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #E8C56C; }
+.lv-out.on { background: #E5534B; border-color: #E5534B; }
+.lv-field { margin: 4px auto 0; max-width: 380px; }
+.lv-field svg { width: 100%; height: auto; display: block; }
+.lv-grass { fill: #3F8F3F; }
+.lv-dirt { fill: #C98A4B; }
+.lv-infield { fill: #4FA34A; }
+.lv-line { stroke: #F4F1E6; stroke-width: 2; }
+.lv-base { fill: #FFFFFF; stroke: #D8D2C4; stroke-width: 1; }
+.lv-runner { cursor: pointer; }
+.lv-rn-dot { fill: #15224A; stroke: #E8C56C; stroke-width: 2.5; }
+.lv-rn-no { fill: #FFFFFF; font-size: 13px; font-weight: 700; text-anchor: middle; font-family: "Roboto Mono", monospace; }
+.lv-rn-tag { fill: #FFFFFF; stroke: #15224A; stroke-width: 0.8; }
+.lv-rn-name { fill: #15224A; font-size: 11px; font-weight: 700; text-anchor: middle; }
+.lv-batter { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; }
+.lv-tag { flex: none; background: #E8C56C; color: #15224A; font-size: 12px; font-weight: 700; padding: 5px 8px; border-radius: 6px; }
+.lv-tag-def { background: #9AA4C4; color: #15224A; }
+.lv-batter-lbl, .lv-batter-note { font-size: 12.5px; color: var(--ink-muted); }
+.lv-select { flex: 1; min-width: 0; font-size: 16px; padding: 8px; font-weight: 700; }
+.lv-skip { flex: none; font-size: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-muted); }
+.lv-addp { display: flex; gap: 8px; align-items: center; }
+.lv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.lv-col { display: flex; flex-direction: column; gap: 6px; }
+.lv-col-h { text-align: center; font-size: 12px; font-weight: 700; }
+.lv-h-hit { color: #2E8B57; } .lv-h-on { color: #128A93; } .lv-h-out { color: #D0453A; } .lv-h-k { color: #D9822B; }
+.lv-btn { width: 100%; min-height: 54px; border: 0; border-radius: 10px; font-size: 16px; font-weight: 700; color: #FFFFFF; cursor: pointer; font-family: inherit; padding: 0 2px; }
+.lv-btn:active { transform: scale(0.97); }
+.lv-btn:disabled { opacity: 0.35; cursor: default; }
+.lv-c-h1 { background: #1F7A4D; } .lv-c-h2 { background: #3E9B68; } .lv-c-h3 { background: #A9D8B9; color: #0F3D25; } .lv-c-hr { background: #E8C56C; color: #15224A; }
+.lv-c-o1 { background: #0E7C86; } .lv-c-o2 { background: #4BA8B0; } .lv-c-o3 { background: #9ED3D7; color: #0B4A50; }
+.lv-c-a1 { background: #C0392B; } .lv-c-a2 { background: #DD6A5E; } .lv-c-a3 { background: #F0B1AA; color: #6B1A13; }
+.lv-c-k1 { background: #F2C48A; color: #6A3A08; } .lv-c-k2 { background: #FBE8D2; color: #8A4B0F; }
+.lv-adv { width: 100%; margin-top: 8px; padding: 10px; border-radius: 10px; border: 1px dashed var(--border); background: transparent; color: var(--ink-muted); font-size: 12.5px; font-family: inherit; cursor: pointer; }
+.lv-adv.on { border-style: solid; border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.lv-sheet-bg { position: fixed; inset: 0; background: rgba(10, 16, 36, 0.45); z-index: 120; }
+.lv-sheet { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 640px; max-height: 82vh; overflow-y: auto; z-index: 121;
+  background: var(--surface); color: var(--ink); border-radius: 18px 18px 0 0; padding: 16px 16px calc(18px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 24px rgba(10, 16, 36, 0.25); }
+.lv-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.lv-sheet-head b { font-size: 21px; }
+.lv-sheet-sub { font-size: 12.5px; color: var(--ink-muted); margin-top: 2px; }
+.lv-sheet-x { background: none; border: 0; color: var(--ink-muted); font-size: 14px; padding: 6px; font-family: inherit; cursor: pointer; }
+.lv-sheet-step { font-size: 13px; font-weight: 700; margin: 12px 0 8px; }
+.lv-dirs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.lv-dirs .btn { min-height: 48px; }
+.lv-pick { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+.lv-pick .btn { justify-content: center; min-height: 46px; font-size: 15px; }
+.lv-rbi { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+.lv-rbi b { font-size: 18px; min-width: 18px; text-align: center; }
+.lv-rbi-note { font-size: 11px; color: var(--ink-muted); }
+.lv-undo-bar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); z-index: 130;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px;
+  background: var(--win-soft); border: 1px solid var(--win); color: var(--ink); font-size: 14px; font-weight: 700; box-shadow: var(--shadow); }
+.lv-undo-bar button { flex: none; background: var(--surface); border: 1px solid var(--win); color: var(--win); border-radius: 8px; padding: 6px 12px; font-weight: 700; font-family: inherit; cursor: pointer; }
+.lv-more { margin-top: 14px; }
+.lv-more summary { cursor: pointer; font-size: 12.5px; color: var(--ink-muted); }
+.lv-more-body { margin-top: 10px; }
+.lv-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 110; display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--surface); border-top: 1px solid var(--border); padding: 4px 0 calc(4px + env(safe-area-inset-bottom)); }
+.lv-nav button { background: none; border: 0; color: var(--ink); font-size: 11.5px; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 0; cursor: pointer; }
+.lv-nav button:disabled { opacity: 0.35; }
+.lv-nav .lv-ic { font-size: 21px; line-height: 1.1; }
+.lv-nav .lv-nav-end { color: var(--loss); }
+.lv-log { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.lv-log-row { display: flex; gap: 10px; padding: 7px 8px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
+.lv-log-inn { flex: none; color: var(--ink-muted); font-size: 12px; min-width: 3.4em; }
 .mvp-best { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: var(--focus); color: var(--surface); font-weight: 700; }
 .th-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; font-size: 13px; }
 .th-counts-label { font-size: 11.5px; color: var(--ink-muted); }
@@ -2902,6 +2988,7 @@ function renderApp() {
   else if (UI.tab === "addgame") content = renderAddGameTab();
   else content = renderSettingsTab();
   document.getElementById("app").innerHTML = renderShell(content);
+  document.body.classList.toggle("lv-on", !!document.querySelector(".lv-nav"));
   saveViewState();
   /* 横スクロールのサブタブは、選択中のボタンが隠れないよう横方向だけ寄せる */
   document.querySelectorAll(".subtabs").forEach(function (bar) {
@@ -3813,107 +3900,183 @@ function renderGameDetail(g) {
         + "</div>"
         + (runnerLegend ? '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">' + runnerLegend + "</div>" : "");
       var scorerNameNow = getScorerName();
-      var exitTakeoverBtn = UI.liveTakeover
-        ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="margin-left:auto;">終了</button>' : "";
+      /* ===== 試合中モード（新レイアウト）：打者の行・大きな結果ボタン・下から出る確定シート ===== */
+      var lvBtn = function (action, key, label, cls, extra) {
+        return '<button class="lv-btn ' + cls + '" data-action="' + action + '"' + (key ? ' data-key="' + key + '"' : "") + (extra || "") + ">" + label + "</button>";
+      };
+      var lvCol = function (title, tcls, btns) {
+        return '<div class="lv-col"><div class="lv-col-h ' + tcls + '">' + title + "</div>" + btns + "</div>";
+      };
       if (!iHoldLive) {
-        liveBatterHtml = liveSituationHtml
-          + '<div class="banner readonly" style="margin:0 0 10px;">🔒 ' + esc(liveHolder.name || "他の人")
-            + ' さんが試合中モードで入力中です（' + liveTimeStr(liveHolder.ts) + " 更新）</div>"
-          + '<button class="btn btn-primary btn-sm" data-action="live-claim-control" style="width:100%;">入力を引き継ぐ</button>'
-          + (UI.liveTakeover ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="width:100%;margin-top:6px;">試合中モードを終了</button>' : "")
-          + '<hr class="rule" style="margin:14px 0;">';
+        liveBatterHtml = '<div class="banner readonly" style="margin:10px 0;">🔒 ' + esc(liveHolder.name || "他の人")
+            + " さんが試合中モードで入力中です（" + liveTimeStr(liveHolder.ts) + " 更新）</div>"
+          + '<button class="btn btn-primary" data-action="live-claim-control" style="width:100%;justify-content:center;">入力を引き継ぐ</button>'
+          + (UI.liveTakeover ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="width:100%;margin-top:6px;justify-content:center;">試合中モードを終了</button>' : "");
+      } else if (UI.liveHalfDone) {
+        /* 守備（相手の攻撃）：投手成績を自動集計。相手の打者は追わない */
+        var lvDefNeedP = d.pitching.length === 0;
+        liveBatterHtml = '<div class="lv-batter"><span class="lv-tag lv-tag-def">守備中</span>'
+            + (lvDefNeedP ? '<span class="lv-batter-note">先に今の投手を登録してください</span>'
+              : '<span class="lv-batter-lbl">投手</span><select id="live-def-pitcher-select" class="lv-select">' + defPitcherOptions + "</select>")
+          + "</div>"
+          + (lvDefNeedP
+            ? '<div class="lv-addp"><select id="live-add-pitcher-select" class="lv-select"><option value="">投手を選択…</option>' + defAddPitcherOptions + "</select>"
+              + '<button class="btn btn-primary btn-sm" data-action="live-add-def-pitcher">＋ 登板</button></div>'
+            : '<div class="lv-grid">'
+              + lvCol("安打", "lv-h-hit", lvBtn("live-def-result", "H1", "ヒット", "lv-c-h1") + lvBtn("live-def-result", "H2", "二塁打", "lv-c-h2") + lvBtn("live-def-result", "H3", "三塁打", "lv-c-h3") + lvBtn("live-def-result", "HR", "本塁打", "lv-c-hr"))
+              + lvCol("出塁", "lv-h-on", lvBtn("live-def-result", "BB", "四球", "lv-c-o1") + lvBtn("live-def-result", "ROE", "エラー", "lv-c-o2"))
+              + lvCol("アウト", "lv-h-out", lvBtn("live-def-result", "GO", "ゴロ", "lv-c-a1") + lvBtn("live-def-result", "FLY", "フライ", "lv-c-a2"))
+              + lvCol("三振・他", "lv-h-k", lvBtn("live-def-result", "SO", "三振", "lv-c-k1") + lvBtn("live-manual-out", "", "＋アウト", "lv-c-k2"))
+              + "</div>"
+              + (anyRunnerOn ? '<button class="lv-adv' + (UI.livePendingAdvance ? " on" : "") + '" data-action="live-toggle-advance">'
+                + (UI.livePendingAdvance === 2 ? "✓✓ 走者が2つ多く進んだ" : UI.livePendingAdvance === 1 ? "✓ 走者が1つ多く進んだ" : "走者が多く進んだときはここを押してから結果を選ぶ") + "</button>" : ""));
       } else {
-        var controlBar = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">'
-          + '<span style="color:var(--ink-muted);white-space:nowrap;">入力担当</span>'
-          + (scorerNameNow
-            ? '<b>' + esc(scorerNameNow) + "（あなた）</b>"
-            : '<input id="live-scorer-name" placeholder="あなたの名前を入力" maxlength="20" style="flex:1;min-width:0;font-size:13px;">')
-          + exitTakeoverBtn
+        /* 自チームの攻撃 */
+        var lvCurIdx = d.batting.findIndex(function (b) { return b._rid === curRid; });
+        liveBatterHtml = '<div class="lv-batter"><span class="lv-tag">攻撃中</span>'
+            + '<select id="live-batter-select" class="lv-select lv-select-batter">' + batterOpts + "</select>"
+            + '<button class="lv-skip" data-action="live-skip-batter" title="早退などでこの打者を飛ばして次へ">スキップ</button>'
+          + "</div>"
+          + '<div class="lv-grid">'
+            + lvCol("安打", "lv-h-hit", lvBtn("live-batter-result", "H1", "ヒット", "lv-c-h1") + lvBtn("live-batter-result", "H2", "二塁打", "lv-c-h2") + lvBtn("live-batter-result", "H3", "三塁打", "lv-c-h3") + lvBtn("live-batter-result", "HR", "本塁打", "lv-c-hr"))
+            + lvCol("出塁", "lv-h-on", lvBtn("live-batter-result", "BB", "四球", "lv-c-o1") + lvBtn("live-batter-result", "HBP", "死球", "lv-c-o2") + lvBtn("live-batter-result", "ROE", "エラー", "lv-c-o3"))
+            + lvCol("アウト", "lv-h-out", lvBtn("live-batter-result", "GO", "ゴロ", "lv-c-a1") + lvBtn("live-batter-result", "FLY", "フライ", "lv-c-a2") + lvBtn("live-batter-result", "LINE", "ライナー", "lv-c-a3") + lvBtn("live-batter-result", "SAC", "犠打", "lv-c-a3"))
+            + lvCol("三振・他", "lv-h-k", lvBtn("live-batter-result", "SO", "三振", "lv-c-k1")
+              + lvBtn("live-steal-btn", "", "盗塁", "lv-c-k2", anyRunnerOn ? "" : " disabled")
+              + lvBtn("live-manual-out", "", "走塁死", "lv-c-k2"))
           + "</div>";
-        var undoBtnHtml = '<button class="btn btn-sm" data-action="live-undo" style="margin-top:8px;width:100%;color:var(--loss);">↩ ひとつ取り消す' + (undoN ? "（" + undoN + "）" : "") + "</button>";
-        var endGameBtnHtml = '<button class="btn btn-sm" data-action="live-request-end-game" style="margin-top:6px;width:100%;color:var(--loss);border-color:var(--loss);">試合終了（コールド・時間切れなどで今のスコアに確定）</button>';
-        if (UI.liveHalfDone) {
-          liveBatterHtml =
-            controlBar
-            + liveSituationHtml
-            + '<div class="banner" style="margin:0 0 10px;">守備中（' + (li + 1) + "回" + liveHalfChar(d, true) + "）<br>"
-              + '<span style="font-size:11.5px;">下の結果ボタンで投手成績を自動集計。合わなければ相手の得点を下の＋で直接調整も可。終わったら「次へ ▶」で自チームの攻撃に進みます。</span></div>'
-            + defPanelHtml
-            + defFieldSubHtml
-            + '<div style="display:flex;gap:6px;margin:10px 0;">'
-              + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
-              + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
-            + "</div>"
-            + '<button class="btn btn-primary btn-sm" data-action="live-inning" data-delta="1" style="width:100%;">次へ ▶ 自チームの攻撃へ</button>'
-            + (d.venue === "away"
-                ? '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">この回（' + (li + 1) + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>"
-                : (li > 0 ? '<button class="btn btn-sm" data-action="live-resume-half" style="width:100%;margin-top:6px;">前の回（' + li + "回" + liveHalfChar(d, false) + "）の自チーム攻撃に戻る</button>" : ""))
-            + undoBtnHtml
-            + endGameBtnHtml
-            + '<hr class="rule" style="margin:14px 0;">';
-        } else {
-          liveBatterHtml =
-            controlBar
-            + liveSituationHtml
-            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
-              + '<span style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">今の打者</span>'
-              + '<select id="live-batter-select" style="flex:1;min-width:0;font-size:14px;">' + batterOpts + "</select>"
-              + '<button class="btn btn-sm" data-action="live-skip-batter" title="早退などでこの打者を飛ばして次へ" style="white-space:nowrap;padding:6px 8px;font-size:12px;">スキップ</button>'
-            + "</div>"
-            + '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:5px;">' + (li + 1) + "回" + ((d.venue === "away") ? "表" : "裏") + "に記録"
-              + (showStealPicker ? '　<b style="color:var(--ink);">盗塁</b> → 走者を選ぶ'
-                : pend ? '　<b style="color:var(--ink);">' + esc(liveResultShort(pend)) + "</b>" + (showGoOutStep ? " → アウトになったのは？" : showSacAdvStep ? " → 走者は進んだ？" : needDirNow ? " → 打球方向を選ぶ" : "") : "　結果を選ぶ") + "</div>"
-            + (showStealPicker
-              ? '<button class="btn btn-sm" data-action="live-steal-cancel" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← キャンセル</button>'
-                + '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:6px;">盗塁したのはどの走者？</div>'
-                + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;">' + stealPickerBtns + "</div>"
-              : showGoOutStep
-              ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
-                + goOutTargetBtns
-                + goOutCommitHtml
-              : showSacAdvStep
-              ? '<button class="btn btn-sm" data-action="live-cancel-go-out" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 方向を選び直す</button>'
-                + sacAdvTargetBtns
-                + sacAdvCommitHtml
-              : needDirNow
-              ? '<button class="btn btn-sm" data-action="live-cancel-pending" style="width:100%;margin-bottom:6px;color:var(--ink-muted);">← 結果を選び直す</button>'
-                + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + dirBtns + "</div>"
-              : '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + resultBtns + "</div>")
-            + '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">'
-              + '<span style="font-size:12px;color:var(--ink-muted);">打点</span>'
-              + '<button class="btn btn-sm" data-action="live-rbi" data-delta="-1" style="min-width:38px;">－</button>'
-              + '<span class="mono" style="font-size:18px;font-weight:700;min-width:18px;text-align:center;">' + liveRbi + "</span>"
-              + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1" style="min-width:38px;">＋</button>'
-              + '<span style="font-size:10.5px;color:var(--ink-muted);">0なら自動</span>'
-            + "</div>"
-            + advanceToggleHtml
-            + '<div style="display:flex;gap:6px;margin-top:10px;">'
-              + '<button class="btn btn-sm" data-action="live-manual-out" style="flex:1;">＋アウト（走塁死など）</button>'
-              + '<button class="btn btn-sm" data-action="live-end-half" style="flex:1;">▶ スリーアウト</button>'
-            + "</div>"
-            + undoBtnHtml
-            + endGameBtnHtml
-            + '<hr class="rule" style="margin:14px 0;">';
+        /* 結果を選んだあと：下から出るシートで方向・アウトの人・進塁・打点を決める */
+        if (pend || showStealPicker) {
+          var lvSheetTitle = showStealPicker ? "盗塁" : esc(liveResultShort(pend));
+          var lvSheetSub = showStealPicker ? "盗塁したのはどの走者？"
+            : showGoOutStep ? "アウトになった人を選んで確定"
+            : showSacAdvStep ? "進んだ走者を選んで確定"
+            : "打球の方向を選ぶと記録します";
+          var lvSheetBody = showStealPicker
+            ? '<div class="lv-pick">' + stealPickerBtns + "</div>"
+            : showGoOutStep ? goOutTargetBtns + goOutCommitHtml
+            : showSacAdvStep ? sacAdvTargetBtns + sacAdvCommitHtml
+            : '<div class="lv-dirs">' + dirBtns + "</div>"
+              + '<div class="lv-rbi"><span>打点</span>'
+                + '<button class="btn btn-sm" data-action="live-rbi" data-delta="-1">－</button>'
+                + '<b class="mono">' + liveRbi + "</b>"
+                + '<button class="btn btn-sm" data-action="live-rbi" data-delta="1">＋</button>'
+                + '<span class="lv-rbi-note">0なら自動で数えます</span></div>'
+              + advanceToggleHtml;
+          liveBatterHtml += '<div class="lv-sheet-bg" data-action="' + (showStealPicker ? "live-steal-cancel" : "live-cancel-pending") + '"></div>'
+            + '<div class="lv-sheet" role="dialog">'
+              + '<div class="lv-sheet-head"><div><b>' + lvSheetTitle + "</b>"
+                + '<div class="lv-sheet-sub">' + (lvCurIdx >= 0 ? (lvCurIdx + 1) + "番 " + esc(playerName(d.batting[lvCurIdx].playerId)) + "・" : "") + liveBasesLabel() + "・" + outsNow + "アウト</div></div>"
+                + '<button class="lv-sheet-x" data-action="' + (showStealPicker ? "live-steal-cancel" : "live-cancel-pending") + '">キャンセル</button></div>'
+              + '<div class="lv-sheet-step">' + lvSheetSub + "</div>"
+              + lvSheetBody
+            + "</div>";
         }
+      }
+      /* 走者を押したときのメニュー（盗塁・進塁・戻す・走塁死） */
+      if (iHoldLive && UI.liveRunnerMenu != null && basesNow[UI.liveRunnerMenu]) {
+        var rmB = UI.liveRunnerMenu, rmRid = basesNow[rmB];
+        var rmRow = d.batting.filter(function (b) { return b._rid === rmRid; })[0];
+        var rmIdx = rmRow ? d.batting.indexOf(rmRow) : -1;
+        var rmCanSteal = !UI.liveHalfDone && (rmB === 2 || !basesNow[rmB + 1]);
+        liveBatterHtml += '<div class="lv-sheet-bg" data-action="live-runner-menu-close"></div>'
+          + '<div class="lv-sheet" role="dialog">'
+            + '<div class="lv-sheet-head"><div><b>' + ["一塁", "二塁", "三塁"][rmB] + "走者</b>"
+              + '<div class="lv-sheet-sub">' + (rmRow ? (rmIdx + 1) + "番 " + esc(playerName(rmRow.playerId)) : "相手の走者") + "</div></div>"
+              + '<button class="lv-sheet-x" data-action="live-runner-menu-close">閉じる</button></div>'
+            + '<div class="lv-pick">'
+              + (rmCanSteal && rmRow ? '<button class="btn" data-action="live-steal-pick" data-base="' + rmB + '">盗塁（記録する）</button>' : "")
+              + '<button class="btn" data-action="live-steal" data-base="' + rmB + '">' + (rmB === 2 ? "生還（暴投など）" : "1つ進める（暴投など）") + "</button>"
+              + '<button class="btn" data-action="live-retreat" data-base="' + rmB + '">1つ戻す（訂正）</button>'
+              + '<button class="btn" data-action="live-clear-base" data-base="' + rmB + '" style="color:var(--loss);">アウト（走塁死・けん制死）</button>'
+            + "</div></div>";
+      }
+      /* 経過（この試合中モードで記録した内容） */
+      if (iHoldLive && UI.liveLogOpen) {
+        var lgList = (UI.liveLog || []).slice().reverse();
+        liveBatterHtml += '<div class="lv-sheet-bg" data-action="live-log-close"></div>'
+          + '<div class="lv-sheet" role="dialog">'
+            + '<div class="lv-sheet-head"><div><b>経過</b><div class="lv-sheet-sub">新しい順。いちばん上だけ「取消」で戻せます</div></div>'
+              + '<button class="lv-sheet-x" data-action="live-log-close">閉じる</button></div>'
+            + '<div class="lv-log">' + (lgList.length ? lgList.map(function (e) {
+                return '<div class="lv-log-row"><span class="lv-log-inn">' + esc(liveLogInning(d, e)) + "</span><span>" + esc(liveLogText(d, e)) + "</span></div>";
+              }).join("") : '<p class="title-empty">まだ記録がありません。</p>') + "</div>"
+          + "</div>";
       }
     }
 
-    liveHtml = '<div class="section-title">⚾ 試合中モード（スマホ向け）' + (UI.liveTakeover ? "<span style=\"font-weight:400;font-size:12px;color:var(--ink-muted);\">　保存済みの試合を編集中</span>" : "") + "</div>"
-      + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">'
-      + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + ((li <= 0 && liveOnTop(d)) || !iHoldLive ? " disabled" : "") + ">◀ 前へ</button>"
-      + '<span class="display" style="font-size:20px;min-width:70px;text-align:center;">' + (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone) + "</span>"
-      + '<button class="btn btn-sm" data-action="live-inning" data-delta="1"' + (iHoldLive ? "" : " disabled") + ">次へ ▶</button>"
-      + "</div>"
-      + liveBatterHtml
-      + '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-        + (liveOnTop(d)
-            ? liveSideBlock("top", topLabel, liTop, weAreAway)
-            : liveSideBlock("bottom", bottomLabel, liBot, !weAreAway))
-      + "</div>"
-      + '<div class="mono" style="text-align:center;font-size:14px;margin-top:12px;color:var(--ink-muted);">合計 &nbsp;'
-        + esc(topLabel) + ' <b style="color:var(--ink);font-size:18px;">' + sum(d.innings.top) + "</b> &nbsp;-&nbsp; "
-        + '<b style="color:var(--ink);font-size:18px;">' + sum(d.innings.bottom) + "</b> " + esc(bottomLabel) + "</div>"
-      + '<p style="color:var(--ink-muted);font-size:11.5px;margin-top:8px;text-align:center;">打席結果からアウト・走者・自チームの得点が自動で進みます。3アウトで自動的に次の半回（表→裏→次の回の表…）へ。相手の得点は下の＋で入れ、「次へ ▶」で進めます。走塁死（タッチアウトなど）は走者の「×」でアウトも加算。単なる入力ミスの取り消しは「↩ ひとつ取り消す」で。すべて即保存・全員に同期。</p>';
+    /* ---- 共通：スコアボード・グラウンド・取り消しバー・下の操作バー ---- */
+    var lvBases = liveBasesArr();
+    var lvOuts = UI.liveOuts || 0;
+    var lvAway = d.venue === "away";
+    var lvOnTop = liveOnTop(d);
+    var lvN = Math.max(n0(STATE.team.inningsPerGame) || 7, inningCount, li + 1);
+    var lvHits = { us: (d.batting || []).reduce(function (a, b) { return a + n0(b.h); }, 0), them: (d.pitching || []).reduce(function (a, p) { return a + n0(p.h); }, 0) };
+    var lvRow = function (side) {
+      var arr = d.innings[side] || [], ours = (side === "top") === lvAway, cells = "";
+      for (var k = 0; k < lvN; k++) {
+        var begun = k < li || (k === li && (side === "top" || !lvOnTop)) || n0(arr[k]) > 0;
+        var cur = k === li && ((side === "top") === lvOnTop);
+        cells += "<td" + (iHoldLive ? ' data-action="live-goto-inning" data-inning="' + k + '" data-half="' + (ours ? "bat" : "field") + '"' : "")
+          + (cur ? ' class="lv-cur"' : "") + ">" + (begun ? n0(arr[k]) : "-") + "</td>";
+      }
+      return '<tr><th class="lv-team' + (ours ? " lv-ours" : "") + '">' + esc(side === "top" ? topLabel : bottomLabel) + "</th>" + cells
+        + '<td class="lv-tot">' + sum(arr) + '</td><td class="lv-hits">' + (ours ? lvHits.us : lvHits.them) + "</td></tr>";
+    };
+    var lvHead = "";
+    for (var hk = 0; hk < lvN; hk++) lvHead += "<th>" + (hk + 1) + "</th>";
+    var lvOutDots = "";
+    for (var od = 0; od < 3; od++) lvOutDots += '<span class="lv-out' + (od < lvOuts ? " on" : "") + '"></span>';
+    var lvBoard = '<div class="lv-board"><div class="lv-board-scroll"><table>'
+        + '<tr><th class="lv-team"></th>' + lvHead + '<th class="lv-tot">計</th><th class="lv-hits">安</th></tr>'
+        + lvRow("top") + lvRow("bottom") + "</table></div>"
+      + '<div class="lv-board-foot"><span class="lv-inn">' + (li + 1) + "回" + liveHalfChar(d, !!UI.liveHalfDone) + "</span>"
+        + '<span class="lv-chip' + (UI.liveHalfDone ? " def" : "") + '">' + (UI.liveHalfDone ? "守備中" : esc(ourTeamLabel) + "攻撃") + "</span>"
+        + '<span class="lv-outs">' + lvOutDots + "<b>OUT</b></span></div></div>";
+    var lvField = liveFieldSvg(lvBases, d, iHoldLive);
+    /* 記録した直後に出る「取り消す」バー（6秒） */
+    var lvLog = UI.liveLog || [];
+    lvLog.forEach(function (e) { if (!e.ts) e.ts = Date.now(); });
+    var lvLast = lvLog[lvLog.length - 1];
+    var lvUndoBar = "";
+    if (iHoldLive && lvLast && Date.now() - lvLast.ts < 6000) {
+      lvUndoBar = '<div class="lv-undo-bar"><span>' + esc(liveLogText(d, lvLast)) + " → " + esc(liveBasesLabel()) + "・" + lvOuts + "アウト</span>"
+        + '<button data-action="live-undo">取り消す</button></div>';
+      clearTimeout(UI._lvBarTimer);
+      UI._lvBarTimer = setTimeout(function () { UI._lvBarTimer = null; if (document.querySelector(".lv-undo-bar")) renderApp(); }, 6000 - (Date.now() - lvLast.ts) + 50);
+    }
+    var lvControl = '<div class="lv-control"><span class="lv-control-lbl">入力担当</span>'
+      + (iHoldLive
+        ? (getScorerName() ? "<b>" + esc(getScorerName()) + "（あなた）</b>" : '<input id="live-scorer-name" placeholder="あなたの名前" maxlength="20">')
+        : "<b>" + esc(liveHolder.name || "他の人") + "</b>")
+      + (UI.liveTakeover && iHoldLive ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="margin-left:auto;">終了</button>' : "")
+      + "</div>";
+    var lvMore = iHoldLive ? '<details class="lv-more"><summary>その他の操作（得点の直接修正・投手交代・守備交代・回の移動）</summary>'
+        + '<div class="lv-more-body">'
+          + '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + (lvOnTop ? liveSideBlock("top", topLabel, liTop, lvAway) : liveSideBlock("bottom", bottomLabel, liBot, !lvAway)) + "</div>"
+          + (d.pitching.length ? '<div class="field-row" style="align-items:flex-end;gap:8px;margin-top:10px;"><div class="field" style="flex:1 1 200px;"><label>投手交代（新しい投手）</label><select id="live-add-pitcher-select"><option value="">選手を選択…</option>' + (defAddPitcherOptions || "") + "</select></div>"
+            + '<button class="btn btn-sm" data-action="live-add-def-pitcher">＋ 登板</button></div>' : "")
+          + (defFieldSubHtml || "")
+          + '<div style="display:flex;gap:6px;margin-top:10px;">'
+            + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + (li <= 0 && lvOnTop ? " disabled" : "") + ' style="flex:1;">◀ 前の半回へ</button>'
+            + '<button class="btn btn-sm" data-action="live-inning" data-delta="1" style="flex:1;">次の半回へ ▶</button></div>'
+          + '<p style="color:var(--ink-muted);font-size:11.5px;margin:8px 0 0;">スコアボードの数字を押しても、その回へ移動できます。記録はすべて即保存・全員に同期されます。</p>'
+        + "</div></details>" : "";
+    var lvNav = iHoldLive ? '<nav class="lv-nav">'
+        + '<button data-action="live-undo"' + (lvLog.length ? "" : " disabled") + '><span class="lv-ic">↶</span>取消</button>'
+        + '<button data-action="live-log-open"><span class="lv-ic">◷</span>経過</button>'
+        + '<button data-action="live-goto-order"><span class="lv-ic">☰</span>オーダー</button>'
+        + '<button data-action="live-end-half"><span class="lv-ic">»</span>チェンジ</button>'
+        + '<button data-action="live-request-end-game" class="lv-nav-end"><span class="lv-ic">⚑</span>試合終了</button>'
+      + "</nav>" : "";
+    if (!(d.batting || []).length && !UI.liveHalfDone) {
+      liveBatterHtml = '<div class="banner" style="margin:10px 0;">先に打順（出場選手）を登録すると、ここで打席の結果をタップで記録できます。</div>'
+        + '<button class="btn btn-primary" data-action="live-goto-order" style="width:100%;justify-content:center;">打順を登録する</button>';
+    }
+    liveHtml = '<div class="lv-wrap">'
+      + '<div class="section-title" style="margin-top:0;">⚾ 試合中モード' + (UI.liveTakeover ? '<span style="font-weight:400;font-size:12px;color:var(--ink-muted);">　保存済みの試合を編集中</span>' : "") + "</div>"
+      + lvControl + lvUndoBar + lvBoard + lvField + liveBatterHtml + lvMore + lvNav
+      + "</div>";
   }
 
   var canEditInnings = UI.isNewUnsavedGame || UI.gameMetaEditMode;
@@ -4662,6 +4825,60 @@ function liveRunnerShort(d, rid) {
   if (p && p.number != null && p.number !== "") return String(p.number);
   return (playerName(row.playerId) || "").slice(0, 2);
 }
+/* 試合中モードの「経過」と取り消しバーの文言 */
+function liveLogInning(d, e) {
+  var inn = typeof e.snapInning === "number" ? e.snapInning : 0;
+  return (inn + 1) + "回" + liveHalfChar(d, !!e.snapHalfDone);
+}
+function liveLogText(d, e) {
+  var who = function (rid) {
+    var row = (d.batting || []).filter(function (b) { return b._rid === rid; })[0];
+    return row ? playerName(row.playerId) : "走者";
+  };
+  var DEF = { H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", BB: "四球", ROE: "エラー", GO: "ゴロアウト", FLY: "フライアウト", SO: "三振" };
+  switch (e.type) {
+    case "atbat": return who(e.rid) + " " + (e.token || "") + (n0(e.rbi) ? " " + n0(e.rbi) + "打点" : "");
+    case "defatbat": return "相手の打者 " + (DEF[e.key] || "");
+    case "steal": return who(e.snapBases && e.snapBases[e.base] || e.rid) + (e.credit ? " 盗塁" : " 進塁");
+    case "retreat": return "走者を1つ戻す";
+    case "clearbaseout": return "走者アウト（走塁死）";
+    case "out": return "アウト追加";
+    case "endhalf": return "チェンジ";
+  }
+  return "記録";
+}
+/* 試合中モードの大きなグラウンド。走者は「打順＋名前」で表示し、押すと走者メニューが開く */
+function liveFieldSvg(bases, d, canTap) {
+  var P = { 0: [222, 168], 1: [160, 106], 2: [98, 168] };
+  var runner = function (bi) {
+    var rid = bases[bi];
+    if (!rid) return "";
+    var row = (d.batting || []).filter(function (b) { return b._rid === rid; })[0];
+    var no = row ? String(d.batting.indexOf(row) + 1) : "";
+    var nm = row ? playerName(row.playerId) : "走者";
+    if (nm.length > 5) nm = nm.slice(0, 5);
+    var x = P[bi][0], y = P[bi][1];
+    var lw = Math.max(46, nm.length * 12 + (no ? 22 : 10));
+    var lx = bi === 0 ? x - lw / 2 + 10 : bi === 2 ? x - lw / 2 - 10 : x - lw / 2;
+    return '<g class="lv-runner"' + (canTap ? ' data-action="live-runner-menu" data-base="' + bi + '"' : "") + ">"
+      + '<circle cx="' + x + '" cy="' + (y - 4) + '" r="15" class="lv-rn-dot"/>'
+      + '<text x="' + x + '" y="' + (y + 1) + '" class="lv-rn-no">' + (no || "●") + "</text>"
+      + '<rect x="' + lx + '" y="' + (y + 13) + '" width="' + lw + '" height="18" rx="5" class="lv-rn-tag"/>'
+      + '<text x="' + (lx + lw / 2) + '" y="' + (y + 26) + '" class="lv-rn-name">' + (no ? no + "番 " : "") + esc(nm) + "</text></g>";
+  };
+  var base = function (x, y) { return '<rect x="' + (x - 7) + '" y="' + (y - 7) + '" width="14" height="14" class="lv-base" transform="rotate(45 ' + x + " " + y + ')"/>'; };
+  return '<div class="lv-field"><svg viewBox="0 36 320 222" role="img" aria-label="塁上の走者">'
+    + '<defs><pattern id="lvMow" width="28" height="28" patternUnits="userSpaceOnUse"><rect width="14" height="28" fill="#3F8F3F"/><rect x="14" width="14" height="28" fill="#4A9C47"/></pattern></defs>'
+    + '<path d="M160 262 L8 110 A215 215 0 0 1 312 110 Z" style="fill:url(#lvMow)"/>'
+    + '<polygon points="160,92 236,168 160,244 84,168" class="lv-dirt" stroke-linejoin="round"/>'
+    + '<polygon points="160,120 208,168 160,216 112,168" class="lv-infield"/>'
+    + '<circle cx="160" cy="168" r="10" class="lv-dirt"/>'
+    + '<line x1="160" y1="230" x2="25" y2="95" class="lv-line"/><line x1="160" y1="230" x2="295" y2="95" class="lv-line"/>'
+    + base(222, 168) + base(160, 106) + base(98, 168)
+    + '<path d="M153,224 h14 v6 l-7,6 -7,-6 z" class="lv-base"/>'
+    + runner(0) + runner(1) + runner(2)
+    + "</svg></div>";
+}
 /* 野球場テイストのダイヤモンド（占有塁を金色で表示し、走者名を添える） */
 function liveDiamondSvg(bases, d) {
   var gold = "#E8C56C", dim = "#2C3B66", line = "#42538A";
@@ -4699,7 +4916,7 @@ function liveSteal(baseIdx, creditSb) {
   var row = (d.batting || []).filter(function (x) { return x._rid === rid; })[0];
   var prevSb = row ? n0(row.sb) : 0;
   var entry = {
-    type: "steal", rid: rid, prevSb: prevSb,
+    type: "steal", rid: rid, prevSb: prevSb, credit: !!creditSb, base: baseIdx,
     snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
     snapBases: b.slice(), snapInning: UI.liveInning, snapHalfDone: !!UI.liveHalfDone
   };
@@ -5147,7 +5364,7 @@ function liveCommitDefAtbat(resultKey) {
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push({
-    type: "defatbat", prid: prid, prevStat: prevStat,
+    type: "defatbat", prid: prid, prevStat: prevStat, key: resultKey,
     snapInnings: snapInnings, snapOuts: snapOuts, snapBases: snapBases, snapInning: snapInning, snapHalfDone: snapHalfDone
   });
   UI.livePendingAdvance = 0;
@@ -6809,6 +7026,9 @@ function onAppClick(e) {
   if (UI.msAchievers && action !== "ms-achievers") UI.msAchievers = null;
   if (UI.mvpMonth && action !== "mvp-month-games") UI.mvpMonth = null;
   if (UI.titleGames && action !== "title-games") UI.titleGames = null;
+  /* 試合中モードの走者メニュー・経過シートは、何か押したら閉じる */
+  if (UI.liveRunnerMenu != null && action !== "live-runner-menu") UI.liveRunnerMenu = null;
+  if (UI.liveLogOpen && action !== "live-log-open") UI.liveLogOpen = false;
 
   if (action === "tab") {
     var nextTab = el.getAttribute("data-tab");
@@ -7015,6 +7235,17 @@ function onAppClick(e) {
     UI.draftGame.innings.top.splice(ridx, 1);
     UI.draftGame.innings.bottom.splice(ridx, 1);
     persistDraft();
+  } else if (action === "live-runner-menu") {
+    UI.liveRunnerMenu = parseInt(el.getAttribute("data-base"), 10);
+    renderApp();
+  } else if (action === "live-runner-menu-close" || action === "live-log-close") {
+    renderApp();
+  } else if (action === "live-log-open") {
+    UI.liveLogOpen = true;
+    renderApp();
+  } else if (action === "live-goto-order") {
+    var ordCard = document.getElementById("sec-batting");
+    if (ordCard) ordCard.scrollIntoView({ block: "start", behavior: "smooth" });
   } else if (action === "live-run") {
     if (!UI.draftGame || UI.readOnly) return;
     if ((UI.isNewUnsavedGame || UI.liveTakeover) && !liveGuardControl(UI.draftGame)) return;
