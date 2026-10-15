@@ -678,6 +678,7 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .th-row { display: grid; grid-template-columns: 6.5em 1fr auto; align-items: center; gap: 8px; padding: 4px 2px; font-size: 13.5px; }
 .th-title { color: var(--ink-muted); font-size: 12.5px; }
 .th-val { font-weight: 700; font-size: 13.5px; background: transparent; border: 1px solid var(--border); border-radius: 99px; padding: 2px 9px; color: var(--ink); cursor: pointer; white-space: nowrap; }
+.tg-open { background: transparent; border: 0; padding: 0; color: inherit; font-size: inherit; cursor: pointer; }
 .tg-line { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--ink-muted); }
 .tg-line.tg-hit { color: var(--ink); font-weight: 600; }
 .tg-line.tg-none { opacity: .6; }
@@ -5961,7 +5962,7 @@ function renderTitleRace(games, year) {
       + ranked.map(function (r) {
         return '<div class="title-row rank-' + r.rank + '"><span class="title-medal">' + medal[r.rank] + "</span>"
           + '<button class="link-btn title-player" data-action="view-player" data-id="' + r.pid + '">' + esc(playerName(r.pid)) + "</button>"
-          + '<span class="title-val mono">' + fmtTitleVal(t, r.v) + "</span></div>";
+          + '<button class="title-val mono tg-open" data-action="title-games" data-year="' + esc(year || "all") + '" data-title="' + esc(t.name) + '" data-pid="' + r.pid + '" title="試合ごとの' + t.label + 'を見る">' + fmtTitleVal(t, r.v) + " ›</button></div>";
       }).join("")
       + (hidden ? '<div class="title-gap">ほか ' + hidden + "人が同じ順位</div>" : "")
       + '<div class="title-gap">' + gap + "</div></div>";
@@ -5995,6 +5996,11 @@ function renderTitleGamesDialog() {
   var board = computeTitleBoards(gamesForYear(tg.year)).boards.filter(function (b) { return b.t.name === tg.name; })[0];
   if (!board || !board.leaders.length) return "";
   var t = board.t, leaders = board.leaders;
+  /* タイトル争いから開いたときは、押した選手の分だけ */
+  if (tg.pid) leaders = board.rows.filter(function (r) { return r.pid === tg.pid; });
+  if (!leaders.length) return "";
+  var final = isFinishedSeason(tg.year);
+  var medal = tg.pid ? ({ 1: final ? "👑" : "🥇", 2: "🥈", 3: "🥉" }[leaders[0].rank] || "") : "👑";
   var run = {};
   var rows = games.map(function (g) {
     var res = gameResult(g), tot = gameTotals(g);
@@ -6020,8 +6026,8 @@ function renderTitleGamesDialog() {
       + lines + "</button>";
   }).join("");
   return '<div class="modal-overlay" data-action="title-games-close"><div class="modal-box" data-action="ms-noop">'
-    + '<div class="section-title" style="margin-top:0;">' + esc(tg.year) + "年 " + t.name + "</div>"
-    + '<div class="title-gap" style="margin:-4px 0 8px;">👑 ' + leaders.map(function (r) { return esc(playerName(r.pid)); }).join("・") + "（" + fmtTitleVal(t, leaders[0].v) + "）の試合ごとの" + t.label + "です。試合を押すと試合の画面を開きます。</div>"
+    + '<div class="section-title" style="margin-top:0;">' + (tg.year === "all" ? "通算 " : esc(tg.year) + "年 ") + t.name + (final || !tg.pid ? "" : "争い") + "</div>"
+    + '<div class="title-gap" style="margin:-4px 0 8px;">' + medal + " " + leaders.map(function (r) { return esc(playerName(r.pid)); }).join("・") + "（" + fmtTitleVal(t, leaders[0].v) + "）の試合ごとの" + t.label + "です。試合を押すと試合の画面を開きます。</div>"
     + '<div class="mvp-game-list">' + rows + "</div>"
     + '<div class="modal-actions"><button class="btn btn-primary" data-action="title-games-close">閉じる</button></div>'
     + "</div></div>";
@@ -7388,7 +7394,7 @@ function onAppClick(e) {
     UI.mvpMonth = el.getAttribute("data-month");
     renderApp();
   } else if (action === "title-games") {
-    UI.titleGames = { year: el.getAttribute("data-year"), name: el.getAttribute("data-title") };
+    UI.titleGames = { year: el.getAttribute("data-year"), name: el.getAttribute("data-title"), pid: el.getAttribute("data-pid") || null };
     renderApp();
   } else if (action === "title-games-close") {
     renderApp();
