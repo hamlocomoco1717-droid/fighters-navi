@@ -627,7 +627,12 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .ms-row.ms-own { grid-template-areas: "goal goal left" "bar bar cur"; }
 .ms-player { grid-area: player; font-size: 14px; font-weight: 700; }
 .ms-goal { grid-area: goal; color: var(--ink-muted); font-size: 12.5px; }
-.ms-diff { margin-left: 6px; font-size: 10.5px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--border); white-space: nowrap; }
+.ms-diff { margin-left: 6px; font-size: 10.5px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--border); white-space: nowrap; background: transparent; color: var(--ink-muted); font-family: inherit; cursor: pointer; }
+.ms-ach-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; margin-bottom: 14px; }
+.ms-ach-row { display: grid; grid-template-columns: 22px auto 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
+.ms-ach-no { color: var(--ink-muted); font-size: 12px; text-align: center; }
+.ms-ach-when { color: var(--ink-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-ach-now { font-size: 11.5px; color: var(--ink-muted); }
 .ms-left { grid-area: left; white-space: nowrap; }
 .ms-left b { font-size: 18px; color: var(--loss); margin: 0 2px; }
 .ms-bar { grid-area: bar; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
@@ -1351,6 +1356,42 @@ function computeMilestoneCountdown() {
   });
   return items;
 }
+/* その記録（通算 target の key）に届いた選手と、届いた試合の日付（早い順） */
+function computeMilestoneAchievers(key, target) {
+  var pitch = ["so", "w", "s"].indexOf(key) !== -1, run = {}, hit = [];
+  sortGamesByDate(STATE.games).forEach(function (g) {
+    var add = function (pid, v) {
+      if (!pid || !v) return;
+      var before = run[pid] || 0;
+      run[pid] = before + v;
+      if (before < target && run[pid] >= target) hit.push({ pid: pid, date: g.date || "", opponent: g.opponent || "" });
+    };
+    if (pitch) (g.pitching || []).forEach(function (p) {
+      add(p.playerId, key === "so" ? n0(p.so) : (p.decision === { w: "W", s: "S" }[key] ? 1 : 0));
+    });
+    else (g.batting || []).forEach(function (b) { add(b.playerId, n0(b[key])); });
+  });
+  hit.forEach(function (h) { h.total = run[h.pid]; });
+  return hit;
+}
+function renderMsAchieversDialog() {
+  var ma = UI.msAchievers;
+  if (!ma) return "";
+  var list = computeMilestoneAchievers(ma.key, ma.target);
+  var rows = list.length === 0
+    ? '<p style="margin-bottom:12px;">まだ誰も達成していません。最初に届けば「チーム初」です！</p>'
+    : '<div class="ms-ach-list">' + list.map(function (h, i) {
+      return '<div class="ms-ach-row"><span class="ms-ach-no mono">' + (i + 1) + '</span>'
+        + '<button class="link-btn" data-action="view-player" data-id="' + h.pid + '" style="font-weight:700;">' + esc(playerName(h.pid)) + "</button>"
+        + '<span class="ms-ach-when">' + esc(fmtDate(h.date)) + (h.opponent ? " " + esc(h.opponent) + "戦" : "") + "</span>"
+        + '<span class="ms-ach-now mono">今 ' + h.total + "</span></div>";
+    }).join("") + "</div>";
+  return '<div class="modal-overlay" data-action="ms-achievers-close"><div class="modal-box" data-action="ms-noop">'
+    + '<div class="section-title" style="margin-top:0;">通算' + ma.target + MILESTONE_LABEL[ma.key] + "の達成者</div>"
+    + rows
+    + '<div class="modal-actions"><button class="btn btn-primary" data-action="ms-achievers-close">閉じる</button></div>'
+    + "</div></div>";
+}
 /* 「あと少し」の一覧を、達成が難しい記録から順に並べる。
    達成者が少ない記録ほど上。同じ人数なら、同じ種類の大きい区切り（150安打＞100安打）や、
    チームでその数字を出すのに試合数がかかる記録（＝1試合あたりの平均が少ない）が上 */
@@ -1509,7 +1550,8 @@ function renderMilestoneCountdown() {
     : '<div class="ms-list">' + near.map(function (it) {
       return '<div class="ms-row"><button class="link-btn ms-player" data-action="view-player" data-id="' + it.pid + '">' + esc(playerName(it.pid)) + "</button>"
         + '<span class="ms-goal">通算' + it.target + MILESTONE_LABEL[it.key]
-        + '<span class="ms-diff">' + (it.achievers === 0 ? "チーム初" : "達成者" + it.achievers + "人") + "</span></span>"
+        + '<button class="ms-diff" data-action="ms-achievers" data-key="' + it.key + '" data-target="' + it.target + '" title="達成者を見る">'
+        + (it.achievers === 0 ? "チーム初" : "達成者" + it.achievers + "人 ›") + "</button></span>"
         + '<span class="ms-left">あと<b>' + it.left + "</b>" + MILESTONE_UNIT[it.key] + "</span>"
         + '<span class="ms-bar"><span style="width:' + Math.round(it.cur / it.target * 100) + '%;"></span></span>'
         + '<span class="ms-cur mono">' + it.cur + " / " + it.target + "</span></div>";
@@ -2798,7 +2840,8 @@ function renderShell(contentHtml) {
     + ((!UI.readOnly && !(window.FBSync && window.FBSync.enabled)) ? '<div class="banner">Firebase未設定のため、この端末のブラウザにのみ記録を保存します。</div>' : "")
     + contentHtml
     + "</main>"
-    + renderConfirmDialog();
+    + renderConfirmDialog()
+    + renderMsAchieversDialog();
 }
 
 function renderApp() {
@@ -6577,6 +6620,9 @@ function onAppClick(e) {
   if (el && el.getAttribute("data-scroll")) UI.scrollAfterEdit = { id: el.getAttribute("data-scroll"), mode: el.getAttribute("data-scroll-mode") };
   if (!el) return;
   var action = el.getAttribute("data-action");
+  /* 達成者のポップアップ：中の何もない所を押しても閉じない。選手名などを押したら閉じてから移動 */
+  if (action === "ms-noop") return;
+  if (UI.msAchievers && action !== "ms-achievers") UI.msAchievers = null;
 
   if (action === "tab") {
     var nextTab = el.getAttribute("data-tab");
@@ -7164,6 +7210,12 @@ function onAppClick(e) {
     UI.recapOpen = UI.recapOpen === UI.currentGameId ? null : UI.currentGameId;
     renderApp();
     if (UI.recapOpen) { var rcCard = document.getElementById("sec-recap"); if (rcCard) rcCard.scrollIntoView({ block: "start", behavior: "smooth" }); }
+  } else if (action === "ms-achievers") {
+    UI.msAchievers = { key: el.getAttribute("data-key"), target: n0(el.getAttribute("data-target")) };
+    renderApp();
+  } else if (action === "ms-achievers-close") {
+    UI.msAchievers = null;
+    renderApp();
   } else if (action === "toggle-ms-all") {
     UI.msShowAll = !UI.msShowAll;
     renderApp();
