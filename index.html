@@ -2455,15 +2455,18 @@ function atbatTokenDir(tok) {
   if ("一二三遊左中右".indexOf(c) !== -1) return c;
   return cls === "OUT_OTHER" ? null : "?";
 }
-function computeSprayData(games, pid) {
+/* risp=true なら、得点圏（2塁・3塁に走者）で迎えた打席の打球だけ */
+function computeSprayData(games, pid, risp) {
   var d = { zones: {}, total: 0, hits: 0, unknown: 0 };
   SPRAY_ZONES.forEach(function (z) { d.zones[z.key] = { n: 0, h: 0 }; });
   games.forEach(function (g) {
-    (g.batting || []).forEach(function (b) {
+    var rispPA = risp && (g.batting || []).some(function (b) { return b.playerId === pid; }) ? computeGameRisp(g).rispPA : null;
+    (g.batting || []).forEach(function (b, ri) {
       if (b.playerId !== pid) return;
-      (b.atbats || []).forEach(function (cell) {
+      (b.atbats || []).forEach(function (cell, inn) {
         if (!cell) return;
-        String(cell).split("・").forEach(function (tok) {
+        String(cell).split("・").forEach(function (tok, tidx) {
+          if (risp && !rispPA[ri + ":" + inn + ":" + tidx]) return;
           var dir = atbatTokenDir(tok);
           if (dir === null) return;
           if (dir === "?") { d.unknown++; return; }
@@ -4917,6 +4920,7 @@ var RISP_PLAY_KEY = { H1: "H1", H2: "H2", H3: "H3", HR: "HR", BB: "BB", HBP: "HB
 function computeGameRisp(g) {
   var rows = g.batting || [];
   var out = rows.map(function () { return { ab: 0, h: 0, estimated: 0 }; });
+  out.rispPA = {};   /* 得点圏で迎えた打席："打順行:回:その回の何打席目" → true（打球方向の得点圏表示で使う） */
   var innCount = rows.reduce(function (m, b) { return Math.max(m, (b.atbats || []).length); }, 0);
   var prevLast = null;
   for (var inn = 0; inn < innCount; inn++) {
@@ -4931,6 +4935,7 @@ function computeGameRisp(g) {
       if (saved) bases = codeToBases(saved);
       if (outs >= 3) { bases = saved ? bases : [null, null, null]; outs = 0; }
       if (cls === null) return;
+      if (bases[1] || bases[2]) out.rispPA[pa.ri + ":" + inn + ":" + pa.tidx] = true;
       var isAb = !(cls === "BB" || cls === "HBP" || cls === "SAC" || cls === "SACFLY");
       if (isAb && (bases[1] || bases[2])) {
         out[pa.ri].ab++;
@@ -6098,8 +6103,12 @@ function renderPlayerDetail(pid) {
       + '<div class="section-title" style="margin-top:16px;">調子（打率の推移）</div>'
       + renderFormChart(games, pid, rt.avg)
       + renderPlayerNextMilestones(pid)
-      + '<div class="section-title" style="margin-top:16px;">打球方向</div>'
-      + renderSprayChart(computeSprayData(games, pid));
+      + '<div class="section-title" style="margin-top:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">打球方向'
+        + '<span class="spray-modes"><button class="btn btn-sm' + (UI.sprayRisp ? "" : " btn-primary") + '" data-action="spray-mode" data-risp="0">すべて</button>'
+        + '<button class="btn btn-sm' + (UI.sprayRisp ? " btn-primary" : "") + '" data-action="spray-mode" data-risp="1">得点圏</button></span></div>'
+      + (UI.sprayRisp ? '<div class="page-lede" style="font-size:12px;margin-bottom:6px;">2塁か3塁に走者がいる場面（得点圏）の打球だけを表示しています。'
+          + (rt.risp != null ? "得点圏打率 <b>" + fmtRate(rt.risp) + "</b>（" + bAgg.rispAb + "-" + bAgg.rispH + "）。" : "") + "走者は推定を含む参考値です。</div>" : "")
+      + renderSprayChart(computeSprayData(games, pid, !!UI.sprayRisp));
   } else {
     batHtml = '<div class="section-title">打撃</div><p style="color:var(--ink-muted);font-size:13px;">この期間の打席記録はありません。</p>';
   }
@@ -7389,6 +7398,9 @@ function onAppClick(e) {
     if (UI.recapOpen) { var rcCard = document.getElementById("sec-recap"); if (rcCard) rcCard.scrollIntoView({ block: "start", behavior: "smooth" }); }
   } else if (action === "ms-achievers") {
     UI.msAchievers = { key: el.getAttribute("data-key"), target: n0(el.getAttribute("data-target")) };
+    renderApp();
+  } else if (action === "spray-mode") {
+    UI.sprayRisp = el.getAttribute("data-risp") === "1";
     renderApp();
   } else if (action === "mvp-month-games") {
     UI.mvpMonth = el.getAttribute("data-month");
