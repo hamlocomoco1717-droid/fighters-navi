@@ -1203,8 +1203,6 @@ var UI = {
   /* 代打・代走の選手選び（{type: "PH"|"PR", rid, base}） */
   liveSubSheet: null,
   liveDefPitcherRid: null,
-  /* 守備中の相手の打順（1始まり）。相手の打者の名前は追わず、番号だけ数える */
-  liveOppBatter: 1,
   livePendingResult: null,
   livePendingDir: null,
   livePendingGoOuts: [],
@@ -5219,7 +5217,6 @@ function liveDirColorStyle(code) {
 function liveResultShort(key) { return LIVE_RESULT_SHORT[key] || key; }
 function resetLiveInput() {
   UI.liveBatterRid = null;
-  UI.liveOppBatter = 1;
   UI.liveDefPitcherRid = null;
   UI.livePendingResult = null;
   UI.livePendingDir = null;
@@ -5370,10 +5367,12 @@ function liveRetreatHalf() {
   UI.liveOuts = 0;
   UI.liveBases = [null, null, null];
 }
-/* 相手の打順の人数（既定9人）と、今の相手の打者の番号 */
+/* 相手の打順の人数（既定9人）と、今の相手の打者の番号。
+   相手の打者は名前を追わず番号だけ数え、試合のデータ（oppNextBatter）に保存するので、
+   ページを開き直しても・ほかの端末で引き継いでも続きから数えられる */
 function liveOppSize(d) { var n = parseInt(d && d.oppOrderSize, 10); return n >= 1 && n <= 20 ? n : 9; }
 function liveOppNo(d) {
-  var n = parseInt(UI.liveOppBatter, 10), size = liveOppSize(d);
+  var n = parseInt(d && d.oppNextBatter, 10), size = liveOppSize(d);
   return n >= 1 && n <= size ? n : 1;
 }
 /* 相手の走者（"opp:打順:id"）の打順。わからなければ 0 */
@@ -6071,7 +6070,7 @@ function liveCommitDefAtbat(resultKey) {
   var oppNo = liveOppNo(d);
   var oppRunnerToken = "opp:" + oppNo + ":" + uid();
   var snapOppBatter = oppNo;
-  UI.liveOppBatter = oppNo % liveOppSize(d) + 1;
+  d.oppNextBatter = oppNo % liveOppSize(d) + 1;
   UI.liveBases = play.bases.map(function (x) { return x === "B" ? oppRunnerToken : x; });
   UI.liveOuts = snapOuts + play.outs;
   if (UI.liveOuts >= 3) {
@@ -6339,7 +6338,7 @@ function liveUndoAtbat() {
       prow2.bb = last.prevStat.bb; prow2.so = last.prevStat.so; prow2.ipOuts = last.prevStat.ipOuts;
     }
     UI.liveDefPitcherRid = last.prid;
-    if (last.snapOppBatter) UI.liveOppBatter = last.snapOppBatter;
+    if (last.snapOppBatter) d.oppNextBatter = last.snapOppBatter;
   }
   if (last.snapInnings) d.innings = clone(last.snapInnings);
   UI.liveOuts = last.snapOuts || 0;
@@ -8209,7 +8208,7 @@ function onAppClick(e) {
   } else if (action === "su-start") {
     if (!UI.draftGame) return;
     UI.setupStep = null;
-    UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null]; UI.liveOppBatter = 1;
+    UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null];
     if (UI.draftGame.batting.length) UI.liveBatterRid = liveSlotActiveRid(UI.draftGame, 0);
     if ((UI.draftGame.pitching || []).length) UI.liveDefPitcherRid = UI.draftGame.pitching[0]._rid;
     persistDraft();
@@ -8244,9 +8243,10 @@ function onAppClick(e) {
     renderApp();
   } else if (action === "live-opp-batter") {
     if (!UI.draftGame || UI.readOnly) return;
+    if ((UI.isNewUnsavedGame || UI.liveTakeover) && !liveGuardControl(UI.draftGame)) return;
     var obSize = liveOppSize(UI.draftGame);
-    UI.liveOppBatter = ((liveOppNo(UI.draftGame) - 1 + parseInt(el.getAttribute("data-delta"), 10) + obSize) % obSize) + 1;
-    renderApp();
+    UI.draftGame.oppNextBatter = ((liveOppNo(UI.draftGame) - 1 + parseInt(el.getAttribute("data-delta"), 10) + obSize) % obSize) + 1;
+    persistDraft();
   } else if (action === "live-sub-open") {
     var soD = UI.draftGame;
     if (!soD || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
@@ -8976,7 +8976,7 @@ function onAppChange(e) {
   }
   if (t.id === "live-opp-size" && UI.draftGame) {
     UI.draftGame.oppOrderSize = parseInt(t.value, 10) || 9;
-    if (liveOppNo(UI.draftGame) !== parseInt(UI.liveOppBatter, 10)) UI.liveOppBatter = 1;
+    if (liveOppNo(UI.draftGame) !== parseInt(UI.draftGame.oppNextBatter, 10)) UI.draftGame.oppNextBatter = 1;
     persistDraft();
     return;
   }
