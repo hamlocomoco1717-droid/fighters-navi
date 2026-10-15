@@ -2186,8 +2186,16 @@ function buildGameRecap(d) {
   var flushLostRun = function () {
     if (!lostRun) return;
     var who = lostRun.pi >= 0 ? pName(lostRun.pi) : "";
-    var rangeTxt = lostRun.to > lostRun.from ? (lostRun.from + 1) + "〜" + (lostRun.to + 1) + "回は" : (lostRun.sameInning ? "その裏、" : (lostRun.from + 1) + "回、");
-    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + (lostRun.sameInning || (lostRun.pi > 0 && spans[lostRun.pi].from === lostRun.from) ? "も" : "が") + concedeFor(lostRun.bf, lostRun.from) : "相手に") + "失点。");
+    /* 2イニングは「5回、6回と」、3イニング以上は「5〜7回は」（荒井さんの書き方） */
+    var rangeTxt = lostRun.to - lostRun.from >= 2 ? (lostRun.from + 1) + "〜" + (lostRun.to + 1) + "回は"
+      : lostRun.to > lostRun.from ? (lostRun.from + 1) + "回、" + (lostRun.to + 1) + "回と"
+      : (lostRun.sameInning ? "その裏、" : (lostRun.from + 1) + "回、");
+    /* まとめた回で5点以上取られたときは「粘り」ではなく「相手打線の猛攻で失点」 */
+    var lrRuns = 0;
+    for (var lri = lostRun.from; lri <= lostRun.to; lri++) lrRuns += n0(theirs[lri]);
+    var lrBig = lrRuns >= 5 && !usedConcept["猛攻"];
+    var lrC = who ? (lrRuns >= 5 ? uniq("concede", CONCEDE.filter(function (c) { return c.indexOf("粘り") === -1; }), null, "") : concedeFor(lostRun.bf, lostRun.from)) : "";
+    (lostRun.sameInning ? addLine : newPara)(rangeTxt + (who ? who + (lostRun.sameInning || (lostRun.pi > 0 && spans[lostRun.pi].from === lostRun.from) ? "も" : "が") + lrC : "相手に") + (lrBig ? "相手打線の猛攻で" : "") + "失点。");
     lostRun = null;
   };
   var zeroSaid = {};
@@ -2247,7 +2255,8 @@ function buildGameRecap(d) {
         } else if (before < 0 && !scored) {
           line = (sono ? team + "もすぐに" : label + "に" + team + "が") + "反撃開始！\n" + how + (sure ? r + "点を返す！" : uniq("chase", CHASE));
         } else if (before < 0) {
-          line = (sono ? "その裏、" : label + (prevScored ? "も" : "に")) + how + (-after <= 3 ? uniq("narrow", r <= 2 && !/HR|本塁打|グランドスラム/.test(how) ? NARROW : NARROW.filter(function (x) { return x.indexOf("じわじわ") === -1; }), -after) : uniq("chase", CHASE));
+          line = (sono ? "その裏、" : label + (prevScored ? "も" : "に")) + how + (-after <= 3 ? uniq("narrow", r <= 2 && !/HR|本塁打|グランドスラム/.test(how) ? NARROW
+            : NARROW.filter(function (x) { return x.indexOf("じわじわ") === -1 && (!/HR|本塁打|グランドスラム/.test(how) || /！$/.test(x)); }), -after) : uniq("chase", CHASE));
         } else if (before === 0) {
           line = (sono ? "その裏、" : label + "に") + how + "勝ち越しに成功！";
         } else if (r >= 5 && !bigSaid && before < 7) {
