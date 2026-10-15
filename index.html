@@ -8202,7 +8202,13 @@ function renderSettingsTab() {
     + '<div class="field-row">'
     + '<div class="field" style="flex:1 1 220px;"><label>チーム名</label><input type="text" data-settings="name" value="' + esc(STATE.team.name || "") + '"' + (UI.readOnly ? " disabled" : "") + "></div>"
     + '<div class="field" style="flex:0 0 160px;"><label>1試合の回数（防御率計算用）</label><input type="number" min="1" data-settings="inningsPerGame" value="' + esc(STATE.team.inningsPerGame || 7) + '"' + (UI.readOnly ? " disabled" : "") + "></div>"
-    + "</div></div>"
+    + "</div>"
+    + '<div class="field-row"><div class="field" style="flex:1 1 220px;"><label>相手の記録（新しい試合の既定）</label>'
+      + '<select data-settings="oppModeDefault"' + (UI.readOnly ? " disabled" : "") + ">"
+        + '<option value=""' + (STATE.team.oppModeDefault === "full" ? "" : " selected") + ">打順の番号だけ</option>"
+        + '<option value="full"' + (STATE.team.oppModeDefault === "full" ? " selected" : "") + ">名前まで記録</option></select>"
+      + '<p style="color:var(--ink-muted);font-size:12.5px;margin-top:6px;">新しい試合を作るとき、最初からこちらが選ばれた状態になります。試合ごとに「試合設定」で変えることもできます。</p></div></div>'
+    + "</div>"
     + '<div class="card"><div class="section-title">スマホのホーム画面に追加する</div>'
     + '<p style="color:var(--ink-muted);font-size:13px;white-space:pre-wrap;line-height:1.7;">' + esc(installHelpText()) + '</p></div>'
     + '<div class="card">' + exportHtml + "</div>"
@@ -9131,6 +9137,8 @@ function onAppClick(e) {
       var top = [], bottom = [];
       for (var i = 0; i < perGame; i++) { top.push(0); bottom.push(0); }
       var g = { id: uid(), date: todayStr(), opponent: "", venue: "home", ground: "", tournament: "", innings: { top: top, bottom: bottom }, note: "", batting: [], pitching: [], _seq: Date.now() };
+      /* 相手の記録はチームの既定（設定画面）から始める */
+      if (STATE.team.oppModeDefault === "full") g.oppMode = "full";
       STATE.games.push(g);
       UI.currentGameId = g.id; UI.draftGame = clone(g); UI.isNewUnsavedGame = true; UI.draftEverSaved = false;
       UI.liveInning = null; resetLiveInput();
