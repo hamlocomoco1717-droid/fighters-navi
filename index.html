@@ -5912,7 +5912,7 @@ function renderTitleRace(games, year) {
       + (hidden ? '<div class="title-gap">ほか ' + hidden + "人が同じ順位</div>" : "")
       + '<div class="title-gap">' + gap + "</div></div>";
   }).join("");
-  var head = final ? esc(year) + "年のタイトル（確定）" : (year === "all" ? "通算のタイトル争い" : "タイトル争い");
+  var head = final ? esc(year) + "年のタイトル（確定）" : (year === "all" ? "通算のタイトル争い" : esc(year) + "年のタイトル争い");
   return '<div class="card"><div class="section-title">' + head + "</div>"
     + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">打率・出塁率は規定打席（' + Math.round(tb.qualPA) + '打席）に届いた選手だけが対象です。選手名を押すと選手ページを開きます。'
     + (final ? "" : "上の「シーズン」で過去の年を選ぶと、その年のタイトルを振り返れます。") + "</div>"
