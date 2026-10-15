@@ -627,6 +627,7 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .ms-row.ms-own { grid-template-areas: "goal goal left" "bar bar cur"; }
 .ms-player { grid-area: player; font-size: 14px; font-weight: 700; }
 .ms-goal { grid-area: goal; color: var(--ink-muted); font-size: 12.5px; }
+.ms-diff { margin-left: 6px; font-size: 10.5px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--border); white-space: nowrap; }
 .ms-left { grid-area: left; white-space: nowrap; }
 .ms-left b { font-size: 18px; color: var(--loss); margin: 0 2px; }
 .ms-bar { grid-area: bar; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
@@ -1338,11 +1339,35 @@ function computeMilestoneCountdown() {
       items.push({ pid: pid, key: k, cur: cur, target: target, left: target - cur, near: target - cur <= MILESTONE_NEAR[k] });
     });
   });
+  /* 難しさの目安：その記録（通算〇〇）にすでに届いている選手の数。少ないほど難しい（0人なら「チーム初」） */
+  items.forEach(function (it) {
+    var n = 0;
+    totals.forEach(function (t) { if (n0(t[it.key]) >= it.target) n++; });
+    it.achievers = n;
+  });
   /* 近い順：残りを「あと少し」の幅で割った値が小さいほど上。同じなら大きい記録が上 */
   items.sort(function (a, b) {
     return a.left / MILESTONE_NEAR[a.key] - b.left / MILESTONE_NEAR[b.key] || b.target - a.target;
   });
   return items;
+}
+/* 「あと少し」の一覧を、達成が難しい記録から順に並べる。
+   達成者が少ない記録ほど上。同じ人数なら、同じ種類の大きい区切り（150安打＞100安打）や、
+   チームでその数字を出すのに試合数がかかる記録（＝1試合あたりの平均が少ない）が上 */
+function sortMilestonesByDifficulty(items) {
+  var per = {};
+  var bat = computeBattingAgg(STATE.games), pit = computePitchingAgg(STATE.games);
+  var bg = 0, pg = 0, sum = {};
+  bat.forEach(function (c) { bg += n0(c.g); ["h", "hr", "d2", "d3", "rbi", "sb"].forEach(function (k) { sum[k] = (sum[k] || 0) + n0(c[k]); }); });
+  pit.forEach(function (c) { pg += n0(c.g); ["so", "w", "s"].forEach(function (k) { sum[k] = (sum[k] || 0) + n0(c[k]); }); });
+  Object.keys(MILESTONE_THRESHOLDS).forEach(function (k) {
+    var games = ["so", "w", "s"].indexOf(k) !== -1 ? pg : bg;
+    per[k] = games > 0 && sum[k] > 0 ? sum[k] / games : 0.001;   /* 1試合（出場）あたりの平均 */
+  });
+  var gamesNeeded = function (it) { return it.target / per[it.key]; };
+  return items.slice().sort(function (a, b) {
+    return n0(a.achievers) - n0(b.achievers) || gamesNeeded(b) - gamesNeeded(a) || a.left - b.left;
+  });
 }
 /* ---------- 調子のグラフ（直近の打率の推移） ----------
    選手が打席に立った試合を日付順に並べ、各試合の時点での「直近5試合の打率」を
@@ -1472,7 +1497,7 @@ function renderMilestoneCountdown() {
   var lastPlayed = lastAppearanceDates();
   var y = new Date(); y.setFullYear(y.getFullYear() - 1);
   var cutoff = y.getFullYear() + "-" + String(y.getMonth() + 1).padStart(2, "0") + "-" + String(y.getDate()).padStart(2, "0");
-  var all = computeMilestoneCountdown().filter(function (it) { return it.near && !inactive[it.pid]; });
+  var all = sortMilestonesByDifficulty(computeMilestoneCountdown().filter(function (it) { return it.near && !inactive[it.pid]; }));
   var isAway = function (it) { return !lastPlayed[it.pid] || lastPlayed[it.pid] < cutoff; };
   var awayCount = all.filter(isAway).length;
   var near = UI.msShowAway ? all : all.filter(function (it) { return !isAway(it); });
@@ -1483,7 +1508,8 @@ function renderMilestoneCountdown() {
     ? '<p class="title-empty">もうすぐ届きそうな記録はありません。</p>'
     : '<div class="ms-list">' + near.map(function (it) {
       return '<div class="ms-row"><button class="link-btn ms-player" data-action="view-player" data-id="' + it.pid + '">' + esc(playerName(it.pid)) + "</button>"
-        + '<span class="ms-goal">通算' + it.target + MILESTONE_LABEL[it.key] + "</span>"
+        + '<span class="ms-goal">通算' + it.target + MILESTONE_LABEL[it.key]
+        + '<span class="ms-diff">' + (it.achievers === 0 ? "チーム初" : "達成者" + it.achievers + "人") + "</span></span>"
         + '<span class="ms-left">あと<b>' + it.left + "</b>" + MILESTONE_UNIT[it.key] + "</span>"
         + '<span class="ms-bar"><span style="width:' + Math.round(it.cur / it.target * 100) + '%;"></span></span>'
         + '<span class="ms-cur mono">' + it.cur + " / " + it.target + "</span></div>";
@@ -1492,7 +1518,7 @@ function renderMilestoneCountdown() {
       + (UI.msShowAll ? "少なく表示" : "すべて見る（" + total + "件）") + "</button>" : "")
     + (awayCount > 0 || UI.msShowAway ? '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;"><input type="checkbox" id="ms-show-away"' + (UI.msShowAway ? " checked" : "") + "> 1年以上出場していない選手も表示（" + awayCount + "件）</label>" : "");
   return '<div class="card"><div class="section-title">記録まであと少し</div>'
-    + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">シーズンに関係なく、通算（全試合）の数字で数えています。</div>'
+    + '<div class="page-lede" style="font-size:12px;margin-bottom:10px;">シーズンに関係なく、通算（全試合）の数字で数えています。達成者が少ない（難しい）記録から順に並べています。</div>'
     + body + "</div>";
 }
 
@@ -2154,16 +2180,16 @@ function buildGameRecap(d) {
   return out.join("\n\n");
 }
 
-/* 在籍中で、1年以内に出場している選手の「あと少し」の記録（近い順） */
+/* 在籍中で、1年以内に出場している選手の「あと少し」の記録（難しい記録から順） */
 function nearMilestonesForTeam() {
   var inactive = {};
   STATE.players.forEach(function (pl) { if (pl.active === false) inactive[pl.id] = true; });
   var lastPlayed = lastAppearanceDates();
   var y = new Date(); y.setFullYear(y.getFullYear() - 1);
   var cutoff = y.getFullYear() + "-" + String(y.getMonth() + 1).padStart(2, "0") + "-" + String(y.getDate()).padStart(2, "0");
-  return computeMilestoneCountdown().filter(function (it) {
+  return sortMilestonesByDifficulty(computeMilestoneCountdown().filter(function (it) {
     return it.near && !inactive[it.pid] && lastPlayed[it.pid] && lastPlayed[it.pid] >= cutoff;
-  });
+  }));
 }
 
 /* ---------- 試合前プレビュー ----------
