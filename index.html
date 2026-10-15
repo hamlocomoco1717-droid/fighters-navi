@@ -1109,6 +1109,16 @@ function migrateState(s) {
       g.innings = { top: [], bottom: [] };
     }
   });
+  /* データの修正（1回だけ・条件が合うときだけ）：
+     2023/9/24 WANS戦は、打席の記録（3回にアウト3つ・打点7、4回は3人で0点）と回ごとの得点（3回2点・4回5点）が
+     ずれていたので、打席の記録に合わせて 3回7点・4回0点 に直す（合計16点は変わらない） */
+  s.games.forEach(function (g) {
+    if (g.id === "z7eb4z4zzkeh" && g.date === "2023-09-24" && g.innings && Array.isArray(g.innings.bottom)
+      && Number(g.innings.bottom[2]) === 2 && Number(g.innings.bottom[3]) === 5) {
+      g.innings.bottom[2] = 7;
+      g.innings.bottom[3] = 0;
+    }
+  });
 }
 
 var STATE = loadInitialState();
