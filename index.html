@@ -4087,7 +4087,7 @@ function renderGameDetail(g) {
       var curRid = UI.liveBatterRid;
       var batterOpts = lvSlotInfo.slots.map(function (sl, si) {
         var b = d.batting[sl[sl.length - 1]];
-        var subLbl = b.subFor ? (SUB_TYPE_LABEL[b.subType] || "途中") : "";
+        var subLbl = b.flex && !b.subFor ? "" : battingSubLabel(b);
         return '<option value="' + b._rid + '"' + (b._rid === curRid ? " selected" : "") + ">"
           + (si + 1) + "番 " + (subLbl ? "[" + subLbl + "] " : "") + esc(playerNameNum(b.playerId)) + (b.position ? "（" + esc(b.position) + "）" : "") + "</option>";
       }).join("");
@@ -4250,16 +4250,44 @@ function renderGameDetail(g) {
           return sg && sg.position ? "（" + sg.position + "）" : "";
         };
         var lfBenchOpts = liveBenchPlayers(d).map(function (p) { return '<option value="' + p.id + '">' + esc(playerNameNum(p.id)) + "</option>"; }).join("");
+        var lfReOpts = lfInGame.map(function (b) { return liveReentryRoot(d, b._rid); }).filter(Boolean).map(function (r) {
+          return '<option value="re:' + r._rid + '">' + esc(playerNameNum(r.playerId)) + "（リエントリー）</option>";
+        }).join("");
+        if (lfReOpts) lfBenchOpts = '<optgroup label="ベンチ">' + lfBenchOpts + '</optgroup><optgroup label="リエントリー（元の打順に戻る）">' + lfReOpts + "</optgroup>";
         var lfSubHtml = '<div style="font-size:12px;font-weight:700;margin-top:10px;">ベンチの選手が守備から途中出場</div>'
           + '<div class="lv-defsub">'
             + '<select id="live-defsub-out"><option value="">退く選手…</option>' + lfInGame.map(function (b) {
                 return '<option value="' + b._rid + '">' + esc(playerNameNum(b.playerId) + lfPosOf(b)) + "</option>";
               }).join("") + "</select>"
             + '<select id="live-defsub-in"><option value="">入る選手…</option>' + lfBenchOpts + "</select>"
-            + '<select id="live-defsub-pos"><option value="">守備位置（退く選手と同じ）</option>' + POSITIONS.map(function (p) { return '<option value="' + p + '">' + p + "</option>"; }).join("") + "</select>"
+            + '<select id="live-defsub-pos"><option value="">守備位置（同じ）</option>' + POSITIONS.map(function (p) { return '<option value="' + p + '">' + p + "</option>"; }).join("") + "</select>"
             + '<button class="btn btn-sm" data-action="live-defsub-commit">交代する</button>'
           + "</div>"
-          + '<div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">入った選手は、退いた選手の打順に入ります。</div>';
+          + '<div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">入った選手は、退いた選手の打順に入ります。リエントリーは元の打順の選手と交代します（退く選手は選ばなくてOK）。</div>';
+        /* ソフトボールのDP：DPが守備に就く／退いたFPのリエントリー */
+        var lfDp = liveDpRow(d);
+        if (lfDp) {
+          var dpFrom = liveNextDefInning();
+          var dpNow = livePosAt(lfDp, dpFrom);
+          var dpFpLeft = d.batting.filter(function (b) { return b.flex && b.leftInn != null && !b.reentrySeq; })[0];
+          var dpHtml = '<div style="font-size:12px;font-weight:700;margin-top:12px;">ソフトボールのDP（' + dpFrom + "回の守備から）</div>";
+          if (!dpNow || dpNow === "DP") {
+            var dpOpts = ["投手"].concat(LIVE_FIELD_POSITIONS).map(function (pos) {
+              var occ = lfInGame.filter(function (b) { return b !== lfDp && livePosAt(b, dpFrom) === pos; })[0];
+              var who = !occ ? "" : (occ.flex && !occ.subFor) ? "（FP " + playerName(occ.playerId) + "は退く）" : "（" + playerName(occ.playerId) + "は打つだけに）";
+              return '<option value="' + pos + '">' + pos + esc(who) + "</option>";
+            }).join("");
+            dpHtml += '<div class="lv-defsub"><select id="live-dp-pos" style="grid-column:1 / -1;">' + dpOpts + "</select>"
+              + '<button class="btn btn-sm" data-action="live-dp-field" style="grid-column:1 / -1;">DP ' + esc(playerName(lfDp.playerId)) + "が守備に就く</button></div>"
+              + '<div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">FPの位置を守るとFPは試合から退き、ほかの選手の位置ならその選手は打つだけになります。</div>';
+          } else {
+            dpHtml += '<div style="font-size:12px;margin-top:4px;">DP ' + esc(playerName(lfDp.playerId)) + "は" + esc(dpNow) + "を守っています（打順はそのまま）。</div>";
+          }
+          if (dpFpLeft && dpNow && dpNow !== "DP") {
+            dpHtml += '<button class="btn btn-sm" data-action="live-fp-reenter" data-rid="' + dpFpLeft._rid + '" style="width:100%;margin-top:6px;">FP ' + esc(playerName(dpFpLeft.playerId)) + "がリエントリー（DPは打つだけに戻る）</button>";
+          }
+          lfSubHtml += dpHtml;
+        }
         defFieldSubHtml = '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">守備交代（' + lfCurInning + '回〜の守備位置を変更）</summary>'
           + '<div style="margin-top:6px;">' + lfRows + lfSubHtml + "</div></details>";
       }
@@ -4476,6 +4504,8 @@ function renderGameDetail(g) {
           var ssFp = !ssIsDp ? "" : liveInGameRows(d).filter(function (b) { return b.flex && !b.subFor; }).map(function (b) {
             return '<button class="btn lv-sub-fp" data-action="live-sub-pick" data-fp="' + b._rid + '">FP ' + esc(playerNameNum(b.playerId)) + "（DPの打順に入る）</button>";
           }).join("");
+          var ssReRow = liveReentryRoot(d, ssRow._rid);
+          var ssRe = ssReRow ? '<button class="btn lv-sub-fp" data-action="live-sub-pick" data-re="' + ssReRow._rid + '">' + esc(playerNameNum(ssReRow.playerId)) + "（先発が再出場）</button>" : "";
           var ssBtns = liveBenchPlayers(d).map(function (p) {
             return '<button class="btn" data-action="live-sub-pick" data-pid="' + p.id + '">' + esc(playerNameNum(p.id)) + "</button>";
           }).join("");
@@ -4485,6 +4515,7 @@ function renderGameDetail(g) {
                 + '<div class="lv-sheet-sub">' + (ssNo ? ssNo + "番 " : "") + esc(playerName(ssRow.playerId))
                   + (ss.type === "PR" ? "（" + ["一塁", "二塁", "三塁"][ss.base] + "走者）" : "") + "に代わって出る選手は？</div></div>"
                 + '<button class="lv-sheet-x" data-action="live-sub-close">キャンセル</button></div>'
+              + (ssRe ? '<div class="lv-sheet-step">リエントリー<span class="lv-sheet-hint">先発選手は1回だけ、元の打順に戻れます</span></div><div class="lv-pick">' + ssRe + "</div>" : "")
               + (ssFp ? '<div class="lv-sheet-step">FP（守るだけの選手）</div><div class="lv-pick">' + ssFp + "</div>" : "")
               + '<div class="lv-sheet-step">ベンチの選手</div>'
               + (ssBtns ? '<div class="lv-pick lv-pick2">' + ssBtns + "</div>" : '<p class="title-empty">ベンチの選手がいません（選手管理で追加できます）。</p>')
@@ -5402,7 +5433,8 @@ function liveLogText(d, e) {
     case "clearbaseout": return "走者アウト（走塁死）";
     case "out": return "アウト追加";
     case "endhalf": return "チェンジ";
-    case "sub": return (e.subType === "DEF" ? "途中出場" : (SUB_TYPE_LABEL[e.subType] || "交代")) + " " + who(e.newRid) + "、" + who(e.forRid) + "と交代";
+    case "sub": return (e.reentry ? "リエントリー" : e.subType === "DEF" ? "途中出場" : (SUB_TYPE_LABEL[e.subType] || "交代")) + " " + who(e.newRid) + "、" + who(e.forRid) + "と交代";
+    case "fieldchg": return e.label || "守備変更";
   }
   return "記録";
 }
@@ -5670,8 +5702,10 @@ function atbatBaseCode(row, inn, tidx) {
 }
 /* 打順の「枠」（1番〜9番などの打順の位置）。代打・代走・守備から途中出場した選手は
    subFor（交代した相手の _rid）で前の選手とつながり、同じ枠に入る。
+   同じ枠の中は出場した順（enterSeq。先発のリエントリーは reentrySeq）に並べ、最後の人が「今出ている選手」。
    FP（ソフトボールの守るだけで打たない選手、flex）は、DPの打順に入るまで枠を持たない。
-   返り値: { slots: [[行idx（出場順）...], ...], slotOf: [行ごとの枠idx（-1=枠なし）] } */
+   返り値: { slots: [[行idx（出場順）...], ...], slotOf: [行ごとの枠idx（-1=枠なし）],
+            groups: [{root, members, active}]（打たないFPも含むつながりごと）, groupOf } */
 function battingSlotInfo(rows) {
   rows = rows || [];
   var byRid = {};
@@ -5684,22 +5718,30 @@ function battingSlotInfo(rows) {
     return { root: cur, depth: depth };
   };
   var info = rows.map(function (b, i) { return rootOf(i); });
+  var key = function (i) { return n0(rows[i].reentrySeq) || n0(rows[i].enterSeq) || info[i].depth; };
   var hasAb = function (b) { return (b.atbats || []).some(function (t) { return t && String(t).trim() !== ""; }); };
-  var slots = [], slotOf = rows.map(function () { return -1; }), rootSlot = {};
+  var groups = [], groupOf = rows.map(function () { return -1; }), rootGroup = {};
   rows.forEach(function (b, i) {
     if (info[i].root !== i) return;
-    if (b && b.flex && !hasAb(b)) return;
-    rootSlot[i] = slots.length;
-    slots.push([]);
+    rootGroup[i] = groups.length;
+    groups.push({ root: i, members: [] });
   });
   rows.forEach(function (b, i) {
-    var si = rootSlot[info[i].root];
-    if (si == null) return;
-    slotOf[i] = si;
-    slots[si].push(i);
+    var gi = rootGroup[info[i].root];
+    groupOf[i] = gi;
+    groups[gi].members.push(i);
   });
-  slots.forEach(function (sl) { sl.sort(function (a, c) { return info[a].depth - info[c].depth || a - c; }); });
-  return { slots: slots, slotOf: slotOf };
+  groups.forEach(function (g) {
+    g.members.sort(function (a, c) { return key(a) - key(c) || a - c; });
+    g.active = g.members[g.members.length - 1];
+  });
+  var slots = [], slotOf = rows.map(function () { return -1; });
+  groups.forEach(function (g) {
+    if (rows[g.root].flex && !g.members.some(function (i) { return hasAb(rows[i]); })) return;
+    g.members.forEach(function (i) { slotOf[i] = slots.length; });
+    slots.push(g.members);
+  });
+  return { slots: slots, slotOf: slotOf, groups: groups, groupOf: groupOf };
 }
 /* 行の打順（1始まり）。枠のない行（打たないFP）は 0 */
 function battingSlotNo(rows, rid) {
@@ -5708,9 +5750,13 @@ function battingSlotNo(rows, rid) {
   return battingSlotInfo(rows).slotOf[i] + 1;
 }
 var SUB_TYPE_LABEL = { PH: "代打", PR: "代走", DEF: "守備", FP: "FP" };
+/* 途中出場などの短い印（なければ空） */
+function battingSubLabel(b) {
+  return b.subFor ? (SUB_TYPE_LABEL[b.subType] || "途中") : b.reentrySeq ? "再出場" : b.flex ? "FP" : "";
+}
 /* 打撃成績表などで名前の前に付ける小さな印（代打・代走・途中出場・FP） */
 function battingSubTag(rows, b) {
-  var lbl = b.subFor ? (SUB_TYPE_LABEL[b.subType] || "途中") : (b.flex ? "FP" : "");
+  var lbl = battingSubLabel(b);
   if (!lbl) return "";
   var no = battingSlotNo(rows, b._rid);
   return '<span class="sub-tag">' + lbl + (no ? "・" + no + "番" : "") + "</span>";
@@ -6055,16 +6101,111 @@ function liveNextBatterRid(d, rid) {
   var si = i >= 0 ? info.slotOf[i] : -1;
   return liveSlotActiveRid(d, si >= 0 ? (si + 1) % info.slots.length : 0, info);
 }
-/* 今出ている選手（打順の枠の最新の選手と、まだ打たないFP）の行 */
+/* 今出ている選手（打順の枠の最新の選手と、まだ打たないFP）の行。試合から退いたFP（leftInn）は除く */
 function liveInGameRows(d) {
   var info = battingSlotInfo(d.batting);
-  var out = info.slots.map(function (sl) { return d.batting[sl[sl.length - 1]]; });
-  d.batting.forEach(function (b, i) {
-    if (info.slotOf[i] !== -1) return;
-    var replaced = d.batting.some(function (x) { return x.subFor === b._rid; });
-    if (!replaced) out.push(b);
+  return info.groups.map(function (g) { return d.batting[g.active]; }).filter(function (b) { return b.leftInn == null; });
+}
+/* リエントリー（ソフトボール）：rid の選手が今いる打順の先発選手が、交代して退いていて、
+   まだ再出場していなければその行を返す（再出場は1回だけ・元の打順にだけ戻れる） */
+function liveReentryRoot(d, rid) {
+  var info = battingSlotInfo(d.batting);
+  var i = d.batting.findIndex(function (b) { return b._rid === rid; });
+  if (i < 0) return null;
+  var g = info.groups[info.groupOf[i]];
+  var root = d.batting[g.root];
+  if (g.root === g.active || root.reentrySeq || root.leftInn != null) return null;
+  return root;
+}
+/* 交代・守備変更の取り消し用に、各行の出場・守備の状態を写しておく */
+var ROW_STATE_KEYS = ["position", "posChanges", "subFor", "subType", "subInn", "enterSeq", "leftInn", "reentrySeq", "reentryInn"];
+function rowStateSnap(rows) {
+  var m = {};
+  (rows || []).forEach(function (b) {
+    var o = {};
+    ROW_STATE_KEYS.forEach(function (k) { if (b[k] !== undefined && b[k] !== null) o[k] = clone(b[k]); });
+    m[b._rid] = o;
   });
-  return out;
+  return m;
+}
+function rowStateRestore(d, m) {
+  (d.batting || []).forEach(function (b) {
+    var o = m[b._rid];
+    if (!o) return;
+    ROW_STATE_KEYS.forEach(function (k) { if (o[k] === undefined) delete b[k]; else b[k] = clone(o[k]); });
+  });
+}
+/* 守備を始める回（1始まり）：守備中ならこの回、攻撃中は先攻ならこの回の裏・後攻なら次の回 */
+function liveNextDefInning() {
+  var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
+  return (UI.liveHalfDone || liveOurSide() === "top") ? inn + 1 : inn + 2;
+}
+function livePosAt(b, inn1) {
+  var pos = "";
+  positionSegments(b, Math.max(POS_INNINGS, inn1)).forEach(function (sg) { if (inn1 >= sg.from && inn1 <= sg.to) pos = sg.position || ""; });
+  return pos;
+}
+function livePosSpan(d, from) {
+  var inningCount = Math.max((d.innings.top || []).length, (d.innings.bottom || []).length);
+  return Math.max(POS_INNINGS, inningCount, from);
+}
+/* 今出ているDP（ソフトボールの指名選手。DPに代わって入った選手も含む） */
+function liveDpRow(d) {
+  return liveInGameRows(d).filter(function (b) {
+    return b.position === "DP" || (b.posChanges || []).some(function (c) { return c && c.position === "DP"; });
+  })[0] || null;
+}
+/* DPが守備に就く：pos を守っていた選手は、FPなら試合から退き、それ以外なら打つだけになる */
+function liveDpTakeField(pos) {
+  var d = UI.draftGame;
+  if (!d || !pos) return;
+  if (!liveGuardControl(d)) return;
+  var dp = liveDpRow(d);
+  if (!dp) return;
+  var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
+  var from = liveNextDefInning(), N = livePosSpan(d, from);
+  var entry = {
+    type: "fieldchg", rowsSnap: rowStateSnap(d.batting),
+    snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
+    snapBases: liveBasesArr().slice(), snapInning: inn, snapHalfDone: !!UI.liveHalfDone
+  };
+  var occ = liveInGameRows(d).filter(function (b) { return b !== dp && livePosAt(b, from) === pos; })[0];
+  setBattingPositionAt(dp, from, pos, N);
+  var label = "DP " + playerName(dp.playerId) + "が" + pos + "の守備に就く";
+  if (occ) {
+    setBattingPositionAt(occ, from, "", N);
+    if (occ.flex && !occ.subFor) { occ.leftInn = inn; label += "（FP " + playerName(occ.playerId) + "は退く）"; }
+    else label += "（" + playerName(occ.playerId) + "は打つだけ）";
+  }
+  entry.label = label;
+  if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
+  UI.liveLog.push(entry);
+  persistDraft();
+}
+/* 退いたFPのリエントリー：FPがDPの守っていた位置に戻り、DPは打つだけに戻る */
+function liveFpReenter(fpRid) {
+  var d = UI.draftGame;
+  if (!d) return;
+  if (!liveGuardControl(d)) return;
+  var fp = d.batting.filter(function (b) { return b._rid === fpRid && b.flex && b.leftInn != null && !b.reentrySeq; })[0];
+  var dp = liveDpRow(d);
+  if (!fp || !dp) return;
+  var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
+  var from = liveNextDefInning(), N = livePosSpan(d, from);
+  var dpPos = livePosAt(dp, from);
+  var entry = {
+    type: "fieldchg", rowsSnap: rowStateSnap(d.batting),
+    label: "リエントリー FP " + playerName(fp.playerId) + (dpPos && dpPos !== "DP" ? "（" + dpPos + "）" : "") + "・DP " + playerName(dp.playerId) + "は打つだけに",
+    snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
+    snapBases: liveBasesArr().slice(), snapInning: inn, snapHalfDone: !!UI.liveHalfDone
+  };
+  if (dpPos && dpPos !== "DP") setBattingPositionAt(fp, from, dpPos, N);
+  setBattingPositionAt(dp, from, "DP", N);
+  delete fp.leftInn;
+  fp.reentrySeq = Date.now(); fp.reentryInn = inn;
+  if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
+  UI.liveLog.push(entry);
+  persistDraft();
 }
 /* ベンチの選手（この試合にまだ出ていない選手） */
 function liveBenchPlayers(d) {
@@ -6073,10 +6214,10 @@ function liveBenchPlayers(d) {
   return sortPlayersForAdd(STATE.players.filter(function (p) { return p.active !== false && !used[p.id]; }), battingGameCounts());
 }
 /* 選手交代。type: "PH"（代打）・"PR"（代走）・"DEF"（守備から途中出場）。
-   pid のベンチ選手（または fpRid のFP）が forRid の選手と入れ替わり、同じ打順に入る。
-   守備位置は、次に守る回から交代した相手の位置を引き継ぐ（DEF は defPos を使う。
-   投手だった場合は空けておく）。交代した相手はその回から守備なしになる */
-function liveSubstitute(type, forRid, pid, fpRid, defPos) {
+   pid のベンチ選手（または fpRid のFP、reRid のリエントリーする先発選手）が forRid の選手と
+   入れ替わり、同じ打順に入る。守備位置は、次に守る回から交代した相手の位置を引き継ぐ
+   （DEF は defPos を使う。投手だった場合は空けておく）。交代した相手はその回から守備なしになる */
+function liveSubstitute(type, forRid, pid, fpRid, defPos, reRid) {
   var d = UI.draftGame;
   if (!d || !Array.isArray(d.batting)) return;
   if (!liveGuardControl(d)) return;
@@ -6084,35 +6225,34 @@ function liveSubstitute(type, forRid, pid, fpRid, defPos) {
   if (!oldRow) return;
   var inn = (typeof UI.liveInning === "number" && UI.liveInning >= 0) ? UI.liveInning : 0;
   var entry = {
-    type: "sub", subType: type, forRid: forRid, created: !fpRid,
-    oldPos: { position: oldRow.position || "", posChanges: clone(oldRow.posChanges || []) },
+    type: "sub", subType: type, forRid: forRid, created: !fpRid && !reRid, reentry: !!reRid,
+    rowsSnap: rowStateSnap(d.batting),
     snapBatterRid: UI.liveBatterRid,
     snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
     snapBases: liveBasesArr().slice(), snapInning: inn, snapHalfDone: !!UI.liveHalfDone
   };
   var row;
-  if (fpRid) {
+  if (reRid) {
+    row = liveReentryRoot(d, forRid);
+    if (!row || row._rid !== reRid) { showToast("この選手はリエントリーできません（元の打順で1回だけ）", true); return; }
+    row.reentrySeq = Date.now(); row.reentryInn = inn;
+  } else if (fpRid) {
     row = d.batting.filter(function (b) { return b._rid === fpRid; })[0];
     if (!row) return;
-    entry.fpPrev = { subFor: row.subFor || null, subType: row.subType || null, subInn: row.subInn == null ? null : row.subInn };
-    row.subFor = forRid; row.subType = "FP"; row.subInn = inn;
+    row.subFor = forRid; row.subType = "FP"; row.subInn = inn; row.enterSeq = Date.now();
   } else {
     if (!pid || !playerById(pid)) return;
-    row = { _rid: uid(), playerId: pid, position: "", posChanges: [], subFor: forRid, subType: type, subInn: inn,
+    row = { _rid: uid(), playerId: pid, position: "", posChanges: [], subFor: forRid, subType: type, subInn: inn, enterSeq: Date.now(),
       ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0, atbats: [] };
     d.batting.push(row);
   }
   entry.newRid = row._rid;
-  /* 守備位置の引き継ぎ（何回から守るか：守備中ならこの回、攻撃中は先攻ならこの回の裏・後攻なら次の回） */
-  var from = (UI.liveHalfDone || liveOurSide() === "top") ? inn + 1 : inn + 2;
-  var inningCount = Math.max((d.innings.top || []).length, (d.innings.bottom || []).length);
-  var N = Math.max(POS_INNINGS, inningCount, from);
-  var oldAt = "";
-  positionSegments(oldRow, N).forEach(function (sg) { if (from >= sg.from && from <= sg.to) oldAt = sg.position || ""; });
+  var from = liveNextDefInning(), N = livePosSpan(d, from);
+  var oldAt = livePosAt(oldRow, from);
   setBattingPositionAt(oldRow, from, "", N);
   if (!fpRid) {
     var newPos = type === "DEF" ? (defPos || oldAt) : (oldAt === "投手" ? "" : oldAt);
-    if (newPos) setBattingPositionAt(row, from, newPos, N);
+    setBattingPositionAt(row, from, newPos || "", N);
   }
   if (UI.liveBatterRid === forRid) UI.liveBatterRid = row._rid;
   UI.liveBases = liveBasesArr().map(function (x) { return x === forRid ? row._rid : x; });
@@ -6123,17 +6263,12 @@ function liveSubstitute(type, forRid, pid, fpRid, defPos) {
   persistDraft();
 }
 function liveUndoSubstitute(d, last) {
-  var oldR = d.batting.filter(function (b) { return b._rid === last.forRid; })[0];
-  if (oldR && last.oldPos) { oldR.position = last.oldPos.position; oldR.posChanges = clone(last.oldPos.posChanges); }
-  var ni = d.batting.findIndex(function (b) { return b._rid === last.newRid; });
-  if (ni >= 0) {
-    if (last.created) d.batting.splice(ni, 1);
-    else {
-      var fr = d.batting[ni], fp = last.fpPrev || {};
-      ["subFor", "subType", "subInn"].forEach(function (k) { if (fp[k] == null) delete fr[k]; else fr[k] = fp[k]; });
-    }
+  if (last.created) {
+    var ni = d.batting.findIndex(function (b) { return b._rid === last.newRid; });
+    if (ni >= 0) d.batting.splice(ni, 1);
+    if (UI.editingAtbatsRow === last.newRid) UI.editingAtbatsRow = null;
   }
-  if (UI.editingAtbatsRow === last.newRid && last.created) UI.editingAtbatsRow = null;
+  if (last.rowsSnap) rowStateRestore(d, last.rowsSnap);
   UI.liveBatterRid = last.snapBatterRid;
 }
 /* 直前の1件（打席・アウト・攻守交代）を取り消す */
@@ -6162,6 +6297,7 @@ function liveUndoAtbat() {
     if (srow) srow.sb = Math.max(0, n0(last.prevSb));
   }
   if (last.type === "sub") liveUndoSubstitute(d, last);
+  if (last.type === "fieldchg" && last.rowsSnap) rowStateRestore(d, last.rowsSnap);
   if (last.type === "defatbat") {
     var prow2 = (d.pitching || []).filter(function (p) { return p._rid === last.prid; })[0];
     if (prow2 && last.prevStat) {
@@ -7672,7 +7808,7 @@ function renderBattingOrderAnalysis(games) {
         + (res ? '<span class="lineup-score mono">' + tot.us + "-" + tot.them + "</span>" : "") + badge + "</div>"
       + '<ol class="lineup-list">' + g.batting.map(function (b, i) {
         var luNo = battingSlotInfo(g.batting).slotOf[i] + 1;
-        var luSub = b.subFor ? (SUB_TYPE_LABEL[b.subType] || "途中") : (b.flex ? "FP" : "");
+        var luSub = battingSubLabel(b);
         return '<li><span class="lineup-slot">' + (luNo || "-") + "</span><span>" + (luSub ? '<span class="sub-tag">' + luSub + "</span> " : "") + esc(playerName(b.playerId)) + "</span>"
           + (b.position ? '<span class="lineup-pos">' + esc(b.position) + "</span>" : "") + "</li>";
       }).join("") + "</ol></div>";
@@ -8086,15 +8222,32 @@ function onAppClick(e) {
   } else if (action === "live-sub-pick") {
     var spS = UI.liveSubSheet;
     if (!spS || UI.readOnly) return;
-    liveSubstitute(spS.type, spS.rid, el.getAttribute("data-pid") || null, el.getAttribute("data-fp") || null);
+    liveSubstitute(spS.type, spS.rid, el.getAttribute("data-pid") || null, el.getAttribute("data-fp") || null, "", el.getAttribute("data-re") || null);
   } else if (action === "live-sub-close") {
     UI.liveSubSheet = null;
     renderApp();
   } else if (action === "live-defsub-commit") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     var dsOut = document.getElementById("live-defsub-out"), dsIn = document.getElementById("live-defsub-in"), dsPos = document.getElementById("live-defsub-pos");
+    var dsRe = dsIn && dsIn.value.indexOf("re:") === 0 ? dsIn.value.slice(3) : null;
+    if (dsRe) {
+      /* リエントリーは元の打順で今出ている選手と交代する */
+      var dsInfo = battingSlotInfo(UI.draftGame.batting);
+      var dsRi = UI.draftGame.batting.findIndex(function (b) { return b._rid === dsRe; });
+      var dsG = dsRi >= 0 ? dsInfo.groups[dsInfo.groupOf[dsRi]] : null;
+      if (!dsG) return;
+      liveSubstitute("DEF", UI.draftGame.batting[dsG.active]._rid, null, null, dsPos ? dsPos.value : "", dsRe);
+      return;
+    }
     if (!dsOut || !dsIn || !dsOut.value || !dsIn.value) { showToast("退く選手と入る選手を選んでください", true); return; }
     liveSubstitute("DEF", dsOut.value, dsIn.value, null, dsPos ? dsPos.value : "");
+  } else if (action === "live-dp-field") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    var dpSel = document.getElementById("live-dp-pos");
+    if (dpSel && dpSel.value) liveDpTakeField(dpSel.value);
+  } else if (action === "live-fp-reenter") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    liveFpReenter(el.getAttribute("data-rid"));
   } else if (action === "live-runner-menu-close" || action === "live-log-close") {
     renderApp();
   } else if (action === "live-log-open") {
