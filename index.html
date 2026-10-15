@@ -662,6 +662,12 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-who .rec-when { white-space: normal; line-height: 1.4; }
 .mvp-season .title-row.rank-1 { font-size: 18px; }
 .title-empty { font-size: 12.5px; color: var(--ink-muted); margin: 0; }
+.mvp-games-btn { width: 100%; justify-content: center; margin-top: 8px; font-size: 12.5px; }
+.mvp-game-list { display: flex; flex-direction: column; gap: 5px; max-height: 55vh; overflow-y: auto; margin-bottom: 14px; }
+.mvp-game-row { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; }
+.mvp-game-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.mvp-game-mine { font-size: 11.5px; color: var(--ink-muted); }
+.mvp-game-mine b { color: var(--ink); }
 .th-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; font-size: 13px; }
 .th-counts-label { font-size: 11.5px; color: var(--ink-muted); }
 .th-count { padding: 2px 9px; border-radius: 99px; background: var(--surface-2); }
@@ -2860,7 +2866,8 @@ function renderShell(contentHtml) {
     + contentHtml
     + "</main>"
     + renderConfirmDialog()
-    + renderMsAchieversDialog();
+    + renderMsAchieversDialog()
+    + renderMvpMonthDialog();
 }
 
 function renderApp() {
@@ -5837,10 +5844,43 @@ function renderMvp(games) {
         byMonth[m].forEach(function (g) { var r = gameResult(g); if (r === "W") rec.w++; else if (r === "L") rec.l++; else if (r === "T") rec.t++; });
         return '<div class="title-card"><div class="title-name">' + Number(m.slice(0, 4)) + "年" + Number(m.slice(5, 7)) + "月"
           + '<span class="title-label">' + byMonth[m].length + "試合・" + rec.w + "勝" + rec.l + "敗" + (rec.t ? rec.t + "分" : "") + "</span></div>"
-          + podium(rows, 3) + "</div>";
+          + podium(rows, 3)
+          + '<button class="btn btn-sm mvp-games-btn" data-action="mvp-month-games" data-month="' + m + '">📅 この月の試合を見る（' + byMonth[m].length + "）</button></div>";
       }).join("") + "</div></div>";
   }
   return html;
+}
+/* 月間MVPのポップアップ：その月の試合と、MVP（1位）がその試合でどう活躍したか */
+function renderMvpMonthDialog() {
+  var m = UI.mvpMonth;
+  if (!m) return "";
+  var games = sortGamesByDate(STATE.games.filter(function (g) { return (g.date || "").slice(0, 7) === m && gameResult(g); }));
+  var top = computeMvpPoints(games)[0];
+  var fmtPts = function (v) { return (Math.round(v * 10) / 10) + "pt"; };
+  var rows = games.map(function (g) {
+    var t = gameTotals(g), r = gameResult(g);
+    var mine = "";
+    if (top) {
+      var b = (g.batting || []).filter(function (x) { return x.playerId === top.pid && n0(x.ab) + n0(x.bb) + n0(x.hbp) + n0(x.sac) + n0(x.sf) > 0; })[0];
+      var pp = (g.pitching || []).filter(function (x) { return x.playerId === top.pid; })[0];
+      if (b || pp) {
+        var pts = (b ? battingContribScore(b) : 0) + (pp ? Math.max(0, pitchingContribScore(pp)) : 0) + MVP_GAME_BONUS;
+        mine = [b ? battingSummaryLine(b) : "", pp ? pitchingSummaryLine(pp) : ""].filter(Boolean).join(" / ") + ' <b class="mono">+' + fmtPts(pts) + "</b>";
+      } else mine = "出場なし";
+    }
+    return '<button class="mvp-game-row" data-action="open-game" data-id="' + g.id + '">'
+      + '<span class="mvp-game-head"><span>' + esc(fmtDate(g.date)) + " " + esc(g.opponent || "相手") + "戦</span>"
+      + '<span><span class="badge ' + (r === "W" ? "badge-win" : r === "L" ? "badge-loss" : "badge-tie") + '">' + (r === "W" ? "勝" : r === "L" ? "負" : "分") + "</span> "
+      + '<span class="mono">' + t.us + "-" + t.them + "</span></span></span>"
+      + (top ? '<span class="mvp-game-mine">' + mine + "</span>" : "")
+      + "</button>";
+  }).join("");
+  return '<div class="modal-overlay" data-action="mvp-month-close"><div class="modal-box" data-action="ms-noop">'
+    + '<div class="section-title" style="margin-top:0;">' + Number(m.slice(0, 4)) + "年" + Number(m.slice(5, 7)) + "月の試合</div>"
+    + (top ? '<div class="title-gap" style="margin:-4px 0 8px;">🥇 ' + esc(playerName(top.pid)) + " の各試合の成績と活躍点です。試合を押すと試合の画面を開きます。</div>" : "")
+    + '<div class="mvp-game-list">' + (rows || '<p class="title-empty">試合がありません</p>') + "</div>"
+    + '<div class="modal-actions"><button class="btn btn-primary" data-action="mvp-month-close">閉じる</button></div>'
+    + "</div></div>";
 }
 
 /* ---------- タイトル争い ----------
@@ -6684,6 +6724,7 @@ function onAppClick(e) {
   /* 達成者のポップアップ：中の何もない所を押しても閉じない。選手名などを押したら閉じてから移動 */
   if (action === "ms-noop") return;
   if (UI.msAchievers && action !== "ms-achievers") UI.msAchievers = null;
+  if (UI.mvpMonth && action !== "mvp-month-games") UI.mvpMonth = null;
 
   if (action === "tab") {
     var nextTab = el.getAttribute("data-tab");
@@ -7273,6 +7314,11 @@ function onAppClick(e) {
     if (UI.recapOpen) { var rcCard = document.getElementById("sec-recap"); if (rcCard) rcCard.scrollIntoView({ block: "start", behavior: "smooth" }); }
   } else if (action === "ms-achievers") {
     UI.msAchievers = { key: el.getAttribute("data-key"), target: n0(el.getAttribute("data-target")) };
+    renderApp();
+  } else if (action === "mvp-month-games") {
+    UI.mvpMonth = el.getAttribute("data-month");
+    renderApp();
+  } else if (action === "mvp-month-close") {
     renderApp();
   } else if (action === "ms-achievers-close") {
     UI.msAchievers = null;
