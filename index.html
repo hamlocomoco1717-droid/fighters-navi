@@ -666,8 +666,10 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-game-list { display: flex; flex-direction: column; gap: 5px; max-height: 55vh; overflow-y: auto; margin-bottom: 14px; }
 .mvp-game-row { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; }
 .mvp-game-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.mvp-game-head > span:last-child { white-space: nowrap; flex-shrink: 0; }
 .mvp-game-mine { font-size: 11.5px; color: var(--ink-muted); }
 .mvp-game-mine b { color: var(--ink); }
+.mvp-best { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: var(--focus); color: var(--surface); font-weight: 700; }
 .th-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; font-size: 13px; }
 .th-counts-label { font-size: 11.5px; color: var(--ink-muted); }
 .th-count { padding: 2px 9px; border-radius: 99px; background: var(--surface-2); }
@@ -5830,7 +5832,8 @@ function renderMvp(games) {
   var season = computeMvpPoints(games);
   var label = UI.statsYear === "all" ? "通算" : UI.statsYear + "年";
   var html = '<div class="card"><div class="section-title">' + esc(label) + "のMVP</div>"
-    + (season.length ? '<div class="title-card mvp-season">' + podium(season, 3) + "</div>" : '<p class="title-empty">この期間の記録がありません。</p>')
+    + (season.length ? '<div class="title-card mvp-season">' + podium(season, 3)
+      + '<button class="btn btn-sm mvp-games-btn" data-action="mvp-month-games" data-month="' + esc(UI.statsYear) + '">📅 ' + esc(label) + "の試合を見る（" + games.filter(function (g) { return gameResult(g); }).length + "）</button></div>" : '<p class="title-empty">この期間の記録がありません。</p>')
     + '<p class="title-gap" style="margin-top:8px;">活躍点＝塁打＋打点＋四球×0.5＋盗塁×0.5（投手は 投球回＋奪三振×0.5−失点＋勝利2／セーブ1.5、マイナスの試合は0）を試合ごとに合計し、さらに<b>出場1試合につき＋' + MVP_GAME_BONUS + 'pt</b>の出場ボーナスを足しています。</p></div>';
   var byMonth = {};
   games.forEach(function (g) { var m = (g.date || "").slice(0, 7); if (m) (byMonth[m] = byMonth[m] || []).push(g); });
@@ -5850,11 +5853,14 @@ function renderMvp(games) {
   }
   return html;
 }
-/* 月間MVPのポップアップ：その月の試合と、MVP（1位）がその試合でどう活躍したか */
+/* 月間・シーズンMVPのポップアップ：その期間の試合と、MVP（1位）がその試合でどう活躍したか。
+   UI.mvpMonth は "2025-11"（月）、"2025"（シーズン）、"all"（通算） */
 function renderMvpMonthDialog() {
   var m = UI.mvpMonth;
   if (!m) return "";
-  var games = sortGamesByDate(STATE.games.filter(function (g) { return (g.date || "").slice(0, 7) === m && gameResult(g); }));
+  var games = sortGamesByDate(STATE.games.filter(function (g) { return (m === "all" || (g.date || "").slice(0, m.length) === m) && gameResult(g); }));
+  var title = m === "all" ? "通算の試合" : (m.length === 4 ? Number(m) + "年の試合" : Number(m.slice(0, 4)) + "年" + Number(m.slice(5, 7)) + "月の試合");
+  var best = -1, bestId = null;
   var top = computeMvpPoints(games)[0];
   var fmtPts = function (v) { return (Math.round(v * 10) / 10) + "pt"; };
   var rows = games.map(function (g) {
@@ -5865,7 +5871,8 @@ function renderMvpMonthDialog() {
       var pp = (g.pitching || []).filter(function (x) { return x.playerId === top.pid; })[0];
       if (b || pp) {
         var pts = (b ? battingContribScore(b) : 0) + (pp ? Math.max(0, pitchingContribScore(pp)) : 0) + MVP_GAME_BONUS;
-        mine = [b ? battingSummaryLine(b) : "", pp ? pitchingSummaryLine(pp) : ""].filter(Boolean).join(" / ") + ' <b class="mono">+' + fmtPts(pts) + "</b>";
+        if (pts > best) { best = pts; bestId = g.id; }
+        mine = [b ? battingSummaryLine(b) : "", pp ? pitchingSummaryLine(pp) : ""].filter(Boolean).join(" / ") + ' <b class="mono">+' + fmtPts(pts) + "</b>@@BEST" + g.id + "@@";
       } else mine = "出場なし";
     }
     return '<button class="mvp-game-row" data-action="open-game" data-id="' + g.id + '">'
@@ -5875,8 +5882,10 @@ function renderMvpMonthDialog() {
       + (top ? '<span class="mvp-game-mine">' + mine + "</span>" : "")
       + "</button>";
   }).join("");
+  /* いちばん活躍点が高かった試合に印（2試合以上あるときだけ） */
+  rows = rows.replace(/@@BEST([^@]+)@@/g, function (all, id) { return games.length >= 2 && id === bestId ? ' <span class="mvp-best">ベスト</span>' : ""; });
   return '<div class="modal-overlay" data-action="mvp-month-close"><div class="modal-box" data-action="ms-noop">'
-    + '<div class="section-title" style="margin-top:0;">' + Number(m.slice(0, 4)) + "年" + Number(m.slice(5, 7)) + "月の試合</div>"
+    + '<div class="section-title" style="margin-top:0;">' + title + "</div>"
     + (top ? '<div class="title-gap" style="margin:-4px 0 8px;">🥇 ' + esc(playerName(top.pid)) + " の各試合の成績と活躍点です。試合を押すと試合の画面を開きます。</div>" : "")
     + '<div class="mvp-game-list">' + (rows || '<p class="title-empty">試合がありません</p>') + "</div>"
     + '<div class="modal-actions"><button class="btn btn-primary" data-action="mvp-month-close">閉じる</button></div>'
