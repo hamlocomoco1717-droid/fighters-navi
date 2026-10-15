@@ -675,8 +675,58 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .mvp-game-head > span:last-child { white-space: nowrap; flex-shrink: 0; }
 .mvp-game-mine { font-size: 11.5px; color: var(--ink-muted); }
 .mvp-game-mine b { color: var(--ink); }
+/* ===== 試合前の準備画面 ===== */
+.su-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
+.su-head h1 { margin: 0; font-size: 22px; flex: 1; }
+.su-back { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); font-size: 20px; cursor: pointer; }
+.su-step { font-size: 12px; color: var(--ink-muted); }
+.su-label { font-size: 13px; font-weight: 700; color: var(--ink-muted); margin: 16px 2px 6px; }
+.su-label-note { font-weight: 400; margin-left: 4px; }
+.su-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 4px 14px; }
+.su-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-top: 1px solid var(--border); }
+.su-card > .su-row:first-child, .su-card > :first-child { border-top: 0; }
+.su-col { flex-direction: column; align-items: stretch; }
+.su-k { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.su-note { font-size: 11.5px; color: var(--ink-muted); }
+.su-input { font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); min-width: 0; }
+.su-input-date { flex: 0 1 180px; }
+.su-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.su-chip { font-size: 12.5px; padding: 5px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); cursor: pointer; font-family: inherit; }
+.su-segs { display: flex; gap: 8px; }
+.su-segs-wide { display: grid; grid-template-columns: repeat(5, 1fr); }
+.su-seg { min-width: 64px; min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-muted); font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; }
+.su-seg.on { border: 2px solid var(--lv-strong); background: var(--lv-strong); color: var(--lv-strong-ink); }
+.su-more summary { list-style: none; cursor: pointer; }
+.su-more summary::-webkit-details-marker { display: none; }
+.su-copy { width: 100%; margin: 10px 0 6px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border-color: var(--lv-strong); }
+.su-lu { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.su-no { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--lv-strong); color: var(--lv-strong-ink); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+.su-no-add { background: transparent; border: 1px dashed var(--border); color: var(--ink-muted); }
+.su-lu-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.su-lu-main b { font-size: 15px; }
+.su-lu-main select { font-size: 13px; padding: 4px 6px; max-width: 150px; }
+.su-lu-btns { display: flex; gap: 4px; }
+.su-ic { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font-size: 13px; cursor: pointer; }
+.su-ic:disabled { opacity: 0.3; }
+.su-ic-x { color: var(--loss); font-size: 16px; }
+.su-add { display: flex; align-items: center; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--border); }
+.su-add select { flex: 1; min-width: 0; font-size: 16px; padding: 10px; border-radius: 10px; border: 2px dashed var(--lv-strong); background: transparent; color: var(--ink); font-weight: 700; }
+.su-empty { font-size: 13px; color: var(--ink-muted); text-align: center; margin: 12px 0; }
+.su-defs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 12px; padding: 10px 0; }
+.su-def { display: flex; gap: 8px; font-size: 13px; padding: 4px 0; }
+.su-def span { color: var(--ink-muted); min-width: 2.5em; }
+.su-def.warn b { color: var(--loss); }
+.su-foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 110; background: var(--surface); border-top: 1px solid var(--border);
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.su-foot > * { width: 100%; max-width: 560px; }
+.su-primary { min-height: 52px; border: 0; border-radius: 12px; background: var(--lv-strong); color: var(--lv-strong-ink); font-size: 17px; font-weight: 700; font-family: inherit; cursor: pointer; }
+.su-link { background: none; border: 0; color: var(--ink-muted); font-size: 13.5px; padding: 4px; font-family: inherit; cursor: pointer; }
+.su-foot-venue { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--ink-muted); }
+.su-foot-venue .su-seg { min-height: 36px; min-width: 60px; font-size: 14px; }
+body.lv-on:has(.su-foot) #app::after { height: 190px; }
+body.lv-on:has(.su-foot) #toast-wrap { bottom: calc(130px + env(safe-area-inset-bottom)); }
 /* ===== 試合中モード（新レイアウト） ===== */
-body.lv-on { padding-bottom: 76px; }
+body.lv-on #app::after { content: ""; display: block; height: 90px; }
 .lv-control { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; }
 .lv-control-lbl { color: var(--ink-muted); }
 .lv-control input { flex: 1; min-width: 0; font-size: 13px; }
@@ -3014,7 +3064,7 @@ function renderApp() {
   else if (UI.tab === "addgame") content = renderAddGameTab();
   else content = renderSettingsTab();
   document.getElementById("app").innerHTML = renderShell(content);
-  document.body.classList.toggle("lv-on", !!document.querySelector(".lv-nav"));
+  document.body.classList.toggle("lv-on", !!document.querySelector(".lv-nav, .su-foot"));
   saveViewState();
   /* 横スクロールのサブタブは、選択中のボタンが隠れないよう横方向だけ寄せる */
   document.querySelectorAll(".subtabs").forEach(function (bar) {
@@ -3651,8 +3701,89 @@ function applyPrevLineup(prev) {
   persistDraft(added + "人の打順を引用しました" + (skipped ? "（" + skipped + "人は名簿にないため除外）" : ""));
 }
 
+/* ===== 試合前の準備画面：①試合設定 → ②先発メンバー → 試合を始める ===== */
+function renderGameSetup(d) {
+  var step = UI.setupStep;
+  var away = d.venue === "away";
+  var nInn = Math.max((d.innings.top || []).length, (d.innings.bottom || []).length) || n0(STATE.team.inningsPerGame) || 7;
+  var seg = function (action, attr, val, cur, label) {
+    return '<button class="su-seg' + (cur ? " on" : "") + '" data-action="' + action + '" ' + attr + '="' + val + '">' + label + "</button>";
+  };
+  var foot, body;
+  if (step === 1) {
+    var opps = {};
+    STATE.games.forEach(function (g) { if (g.opponent && g.id !== d.id) opps[g.opponent] = (opps[g.opponent] || 0) + 1; });
+    var oppList = Object.keys(opps).sort(function (a, b) { return opps[b] - opps[a]; });
+    var innBtns = [5, 6, 7, 8, 9].map(function (n) { return seg("su-innings", "data-n", n, n === nInn, n + "回"); }).join("");
+    body = '<div class="su-label">試合</div><div class="su-card">'
+        + '<div class="su-row su-col"><span class="su-k">対戦相手</span>'
+          + '<input class="su-input" type="text" data-draft="opponent" list="su-opp-list" value="' + esc(d.opponent || "") + '" placeholder="例：ディープインパクト">'
+          + '<datalist id="su-opp-list">' + oppList.map(function (o) { return '<option value="' + esc(o) + '">'; }).join("") + "</datalist>"
+          + (oppList.length ? '<div class="su-chips">' + oppList.slice(0, 6).map(function (o) { return '<button class="su-chip" data-action="su-opp" data-v="' + esc(o) + '">' + esc(o) + "</button>"; }).join("") + "</div>" : "")
+        + "</div>"
+        + '<div class="su-row"><div><span class="su-k">先攻・後攻</span><div class="su-note">メンバー登録のあとでも変えられます</div></div>'
+          + '<div class="su-segs">' + seg("set-venue", "data-value", "away", away, "先攻") + seg("set-venue", "data-value", "home", !away, "後攻") + "</div></div>"
+        + '<div class="su-row su-col"><span class="su-k">回数</span><div class="su-segs su-segs-wide">' + innBtns + "</div></div>"
+      + "</div>"
+      + '<div class="su-label">日付・大会<span class="su-label-note">（あとからでも入力できます）</span></div><div class="su-card">'
+        + '<div class="su-row"><span class="su-k">日付</span><input class="su-input su-input-date" type="date" data-draft="date" value="' + esc(d.date || "") + '"></div>'
+        + '<details class="su-more"' + (d.tournament || d.ground ? " open" : "") + '><summary class="su-row"><span class="su-k">大会名・球場</span><span class="su-note">' + (d.tournament || d.ground ? esc([d.tournament, d.ground].filter(Boolean).join("・")) : "未入力") + " ⌄</span></summary>"
+          + '<div class="su-row su-col"><span class="su-k">大会名</span><input class="su-input" type="text" data-draft="tournament" value="' + esc(d.tournament || "") + '" placeholder="（任意）例：長谷川幸司杯"></div>'
+          + '<div class="su-row su-col"><span class="su-k">球場</span><input class="su-input" type="text" data-draft="ground" value="' + esc(d.ground || "") + '" placeholder="（任意）"></div>'
+        + "</details>"
+      + "</div>";
+    foot = '<button class="su-primary" data-action="su-next">次へ：先発メンバー登録</button>'
+      + '<button class="su-link" data-action="su-start">スキップして試合を始める</button>';
+  } else {
+    var used = {};
+    d.batting.forEach(function (b) { used[b.playerId] = true; });
+    var bCounts = battingGameCounts();
+    var addOpts = sortPlayersForAdd(STATE.players.filter(function (p) { return p.active !== false && !used[p.id]; }), bCounts)
+      .map(function (p) { return '<option value="' + p.id + '">' + (p.number != null && p.number !== "" ? "#" + esc(p.number) + " " : "") + esc(p.name) + "</option>"; }).join("");
+    var prev = prevGameForDraft();
+    var rows = d.batting.map(function (b, i) {
+      return '<div class="su-lu">'
+        + '<span class="su-no">' + (i + 1) + "</span>"
+        + '<div class="su-lu-main"><b>' + esc(playerNameNum(b.playerId)) + "</b>"
+          + '<select class="su-pos" data-rid="' + b._rid + '">' + positionOptions(b.position || "") + "</select></div>"
+        + '<div class="su-lu-btns">'
+          + '<button class="su-ic" data-action="move-brow" data-rid="' + b._rid + '" data-dir="-1"' + (i === 0 ? " disabled" : "") + ' title="上へ">▲</button>'
+          + '<button class="su-ic" data-action="move-brow" data-rid="' + b._rid + '" data-dir="1"' + (i === d.batting.length - 1 ? " disabled" : "") + ' title="下へ">▼</button>'
+          + '<button class="su-ic su-ic-x" data-action="rm-brow" data-rid="' + b._rid + '" title="外す">×</button>'
+        + "</div></div>";
+    }).join("");
+    /* 守備位置の確認（投手・指名打者以外の8つが埋まっているか） */
+    var posWho = {};
+    d.batting.forEach(function (b) { if (b.position) posWho[b.position] = (posWho[b.position] || []).concat(playerName(b.playerId)); });
+    var defRows = ["捕手", "一塁手", "二塁手", "三塁手", "遊撃手", "左翼手", "中堅手", "右翼手"].map(function (pos) {
+      var who = posWho[pos] || [];
+      return '<div class="su-def' + (who.length === 1 ? "" : " warn") + '"><span>' + pos.replace("手", "") + "</span><b>" + (who.length ? esc(who.join("・")) : "未設定") + "</b></div>";
+    }).join("");
+    var pCounts = pitchingGameCounts();
+    var p0 = (d.pitching || [])[0];
+    var pOpts = '<option value="">（あとで選ぶ）</option>' + sortPlayersForAdd(STATE.players.filter(function (p) { return p.active !== false; }), pCounts)
+      .map(function (p) { return '<option value="' + p.id + '"' + (p0 && p0.playerId === p.id ? " selected" : "") + ">" + (p.number != null && p.number !== "" ? "#" + esc(p.number) + " " : "") + esc(p.name) + "</option>"; }).join("");
+    body = '<div class="su-card">'
+        + (prev ? '<button class="su-copy" data-action="copy-prev-lineup">⧉ 前の試合（' + esc(fmtDate(prev.date)) + " " + esc(prev.opponent || "") + "）の打順をコピー</button>" : "")
+        + (rows || '<p class="su-empty">まだ選手がいません。下から1番打者を選んでください。</p>')
+        + '<div class="su-add"><span class="su-no su-no-add">' + (d.batting.length + 1) + "</span>"
+          + '<select id="su-add"><option value="">＋ 選手を追加…</option>' + addOpts + "</select></div>"
+        + '<div class="su-note" style="text-align:center;margin-top:6px;">※ 試合が始まってからでも追加・変更できます</div>'
+      + "</div>"
+      + '<div class="su-label">先発投手</div><div class="su-card"><div class="su-row"><span class="su-k">投手</span><select id="su-pitcher" class="su-input">' + pOpts + "</select></div></div>"
+      + '<div class="su-label">守備位置</div><div class="su-card"><div class="su-defs">' + defRows + "</div></div>";
+    foot = '<div class="su-foot-venue"><span>先攻・後攻</span>' + seg("set-venue", "data-value", "away", away, "先攻") + seg("set-venue", "data-value", "home", !away, "後攻") + "</div>"
+      + '<button class="su-primary" data-action="su-start">試合を始める</button>';
+  }
+  return '<div class="su-head"><button class="su-back" data-action="' + (step === 1 ? "back-to-games" : "su-back") + '">' + (step === 1 ? "✕" : "‹") + "</button>"
+      + "<h1>" + (step === 1 ? "試合設定" : "先発メンバー") + '</h1><span class="su-step">' + step + " / 2</span></div>"
+    + body
+    + '<div class="su-foot">' + foot + "</div>";
+}
+
 function renderGameDetail(g) {
   var d = ensureDraft(g);
+  if (UI.isNewUnsavedGame && UI.setupStep && !UI.readOnly) return renderGameSetup(d);
   var tot = { top: sum(d.innings.top), bottom: sum(d.innings.bottom) };
   var inningCount = Math.max((d.innings.top || []).length, (d.innings.bottom || []).length);
   var idxs = [];
@@ -7349,6 +7480,7 @@ function onAppClick(e) {
   } else if (action === "import-game-json") {
     handleImportGameJson();
   } else if (action === "cancel-game") {
+    UI.setupStep = null;
     requestLeaveGameDetail(false);
   } else if (action === "delete-game") {
     if (UI.readOnly || !UI.currentGameId) return;
@@ -7373,6 +7505,32 @@ function onAppClick(e) {
     UI.draftGame.innings.top.splice(ridx, 1);
     UI.draftGame.innings.bottom.splice(ridx, 1);
     persistDraft();
+  } else if (action === "su-next" || action === "su-back") {
+    UI.setupStep = action === "su-next" ? 2 : 1;
+    renderApp(); window.scrollTo(0, 0);
+  } else if (action === "su-opp") {
+    if (!UI.draftGame) return;
+    UI.draftGame.opponent = el.getAttribute("data-v") || "";
+    persistDraft();
+  } else if (action === "su-innings") {
+    if (!UI.draftGame || !UI.isNewUnsavedGame) return;
+    var suN = parseInt(el.getAttribute("data-n"), 10) || 7;
+    ["top", "bottom"].forEach(function (sd) {
+      var arr = UI.draftGame.innings[sd] || [];
+      while (arr.length < suN) arr.push(0);
+      /* 減らすときは、まだ点の入っていない後ろの回だけ */
+      while (arr.length > suN && !n0(arr[arr.length - 1])) arr.pop();
+      UI.draftGame.innings[sd] = arr;
+    });
+    persistDraft();
+  } else if (action === "su-start") {
+    if (!UI.draftGame) return;
+    UI.setupStep = null;
+    UI.liveInning = null; UI.liveOuts = 0; UI.liveBases = [null, null, null];
+    if (UI.draftGame.batting.length) UI.liveBatterRid = UI.draftGame.batting[0]._rid;
+    if ((UI.draftGame.pitching || []).length) UI.liveDefPitcherRid = UI.draftGame.pitching[0]._rid;
+    persistDraft();
+    window.scrollTo(0, 0);
   } else if (action === "live-sheet-dir") {
     if (!UI.liveSheet) return;
     var shDir = el.getAttribute("data-dir") || "";
@@ -7866,6 +8024,7 @@ function onAppClick(e) {
       STATE.games.push(g);
       UI.currentGameId = g.id; UI.draftGame = clone(g); UI.isNewUnsavedGame = true; UI.draftEverSaved = false;
       UI.liveInning = null; resetLiveInput();
+      UI.setupStep = 1;   /* 試合前の準備画面（試合設定 → 先発メンバー）から始める */
       UI.confirmDialog = null;
       pushGameHistory();
       renderApp();
@@ -8024,6 +8183,25 @@ function onAppChange(e) {
       if (impBox) impBox.innerHTML = '<span style="color:var(--loss);">ファイルを読み込めませんでした。</span>';
     };
     rdr.readAsText(impFile);
+    return;
+  }
+  if (t.id === "su-add" && UI.draftGame && t.value) {
+    var suPl = playerById(t.value);
+    UI.draftGame.batting.push({ _rid: uid(), playerId: t.value, position: (suPl && POSITIONS.indexOf(suPl.position) !== -1) ? suPl.position : "", posChanges: [], ab: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0, atbats: [] });
+    persistDraft();
+    return;
+  }
+  if (t.matches(".su-pos") && UI.draftGame) {
+    var suRow = UI.draftGame.batting.filter(function (b) { return b._rid === t.getAttribute("data-rid"); })[0];
+    if (suRow) { suRow.position = t.value; persistDraft(); }
+    return;
+  }
+  if (t.id === "su-pitcher" && UI.draftGame) {
+    var suPs = UI.draftGame.pitching || (UI.draftGame.pitching = []);
+    if (!t.value) { if (suPs.length && !n0(suPs[0].ipOuts)) suPs.shift(); }
+    else if (suPs.length) suPs[0].playerId = t.value;
+    else suPs.push({ _rid: uid(), playerId: t.value, ipOuts: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, decision: "" });
+    persistDraft();
     return;
   }
   if (t.matches(".bulk-lineup-slot")) {
