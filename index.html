@@ -803,6 +803,9 @@ body.lv-on #app::after { content: ""; display: block; height: 90px; }
 .ts-table th:first-child, .ts-table td:first-child, .ts-table th.num, .ts-table td.num { white-space: nowrap !important; }
 .ts-table tr.ts-ok td:first-child { font-weight: 700; color: var(--win); }
 .ts-table tr.ts-ng td { color: var(--ink-muted); }
+.ts-vs { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.ts-premise { margin: 0 0 8px; padding-left: 18px; font-size: 11.5px; color: var(--ink-muted); line-height: 1.6; }
+.ts-premise b { color: var(--ink); }
 .ts-note { font-size: 11.5px; color: var(--ink-muted); margin: 10px 0 0; line-height: 1.6; }
 .lv-opp { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; }
 .lv-opp-name { flex: 1; min-width: 0; font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -7456,17 +7459,18 @@ function titleSimCompute(games, pid, n, kind) {
       var best = null;
       rv.forEach(function (r) {
         var rx = r.x + (rate == null ? add * r.x / r.y : add * rate), ry = r.y + add;
-        if (!best || rx / ry > best.x / best.y) best = { x: rx, y: ry };
+        if (!best || rx / ry > best.x / best.y) best = { x: rx, y: ry, pid: r.pid };
       });
       if (me.pa + add < qual) return { short: true };
       if (!best) return { v: 0, of: add };
-      for (var v = 0; v <= add; v++) if ((me.x + v) * best.y > best.x * (me.y + add)) return { v: v, of: add };
-      return { v: null, of: add };
+      var topInfo = { topPid: best.pid, topRate: best.x / best.y };
+      for (var v = 0; v <= add; v++) if ((me.x + v) * best.y > best.x * (me.y + add)) return Object.assign({ v: v, of: add }, topInfo);
+      return Object.assign({ v: null, of: add }, topInfo);
     };
     multi.push({ N: N, pace: need(null), slump: need(1 / n) });
   }
   var qualList = list.filter(function (c) { return c.pa >= gp * 2.5; });
-  return { K: K, me: me, gp: gp, qualNow: gp * 2.5, meQualNow: me.pa >= gp * 2.5, meQualNext: meQualNext, next: next, multi: multi, leaders: qualList.slice(0, 4),
+  return { K: K, list: list, me: me, gp: gp, qualNow: gp * 2.5, meQualNow: me.pa >= gp * 2.5, meQualNext: meQualNext, next: next, multi: multi, leaders: qualList.slice(0, 4),
     isTop: qualList.length > 0 && qualList[0].pid === pid && (!qualList[1] || gt(qualList[0].x, qualList[0].y, qualList[1].x, qualList[1].y)) };
 }
 function renderTitleSimDialog() {
@@ -7513,9 +7517,21 @@ function renderTitleSimDialog() {
   }).join("");
   var needTxt = function (m) {
     if (m.short) return "規定打席に届かない";
-    if (m.v == null) return "全部" + (ts.kind === "obp" ? "出塁して" : "打って") + "も届かない";
-    return m.of + K.per + m.v + K.got + "（" + fmtRate(m.v / m.of) + "）";
+    var vs = m.topPid ? '<span class="ts-vs">相手の最高：' + nm(m.topPid) + " " + fmtRate(m.topRate) + "</span>" : "";
+    if (m.v == null) return "全部" + (ts.kind === "obp" ? "出塁して" : "打って") + "も届かない" + vs;
+    return m.of + K.per + m.v + K.got + "（" + fmtRate(m.v / m.of) + "）" + vs;
   };
+  /* 表の前提：「今の率のまま」でいちばん高くなるライバルと、そのペース */
+  var paceTop = r.multi[0].pace.topPid ? r.list.filter(function (c) { return c.pid === r.multi[0].pace.topPid; })[0] : null;
+  var gotWord = ts.kind === "obp" ? "出塁" : "安打";
+  var premise = '<ul class="ts-premise">'
+    + "<li>全員が残りの試合すべてに出て、1試合" + n + K.per + "ずつ立つとして計算しています。</li>"
+    + "<li><b>今の" + K.rate + "のままなら</b>：ライバル全員が今の" + K.rate + "どおりに打つ場合です"
+      + (paceTop ? "（例：" + nm(paceTop.pid) + "は" + fmtRate(paceTop.x / paceTop.y) + "なので、1試合" + n + K.per + "で約" + (Math.round(n * paceTop.x / paceTop.y * 10) / 10) + gotWord + "のペース）" : "")
+      + "。いちばん高くなるライバルを上回るのに必要な数です。</li>"
+    + "<li><b>1試合1" + gotWord + "なら</b>：ライバル全員が調子を落とし、1試合に1" + gotWord + "だけの場合です（" + n + K.per + "1" + gotWord + "＝" + fmtRate(1 / n) + "のペース）。</li>"
+    + "<li>「次の試合」の表は、ライバルの結果を決めつけずに条件として書いているので、2つの表の答えがちがって見えることがあります。</li>"
+    + "</ul>";
   var multiRows = r.multi.map(function (m) {
     return "<tr><td>残り" + m.N + "試合</td><td>" + needTxt(m.pace) + "</td><td>" + needTxt(m.slump) + "</td></tr>";
   }).join("");
@@ -7527,6 +7543,7 @@ function renderTitleSimDialog() {
     + '<div class="ts-h">次の試合で首位' + leadWord + "（全員が" + n + K.per + "のとき）</div>"
     + '<table class="stat-table ts-table"><thead><tr><th>' + nm(ts.pid) + '</th><th class="num">' + K.rate + "</th><th>条件</th></tr></thead><tbody>" + nextRows + "</tbody></table>"
     + '<div class="ts-h">残り試合で必要な' + K.got + "（1試合" + n + K.per + "として）</div>"
+    + premise
     + '<table class="stat-table ts-table"><thead><tr><th>残り</th><th>ライバルが今の' + K.rate + "のままなら</th><th>ライバルが1試合1" + (ts.kind === "obp" ? "出塁" : "安打") + "なら</th></tr></thead><tbody>" + multiRows + "</tbody></table>"
     + '<p class="ts-note">' + (ts.kind === "obp"
       ? "出塁率は「（安打＋四球＋死球）÷打席」です（このアプリのタイトル争いと同じ式で、犠打も打席に数えます）。"
