@@ -791,6 +791,19 @@ body.lv-on #app::after { content: ""; display: block; height: 90px; }
 .lv-skip { flex: none; font-size: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-muted); }
 .lv-addp { display: flex; gap: 8px; align-items: center; }
 .lv-pick.lv-pick2 { grid-template-columns: repeat(2, 1fr); }
+.title-sim-btn { display: block; width: 100%; margin-top: 8px; padding: 8px; border-radius: 8px; border: 1px dashed var(--border); background: var(--surface-2); color: var(--ink); font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
+.ts-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.ts-ctl select { flex: 1 1 160px; min-width: 0; font-size: 15px; }
+.ts-h { font-size: 12.5px; font-weight: 700; margin: 14px 0 6px; }
+.ts-st { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 6px; border-radius: 6px; }
+.ts-st.me { background: var(--accent-soft); font-weight: 700; }
+.ts-box { max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); overflow-y: auto; }
+.ts-table { width: 100%; min-width: 0; table-layout: auto; }
+.ts-table th, .ts-table td { white-space: normal !important; font-size: 12.5px; vertical-align: top; padding: 6px 5px; }
+.ts-table th:first-child, .ts-table td:first-child { white-space: nowrap !important; }
+.ts-table tr.ts-ok td:first-child { font-weight: 700; color: var(--win); }
+.ts-table tr.ts-ng td { color: var(--ink-muted); }
+.ts-note { font-size: 11.5px; color: var(--ink-muted); margin: 10px 0 0; line-height: 1.6; }
 .lv-opp { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; }
 .lv-opp-name { flex: 1; min-width: 0; font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lv-opp-link { display: block; margin: -4px 0 10px; padding: 4px 0; background: none; border: 0; color: var(--info); font-size: 12.5px; font-family: inherit; text-decoration: underline; cursor: pointer; }
@@ -3201,7 +3214,8 @@ function renderShell(contentHtml) {
     + renderConfirmDialog()
     + renderMsAchieversDialog()
     + renderMvpMonthDialog()
-    + renderTitleGamesDialog();
+    + renderTitleGamesDialog()
+    + renderTitleSimDialog();
 }
 
 function renderApp() {
@@ -7381,7 +7395,9 @@ function renderTitleRace(games, year) {
           + '<button class="title-val mono tg-open" data-action="title-games" data-year="' + esc(year || "all") + '" data-title="' + esc(t.name) + '" data-pid="' + r.pid + '" title="試合ごとの' + t.label + 'を見る">' + fmtTitleVal(t, r.v) + " ›</button></div>";
       }).join("")
       + (hidden ? '<div class="title-gap">ほか ' + hidden + "人が同じ順位</div>" : "")
-      + '<div class="title-gap">' + gap + "</div></div>";
+      + '<div class="title-gap">' + gap + "</div>"
+      + (t.name === "首位打者" && !final && year && year !== "all" ? '<button class="title-sim-btn" data-action="title-sim-open" data-year="' + esc(year) + '">🔮 首位打者になるには？</button>' : "")
+      + "</div>";
   }).join("");
   var head = final ? esc(year) + "年のタイトル（確定）" : (year === "all" ? "通算のタイトル争い" : esc(year) + "年のタイトル争い");
   return '<div class="card"><div class="section-title">' + head + "</div>"
@@ -7390,6 +7406,111 @@ function renderTitleRace(games, year) {
     + '<div class="title-grid">' + cards + "</div></div>";
 }
 
+/* ---------- 首位打者シミュレーション ----------
+   選んだ選手が「次の試合で何安打なら首位か」「そのときライバルは何安打以下ならよいか」
+   「残り何試合でどれだけ打てば届くか」を、今の成績から計算する。
+   打率の比べ方は割り算をせず掛け算で（h1/ab1 > h2/ab2 ⇔ h1*ab2 > h2*ab1）、端数の誤差を出さない */
+function titleSimCompute(games, pid, n) {
+  var list = Array.from(computeBattingAgg(games).values()).map(function (c) { return { pid: c.playerId, pa: c.pa, ab: c.ab, h: c.h }; })
+    .filter(function (c) { return c.pa > 0; });
+  var gp = computeTeamRecord(games).gp;
+  var me = list.filter(function (c) { return c.pid === pid; })[0] || { pid: pid, pa: 0, ab: 0, h: 0 };
+  var gt = function (h1, ab1, h2, ab2) { return h1 * ab2 > h2 * ab1; };
+  /* 次の1試合：全員が n 打数（n 打席）として、規定打席に届く選手がライバル */
+  var qualNext = (gp + 1) * 2.5;
+  var rivals = list.filter(function (c) { return c.pid !== pid && c.pa + n >= qualNext && c.ab + n > 0; });
+  var meQualNext = me.pa + n >= qualNext;
+  var next = [];
+  for (var k = 0; k <= n; k++) {
+    var mh = me.h + k, mab = me.ab + n;
+    var conds = [], possible = true;
+    rivals.forEach(function (r) {
+      var maxA = -1;
+      for (var a = 0; a <= n; a++) if (gt(mh, mab, r.h + a, r.ab + n)) maxA = a;
+      if (maxA < 0) possible = false;
+      if (maxA < n) conds.push({ pid: r.pid, maxA: maxA });
+    });
+    conds.sort(function (x, y) { return x.maxA - y.maxA; });
+    next.push({ k: k, h: mh, ab: mab, possible: possible && meQualNext, conds: conds });
+  }
+  /* 残り N 試合：ライバルが今のペース／1試合1安打に落ちたとき、自分に何安打必要か */
+  var multi = [];
+  for (var N = 1; N <= 5; N++) {
+    var ab = n * N, qual = (gp + N) * 2.5;
+    var rv = list.filter(function (c) { return c.pid !== pid && c.pa + ab >= qual && c.ab > 0; });
+    var need = function (rate) {
+      /* ライバルの見込み：今の打率（rate=null）か、rate のペースで打つ */
+      var best = null;
+      rv.forEach(function (r) {
+        var rh = r.h + (rate == null ? ab * r.h / r.ab : ab * rate), rab = r.ab + ab;
+        if (!best || rh / rab > best.h / best.ab) best = { h: rh, ab: rab };
+      });
+      if (me.pa + ab < qual) return { short: true };
+      if (!best) return { x: 0, of: ab };
+      for (var x = 0; x <= ab; x++) if ((me.h + x) * best.ab > best.h * (me.ab + ab)) return { x: x, of: ab, top: best.h / best.ab };
+      return { x: null, of: ab, top: best.h / best.ab };
+    };
+    multi.push({ N: N, pace: need(null), slump: need(1 / 3) });
+  }
+  var sorted = list.filter(function (c) { return c.pa >= gp * 2.5 && c.ab > 0; }).sort(function (a, b) { return b.h * a.ab - a.h * b.ab; });
+  return { me: me, gp: gp, qualNow: gp * 2.5, meQualNow: me.pa >= gp * 2.5, meQualNext: meQualNext, qualNext: qualNext, next: next, multi: multi, leaders: sorted.slice(0, 4), isTop: sorted.length > 0 && sorted[0].pid === pid && (!sorted[1] || gt(sorted[0].h, sorted[0].ab, sorted[1].h, sorted[1].ab)) };
+}
+function renderTitleSimDialog() {
+  var ts = UI.titleSim;
+  if (!ts) return "";
+  var games = gamesForYear(ts.year).filter(function (g) { return gameResult(g); });
+  var cands = Array.from(computeBattingAgg(games).values()).filter(function (c) { return c.pa > 0 && c.ab > 0; })
+    .sort(function (a, b) { return b.h * a.ab - a.h * b.ab; });
+  if (!cands.length) return "";
+  if (!cands.some(function (c) { return c.playerId === ts.pid; })) {
+    var mine = (getScorerName() || "").trim();
+    var hit = mine ? cands.filter(function (c) { return playerName(c.playerId) === mine; })[0] : null;
+    ts.pid = hit ? hit.playerId : (cands[1] || cands[0]).playerId;
+  }
+  var n = ts.ab || 3;
+  var r = titleSimCompute(games, ts.pid, n);
+  var nm = function (pid) { return esc(playerName(pid)); };
+  var avgOf = function (h, ab) { return ab ? fmtRate(h / ab) : "-"; };
+  var opts = cands.map(function (c) {
+    return '<option value="' + c.playerId + '"' + (c.playerId === ts.pid ? " selected" : "") + ">" + esc(playerName(c.playerId)) + "（" + fmtRate(c.h / c.ab) + "）</option>";
+  }).join("");
+  var abSeg = [3, 4, 5].map(function (v) { return '<button class="su-seg' + (v === n ? " on" : "") + '" data-action="title-sim-ab" data-n="' + v + '">' + v + "打数</button>"; }).join("");
+  var standings = r.leaders.map(function (c, i) {
+    return '<div class="ts-st' + (c.pid === ts.pid ? " me" : "") + '"><span>' + (i + 1) + "位 " + nm(c.pid) + '</span><span class="mono">' + avgOf(c.h, c.ab) + "（" + c.h + "/" + c.ab + "）</span></div>";
+  }).join("");
+  if (!r.leaders.some(function (c) { return c.pid === ts.pid; })) {
+    standings += '<div class="ts-st me"><span>' + nm(ts.pid) + (r.meQualNow ? "" : "（規定打席まであと" + Math.ceil(r.qualNow - r.me.pa) + "）") + '</span><span class="mono">' + avgOf(r.me.h, r.me.ab) + "（" + r.me.h + "/" + r.me.ab + "）</span></div>";
+  }
+  var condTxt = function (row) {
+    if (!r.meQualNext) return "規定打席に届かない";
+    if (!row.possible) return "この試合だけでは届かない";
+    if (!row.conds.length) return "ほかの人の結果に関係なく首位";
+    return row.conds.map(function (c) { return nm(c.pid) + "が" + (c.maxA === 0 ? "ノーヒット" : c.maxA + "安打以下"); }).join("、");
+  };
+  var nextRows = r.next.slice().reverse().map(function (row) {
+    return '<tr class="' + (row.possible ? "ts-ok" : "ts-ng") + '"><td>' + n + "打数" + row.k + "安打</td>"
+      + '<td class="num mono">' + avgOf(row.h, row.ab) + "</td><td>" + condTxt(row) + "</td></tr>";
+  }).join("");
+  var needTxt = function (x) {
+    if (x.short) return "規定打席に届かない";
+    if (x.x == null) return "全部打っても届かない";
+    return x.of + "打数" + x.x + "安打（" + fmtRate(x.x / x.of) + "）";
+  };
+  var multiRows = r.multi.map(function (m) {
+    return "<tr><td>残り" + m.N + "試合</td><td>" + needTxt(m.pace) + "</td><td>" + needTxt(m.slump) + "</td></tr>";
+  }).join("");
+  return '<div class="modal-overlay" data-action="title-sim-close"><div class="modal-box ts-box" data-action="ms-noop">'
+    + '<div class="section-title" style="margin-top:0;">🔮 首位打者シミュレーション（' + esc(ts.year) + "年）</div>"
+    + '<div class="ts-ctl"><select id="title-sim-player">' + opts + '</select><div class="su-segs">' + abSeg + "</div></div>"
+    + '<div class="ts-h">いまの順位（規定打席 ' + Math.round(r.qualNow * 10) / 10 + "打席・" + r.gp + "試合）</div>" + standings
+    + '<div class="ts-h">' + (r.isTop ? "次の試合で首位を守るには" : "次の試合で首位になるには") + "（全員が" + n + "打数のとき）</div>"
+    + '<table class="stat-table ts-table"><thead><tr><th>' + nm(ts.pid) + '</th><th class="num">打率</th><th>条件</th></tr></thead><tbody>' + nextRows + "</tbody></table>"
+    + '<div class="ts-h">残り試合で必要な安打（1試合' + n + "打数として）</div>"
+    + '<table class="stat-table ts-table"><thead><tr><th>残り</th><th>ライバルが今の打率のままなら</th><th>ライバルが1試合1安打なら</th></tr></thead><tbody>' + multiRows + "</tbody></table>"
+    + '<p class="ts-note">打率は「安打÷打数」なので、四球・死球・犠打は打率に入りません。同じ打率なら同率首位です。規定打席は「チームの試合数×2.5」で、ライバルは次の試合のあとに規定打席に届く人で計算しています。</p>'
+    + '<div class="modal-actions"><button class="btn btn-primary" data-action="title-sim-close">閉じる</button></div>'
+    + "</div></div>";
+}
 /* タイトル受賞者のポップアップ：その年の試合ごとに、受賞者がそのタイトルの数字をどう積み上げたか */
 function titleGameStat(name, b, p) {
   var ab = n0(b && b.ab), h = n0(b && b.h), bb = n0(b && b.bb), hbp = n0(b && b.hbp);
@@ -8241,6 +8362,7 @@ function onAppClick(e) {
   if (UI.msAchievers && action !== "ms-achievers") UI.msAchievers = null;
   if (UI.mvpMonth && action !== "mvp-month-games") UI.mvpMonth = null;
   if (UI.titleGames && action !== "title-games") UI.titleGames = null;
+  if (UI.titleSim && action !== "title-sim-open" && action !== "title-sim-ab" && action !== "ms-noop") UI.titleSim = null;
   /* 試合中モードの走者メニュー・経過シートは、何か押したら閉じる */
   if (UI.liveRunnerMenu != null && action !== "live-runner-menu") UI.liveRunnerMenu = null;
   if (UI.liveSubSheet && action !== "live-sub-pick" && action !== "live-sub-open") UI.liveSubSheet = null;
@@ -9081,6 +9203,14 @@ function onAppClick(e) {
   } else if (action === "title-games") {
     UI.titleGames = { year: el.getAttribute("data-year"), name: el.getAttribute("data-title"), pid: el.getAttribute("data-pid") || null };
     renderApp();
+  } else if (action === "title-sim-open") {
+    UI.titleSim = { year: el.getAttribute("data-year"), pid: null, ab: 3 };
+    renderApp();
+  } else if (action === "title-sim-ab") {
+    if (UI.titleSim) UI.titleSim.ab = parseInt(el.getAttribute("data-n"), 10) || 3;
+    renderApp();
+  } else if (action === "title-sim-close") {
+    renderApp();
   } else if (action === "title-games-close") {
     renderApp();
   } else if (action === "mvp-month-close") {
@@ -9357,6 +9487,11 @@ function onAppChange(e) {
   }
   if (t.matches(".bulk-lineup-slot")) {
     syncBulkLineupOptions();
+    return;
+  }
+  if (t.id === "title-sim-player" && UI.titleSim) {
+    UI.titleSim.pid = t.value;
+    renderApp();
     return;
   }
   if (t.id === "live-opp-size" && UI.draftGame) {
