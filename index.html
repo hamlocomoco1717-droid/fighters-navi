@@ -2068,6 +2068,7 @@ function recapPlay(tok, pid, hrCount, pitcherPid) {
     if (cls === "SAC") return { name: name, desc: "スクイズ", rbi: rbi, of: true };
     if (cls === "FC") return { name: name, desc: "野選", rbi: rbi, of: true };
     if (cls === "ROE") return { name: "", desc: "相手エラー", rbi: rbi };
+    if (cls === "KR") return null;
     var head = stripAtbatRbiMark(tok).charAt(0);
     var pos = { "一": "ファースト", "二": "セカンド", "三": "サード", "遊": "ショート", "投": "ピッチャー", "捕": "キャッチャー", "左": "レフト", "中": "センター", "右": "ライト" }[head];
     var outfield = head === "左" || head === "中" || head === "右";
@@ -2646,7 +2647,7 @@ function computeBattingAgg(games) {
       if (!b.playerId) return;
       var cur = map.get(b.playerId);
       if (!cur) {
-        cur = { playerId: b.playerId, g: 0, ab: 0, pa: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, sac: 0, sf: 0, rispAb: 0, rispH: 0, rispEst: 0 };
+        cur = { playerId: b.playerId, g: 0, ab: 0, pa: 0, r: 0, h: 0, d2: 0, d3: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, cs: 0, sac: 0, sf: 0, rispAb: 0, rispH: 0, rispEst: 0 };
         map.set(b.playerId, cur);
       }
       cur.rispAb += risp[bi].ab; cur.rispH += risp[bi].h; cur.rispEst += risp[bi].estimated;
@@ -2656,12 +2657,12 @@ function computeBattingAgg(games) {
       cur.ab += n0(b.ab); cur.pa += pa; cur.r += n0(b.r); cur.h += n0(b.h);
       cur.d2 += n0(b.d2); cur.d3 += n0(b.d3); cur.hr += n0(b.hr);
       cur.rbi += n0(b.rbi); cur.bb += n0(b.bb); cur.hbp += n0(b.hbp);
-      cur.so += n0(b.so); cur.sb += n0(b.sb); cur.sac += n0(b.sac); cur.sf += n0(b.sf);
+      cur.so += n0(b.so); cur.sb += n0(b.sb); cur.cs += n0(b.cs); cur.sac += n0(b.sac); cur.sf += n0(b.sf);
     });
   });
   return map;
 }
-/* 出塁率の分母には従来通り犠打(sac)も含め、犠飛(sf)も加える。犠飛は打数には
+/* 出塁率の分母は打数＋四球＋死球＋犠飛（犠打は入れない）。犠飛は打数には
    含めない（打率は変わらない）が、出塁率の分母には加わるので出塁率だけ下がる。 */
 /* 猛打賞（1試合3安打以上）・マルチ安打（2安打以上）の試合数と、連続試合安打。
    試合は日付順（同日は登録順）。打数0で四死球・犠打だけの試合は記録を止めない
@@ -2709,7 +2710,7 @@ var SPRAY_ZONES = [
 var SPRAY_SIDE = { "左": "L", "三": "L", "遊": "L", "中": "C", "投捕": "C", "二": "R", "一": "R", "右": "R" };
 function atbatTokenDir(tok) {
   var cls = classifyAtbatToken(tok);
-  if (cls === null || cls === "SO" || cls === "BB" || cls === "HBP") return null;
+  if (cls === null || cls === "SO" || cls === "KR" || cls === "BB" || cls === "HBP") return null;
   var base = stripAtbatRbiMark(tok);
   var two = base.slice(0, 2);
   if (two === "左中") return "左";
@@ -2802,7 +2803,8 @@ function battingRates(c) {
   var singles = Math.max(0, c.h - c.d2 - c.d3 - c.hr);
   var tb = singles + c.d2 * 2 + c.d3 * 3 + c.hr * 4;
   var avg = c.ab > 0 ? c.h / c.ab : null;
-  var obDen = c.ab + c.bb + c.hbp + c.sac + n0(c.sf);
+  /* 出塁率＝（安打＋四球＋死球）÷（打数＋四球＋死球＋犠飛）。プロ野球と同じ正式な式（犠打は分母に入れない） */
+  var obDen = c.ab + c.bb + c.hbp + n0(c.sf);
   var obp = obDen > 0 ? (c.h + c.bb + c.hbp) / obDen : null;
   var slg = c.ab > 0 ? tb / c.ab : null;
   var ops = (obp != null && slg != null) ? obp + slg : null;
@@ -4590,7 +4592,7 @@ function renderGameDetail(g) {
               + lvCol("安打", "lv-h-hit", lvBtn("live-def-result", "H1", "ヒット", "lv-c-h1") + lvBtn("live-def-result", "H2", "二塁打", "lv-c-h2") + lvBtn("live-def-result", "H3", "三塁打", "lv-c-h3") + lvBtn("live-def-result", "HR", "本塁打", "lv-c-hr"))
               + lvCol("出塁", "lv-h-on", lvBtn("live-def-result", "BB", "四球", "lv-c-o1") + lvBtn("live-def-result", "ROE", "エラー", "lv-c-o2"))
               + lvCol("アウト", "lv-h-out", lvBtn("live-def-result", "GO", "ゴロ", "lv-c-a1") + lvBtn("live-def-result", "FLY", "フライ", "lv-c-a2"))
-              + lvCol("三振・他", "lv-h-k", lvBtn("live-def-result", "SO", "三振", "lv-c-k1") + lvBtn("live-manual-out", "", "＋アウト", "lv-c-k2"))
+              + lvCol("三振・他", "lv-h-k", lvBtn("live-def-result", "SO", "三振", "lv-c-k1") + lvBtn("live-def-result", "KR", "振り逃げ", "lv-c-k2") + lvBtn("live-manual-out", "", "＋アウト", "lv-c-k2"))
               + "</div>"
               + (anyRunnerOn ? '<button class="lv-adv' + (UI.livePendingAdvance ? " on" : "") + '" data-action="live-toggle-advance">'
                 + (UI.livePendingAdvance === 2 ? "✓✓ 走者が2つ多く進んだ" : UI.livePendingAdvance === 1 ? "✓ 走者が1つ多く進んだ" : "走者が多く進んだときはここを押してから結果を選ぶ") + "</button>" : ""));
@@ -4627,6 +4629,7 @@ function renderGameDetail(g) {
             + lvCol("出塁", "lv-h-on", lvBtn("live-batter-result", "BB", "四球", "lv-c-o1") + lvBtn("live-batter-result", "HBP", "死球", "lv-c-o2") + lvBtn("live-batter-result", "ROE", "エラー", "lv-c-o3"))
             + lvCol("アウト", "lv-h-out", lvBtn("live-batter-result", "GO", "ゴロ", "lv-c-a1") + lvBtn("live-batter-result", "FLY", "フライ", "lv-c-a2") + lvBtn("live-batter-result", "LINE", "ライナー", "lv-c-a3") + lvBtn("live-batter-result", "SAC", "犠打", "lv-c-a3"))
             + lvCol("三振・他", "lv-h-k", lvBtn("live-batter-result", "SO", "三振", "lv-c-k1")
+              + lvBtn("live-batter-result", "KR", "振り逃げ", "lv-c-k2")
               + lvBtn("live-steal-btn", "", "盗塁", "lv-c-k2", anyRunnerOn ? "" : " disabled")
               + lvBtn("live-manual-out", "", "走塁死", "lv-c-k2"))
           + "</div>";
@@ -4657,7 +4660,7 @@ function renderGameDetail(g) {
           var shAfterOuts = Math.min(3, outsNow + shOc.outs);
           liveBatterHtml += '<div class="lv-sheet-bg" data-action="live-sheet-cancel"></div>'
             + '<div class="lv-sheet lv-sheet-big" role="dialog">'
-              + '<div class="lv-sheet-head"><div><b>' + esc({ H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", GO: "ゴロ", FLY: "フライ", LINE: "ライナー", ROE: "エラー", SAC: "犠打" }[sh.key] || sh.key) + "</b>"
+              + '<div class="lv-sheet-head"><div><b>' + esc({ H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", GO: "ゴロ", FLY: "フライ", LINE: "ライナー", ROE: "エラー", SAC: "犠打", KR: "振り逃げ" }[sh.key] || sh.key) + "</b>"
                 + (shOc.tokenKey !== sh.key ? '<span class="lv-sheet-as">→ ' + esc(liveResultShort(shOc.tokenKey)) + "として記録</span>" : "")
                 + '<div class="lv-sheet-sub">' + outsNow + "アウト → <b class=\"lv-em\">" + shAfterOuts + "アウト</b>" + (shAfterOuts >= 3 ? "（チェンジ）" : "")
                   + (shOc.runs ? "・<b class=\"lv-em\">" + shOc.runs + "点</b>" : "") + "</div></div>"
@@ -4718,6 +4721,7 @@ function renderGameDetail(g) {
               + (rmCanSteal && rmRow ? '<button class="btn" data-action="live-steal-pick" data-base="' + rmB + '">盗塁（記録する）</button>' : "")
               + '<button class="btn" data-action="live-steal" data-base="' + rmB + '">' + (rmB === 2 ? "生還（暴投など）" : "1つ進める（暴投など）") + "</button>"
               + '<button class="btn" data-action="live-retreat" data-base="' + rmB + '">1つ戻す（訂正）</button>'
+              + (rmRow ? '<button class="btn" data-action="live-cs" data-base="' + rmB + '" style="color:var(--loss);">盗塁死（盗塁失敗でアウト）</button>' : "")
               + '<button class="btn" data-action="live-clear-base" data-base="' + rmB + '" style="color:var(--loss);">アウト（走塁死・けん制死）</button>'
               + (rmRow && !UI.liveHalfDone && !rmInfo.opp ? '<button class="btn" data-action="live-sub-open" data-type="PR" data-base="' + rmB + '">代走を出す</button>' : "")
               + (rmRow && rmInfo.opp ? '<button class="btn" data-action="live-opp-order-open">相手の代走（オーダー・交代）</button>' : "")
@@ -4948,7 +4952,7 @@ function renderGameDetail(g) {
   var abIdxs = [];
   for (var abi = 0; abi < battingInningCount; abi++) abIdxs.push(abi);
   var abHead = abIdxs.map(function (i) { return '<th class="num" style="white-space:nowrap;">' + (i + 1) + "回</th>"; }).join("");
-  var battingColCount = 15 + battingInningCount;
+  var battingColCount = 16 + battingInningCount;
   var canEditAtbats = !UI.readOnly && (UI.isNewUnsavedGame || UI.atbatEditMode);
   var canEditBattingTotals = !UI.readOnly && (UI.isNewUnsavedGame || UI.battingTotalsEditMode);
   var canEditPosition = !UI.readOnly && (UI.isNewUnsavedGame || UI.positionEditMode);
@@ -4973,7 +4977,7 @@ function renderGameDetail(g) {
         + '<td class="num mono">' + (n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf)) + "</td>"
         + battingNumCell(b, "ab", canEditBattingTotals) + battingNumCell(b, "r", canEditBattingTotals) + battingNumCell(b, "h", canEditBattingTotals) + battingNumCell(b, "d2", canEditBattingTotals)
         + battingNumCell(b, "d3", canEditBattingTotals) + battingNumCell(b, "hr", canEditBattingTotals) + battingNumCell(b, "rbi", canEditBattingTotals) + battingNumCell(b, "bb", canEditBattingTotals)
-        + battingNumCell(b, "hbp", canEditBattingTotals) + battingNumCell(b, "so", canEditBattingTotals) + battingNumCell(b, "sb", canEditBattingTotals) + battingNumCell(b, "sac", canEditBattingTotals) + battingNumCell(b, "sf", canEditBattingTotals)
+        + battingNumCell(b, "hbp", canEditBattingTotals) + battingNumCell(b, "so", canEditBattingTotals) + battingNumCell(b, "sb", canEditBattingTotals) + battingNumCell(b, "cs", canEditBattingTotals) + battingNumCell(b, "sac", canEditBattingTotals) + battingNumCell(b, "sf", canEditBattingTotals)
         + "</tr>";
       return row;
     }).join("");
@@ -5022,7 +5026,7 @@ function renderGameDetail(g) {
     + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
     + "<th>選手</th>" + abHead + "<th class=\"num\">打席</th><th class=\"num\">打数</th><th class=\"num\">得点</th><th class=\"num\">安打</th><th class=\"num\">二塁打</th>"
     + "<th class=\"num\">三塁打</th><th class=\"num\">本塁打</th><th class=\"num\">打点</th><th class=\"num\">四球</th>"
-    + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">犠打</th><th class=\"num\">犠飛</th>"
+    + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">盗塁死</th><th class=\"num\">犠打</th><th class=\"num\">犠飛</th>"
     + "</tr></thead><tbody>" + battingRows + "</tbody></table></div>"
     + (editingBatter ? renderAtbatEditorPanel(editingBatter, battingInningCount) : "")
     + (!canEditAtbats ? "" : '<div class="field-row add-row" style="margin-top:10px;align-items:flex-end;">'
@@ -5299,7 +5303,9 @@ var ATBAT_RESULT_TYPES = [
   { key: "SAC", label: "犠打", suffix: "犠", needsDir: true },
   { key: "BB", label: "四球", token: "四球", needsDir: false },
   { key: "HBP", label: "死球", token: "死球", needsDir: false },
-  { key: "SO", label: "三振", token: "三振", needsDir: false }
+  { key: "SO", label: "三振", token: "三振", needsDir: false },
+  /* 振り逃げ：三振だが打者は一塁に生きる。打数・三振に数え、安打・出塁率には入れない */
+  { key: "KR", label: "振り逃げ（三振で出塁）", token: "振逃", needsDir: false }
 ];
 var ATBAT_DIRECTIONS = [
   { code: "一", label: "一塁手(3)" },
@@ -5363,6 +5369,7 @@ function classifyAtbatToken(tok) {
   if (base === "四球") return "BB";
   if (base === "死球") return "HBP";
   if (base === "三振") return "SO";
+  if (base === "振逃") return "KR";
   if (base.indexOf("犠飛") !== -1) return "SACFLY";
   if (base.indexOf("犠") !== -1) return "SAC";
   var last = base.slice(-1);
@@ -5392,7 +5399,7 @@ function recomputeBattingStatsFromAtbats(row) {
       /* 犠飛：打数に含めない（打率は変わらない）が出塁率の分母には数えるので
          sac とは別の sf として集計する */
       else if (c === "SACFLY") stat.sf++;
-      else if (c === "SO") { stat.ab++; stat.so++; }
+      else if (c === "SO" || c === "KR") { stat.ab++; stat.so++; }
       else if (c === "H1") { stat.ab++; stat.h++; }
       else if (c === "H2") { stat.ab++; stat.h++; stat.d2++; }
       else if (c === "H3") { stat.ab++; stat.h++; stat.d3++; }
@@ -5419,11 +5426,11 @@ function atbatDirectionOptionsHtml() {
 var LIVE_RESULT_SHORT = {
   H1: "安打", H1IN: "内安", H2: "二塁打", H3: "三塁打", HR: "本塁打",
   GO: "ゴロ", FLY: "フライ", LINE: "ライナー", FC: "野選", ROE: "敵失",
-  DP: "併殺", SAC: "犠打", BB: "四球", HBP: "死球", SO: "三振", SF: "犠飛"
+  DP: "併殺", SAC: "犠打", BB: "四球", HBP: "死球", SO: "三振", SF: "犠飛", KR: "振り逃げ"
 };
 /* 試合中モードの結果ボタンの色分け: red=安打〜本塁打・三振 / green=四球・死球 / gray=それ以外 */
 var LIVE_RESULT_COLOR = {
-  H1: "red", H1IN: "red", H2: "red", H3: "red", HR: "red", SO: "red",
+  H1: "red", H1IN: "red", H2: "red", H3: "red", HR: "red", SO: "red", KR: "red",
   BB: "green", HBP: "green",
   GO: "gray", FLY: "gray", LINE: "gray", FC: "gray", ROE: "gray", DP: "gray", SAC: "gray"
 };
@@ -5656,12 +5663,12 @@ function liveRunnerShort(d, rid) {
   return (playerName(row.playerId) || "").slice(0, 2);
 }
 /* ===== 確定シート：打球の結果ごとに、打者・走者の行き先（-1=アウト, 0〜2=塁, 3=生還）を1画面で決めて記録する ===== */
-var LIVE_SHEET_KEYS = { H1: 1, H2: 1, H3: 1, HR: 1, GO: 1, FLY: 1, LINE: 1, ROE: 1, SAC: 1 };
+var LIVE_SHEET_KEYS = { H1: 1, H2: 1, H3: 1, HR: 1, GO: 1, FLY: 1, LINE: 1, ROE: 1, SAC: 1, KR: 1 };
 function liveSheetDefaults(key, bases, outsBefore) {
   var dest = {};
   var on = function (i) { return !!bases[i]; };
   var forced = [on(0), on(0) && on(1), on(0) && on(1) && on(2)];   /* 打者が一塁へ行くと押し出される走者 */
-  var batter = { H1: 0, H2: 1, H3: 2, HR: 3, ROE: 0, GO: -1, FLY: -1, LINE: -1, SAC: -1 }[key];
+  var batter = { H1: 0, H2: 1, H3: 2, HR: 3, ROE: 0, KR: 0, GO: -1, FLY: -1, LINE: -1, SAC: -1 }[key];
   dest.B = batter;
   [0, 1, 2].forEach(function (i) {
     if (!on(i)) return;
@@ -5669,7 +5676,7 @@ function liveSheetDefaults(key, bases, outsBefore) {
     if (key === "HR" || key === "H3") to = 3;
     else if (key === "H2") to = Math.min(3, i + 2);
     else if (key === "H1" || key === "SAC") to = i + 1;
-    else if (key === "ROE" || key === "GO") to = forced[i] ? i + 1 : i;
+    else if (key === "ROE" || key === "KR" || key === "GO") to = forced[i] ? i + 1 : i;
     dest[i] = to;
   });
   /* 3アウト目になる打球では、走者は動かさない＝生還も数えない（タイミングで本当に還ったときはシートで「生還」に変える） */
@@ -5704,7 +5711,7 @@ function liveSheetOutcome(sh, bases, outsBefore) {
   /* フライ・ライナー（外野か方向なし）で打者アウト、走者が生還し、3アウト目でなければ犠飛（打数に数えない） */
   if ((sh.key === "FLY" || (sh.key === "LINE" && /^[左中右]$/.test(sh.dir || ""))) && sh.dest.B === -1 && runs > 0 && outsBefore + outs < 3
       && (!sh.dir || /^[左中右]$/.test(sh.dir))) tokenKey = "SF";
-  var autoRbi = (sh.key === "ROE" || tokenKey === "DP") ? 0 : runs;
+  var autoRbi = (sh.key === "ROE" || sh.key === "KR" || tokenKey === "DP") ? 0 : runs;
   var scored = movers.filter(function (k) { return sh.dest[k] === 3; });   /* 生還した人（"B"=打者、0〜2=元の塁） */
   return { bases: nb, outs: outs, runs: runs, err: err, tokenKey: tokenKey, rbi: sh.rbi == null ? autoRbi : sh.rbi, autoRbi: autoRbi, scored: scored };
 }
@@ -5720,13 +5727,14 @@ function liveLogText(d, e) {
     var ri = liveRunnerInfo(d, rid);
     return ri.row ? "相手 " + (ri.no ? ri.no + "番 " : "") + ri.name : ri.no ? "相手 " + ri.no + "番" : "走者";
   };
-  var DEF = { H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", BB: "四球", ROE: "エラー", GO: "ゴロアウト", FLY: "フライアウト", SO: "三振" };
+  var DEF = { H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", BB: "四球", ROE: "エラー", GO: "ゴロアウト", FLY: "フライアウト", SO: "三振", KR: "振り逃げ" };
   switch (e.type) {
     case "atbat": return who(e.rid) + " " + (e.token || "") + (n0(e.rbi) ? " " + n0(e.rbi) + "打点" : "");
     case "defatbat": return (e.oppNo ? "相手 " + e.oppNo + "番 " : "相手の打者 ") + (DEF[e.key] || "");
     case "steal": return who(e.snapBases && e.snapBases[e.base] || e.rid) + (e.credit ? " 盗塁" : " 進塁");
     case "retreat": return "走者を1つ戻す";
     case "clearbaseout": return "走者アウト（走塁死）";
+    case "cs": return who(e.rid) + " 盗塁死";
     case "out": return "アウト追加";
     case "endhalf": return "チェンジ";
     case "sub": return (e.reentry ? "リエントリー" : e.subType === "DEF" ? "途中出場" : (SUB_TYPE_LABEL[e.subType] || "交代")) + " " + who(e.newRid) + "、" + who(e.forRid) + "と交代";
@@ -5856,6 +5864,33 @@ function liveRetreatRunner(baseIdx) {
   showToast("走者を戻しました");
   persistDraft();
 }
+/* 盗塁死：走者を外してアウトを1つ足し、その走者の盗塁死（cs）を1つ数える（3アウトなら攻守交代） */
+function liveCaughtStealing(baseIdx) {
+  var d = UI.draftGame;
+  if (!d || isNaN(baseIdx) || baseIdx < 0 || baseIdx > 2) return;
+  if (!liveGuardControl(d)) return;
+  var b = liveBasesArr().slice();
+  var rid = b[baseIdx];
+  if (!rid) return;
+  var row = liveFindRow(d, rid);
+  var entry = {
+    type: "cs", rid: rid, prevCs: row ? n0(row.cs) : 0,
+    snapInnings: clone(d.innings), snapOuts: UI.liveOuts || 0,
+    snapBases: b.slice(), snapInning: UI.liveInning, snapHalfDone: !!UI.liveHalfDone
+  };
+  b[baseIdx] = null;
+  UI.liveBases = b;
+  if (row) row.cs = n0(row.cs) + 1;
+  liveCreditDefOut(d, entry);
+  UI.liveOuts = (UI.liveOuts || 0) + 1;
+  if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
+  UI.liveLog.push(entry);
+  if (UI.liveOuts >= 3) {
+    liveAdvanceHalf();
+    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
+  }
+  persistDraft();
+}
 /* 守備中に打席以外でアウトを取った（走塁死・けん制など）ときは、今の投手の投球回に1つ足す */
 function liveCreditDefOut(d, entry) {
   if (!UI.liveHalfDone) return;
@@ -5906,7 +5941,7 @@ function liveResolvePlay(resultKey, bases, advance) {
       else if (advance === 1) { if (b3) runs++; if (b2) runs++; nb = ["B", null, b1]; }
       else { if (b3) runs++; nb = ["B", b1, b2]; }
       break;
-    case "ROE":
+    case "ROE": case "KR":
       if (advance >= 2) { runs += (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0); nb = ["B", null, null]; }
       else if (advance === 1) { if (b3) runs++; if (b2) runs++; nb = ["B", null, b1]; }
       else {
@@ -6104,7 +6139,7 @@ function orderInningAtbats(rows, inn, prevLast) {
   return seq;
 }
 var RISP_PLAY_KEY = { H1: "H1", H2: "H2", H3: "H3", HR: "HR", BB: "BB", HBP: "HBP", SO: "SO", SAC: "SAC",
-  FC: "FC", ROE: "ROE", DP: "DP", GO: "GO", FLY: "FLY", LINE: "LINE", OUT_OTHER: "LINE" };
+  FC: "FC", ROE: "ROE", KR: "ROE", DP: "DP", GO: "GO", FLY: "FLY", LINE: "LINE", OUT_OTHER: "LINE" };
 /* 1試合ぶんの得点圏成績を打順の行ごとに返す：[{ab, h, estimated}, ...]（g.batting と同じ並び） */
 function computeGameRisp(g) {
   var rows = g.batting || [];
@@ -6250,7 +6285,7 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec, sheetOutcome
      進塁走者チェックで明示的に確認された生還だけを得点にする（タイミングプレーの誤カウント防止） */
   var explicitlyConfirmed = manualAdvance || manualRbi > 0 || (playKey === "SAC" && Array.isArray(sacAdvSpec));
   var runsThisPlay = (play.outs > 0 && endsHalf && !explicitlyConfirmed) ? 0 : play.runs;
-  var autoRbi = (resultKey === "ROE") ? 0 : runsThisPlay;
+  var autoRbi = (resultKey === "ROE" || resultKey === "KR") ? 0 : runsThisPlay;
   var rbi = manualRbi > 0 ? manualRbi : autoRbi;
   /* 確定シートで打者・走者の行き先を決めたときは、その通りに記録する */
   if (sheetOutcome) {
@@ -6278,7 +6313,7 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec, sheetOutcome
     var pcls = classifyAtbatToken(token);
     if (pcls === "H1" || pcls === "H2" || pcls === "H3" || pcls === "HR") prow.h = n0(prow.h) + 1;
     if (pcls === "BB") prow.bb = n0(prow.bb) + 1;
-    if (pcls === "SO") prow.so = n0(prow.so) + 1;
+    if (pcls === "SO" || pcls === "KR") prow.so = n0(prow.so) + 1;
     prow.ipOuts = n0(prow.ipOuts) + play.outs;
     if (runsThisPlay > 0) {
       prow.r = n0(prow.r) + runsThisPlay;
@@ -6356,7 +6391,7 @@ function liveCommitDefAtbat(resultKey) {
 
   if (resultKey === "H1" || resultKey === "H2" || resultKey === "H3" || resultKey === "HR") prow.h = n0(prow.h) + 1;
   if (resultKey === "BB") prow.bb = n0(prow.bb) + 1;
-  if (resultKey === "SO") prow.so = n0(prow.so) + 1;
+  if (resultKey === "SO" || resultKey === "KR") prow.so = n0(prow.so) + 1;
   prow.ipOuts = n0(prow.ipOuts) + play.outs;
   if (runsThisPlay > 0) {
     prow.r = n0(prow.r) + runsThisPlay;
@@ -6630,6 +6665,10 @@ function liveUndoAtbat() {
   if (last.type !== "defatbat" && last.prid && last.prevStat) {
     var prow3 = (d.pitching || []).filter(function (p) { return p._rid === last.prid; })[0];
     if (prow3) ["h", "r", "er", "bb", "so", "ipOuts"].forEach(function (k) { prow3[k] = n0(last.prevStat[k]); });
+  }
+  if (last.type === "cs") {
+    var csRow = liveFindRow(d, last.rid);
+    if (csRow) csRow.cs = Math.max(0, n0(last.prevCs));
   }
   if (last.type === "steal") {
     var srow = liveFindRow(d, last.rid);
@@ -6916,6 +6955,7 @@ function renderPlayerStatsTab() {
       { key: "ab", label: "打数", cell: function (r) { return tdnum(r.c.ab); } },
       { key: "h", label: "安打", cell: function (r) { return tdnum(r.c.h, "stat-hit"); } },
       { key: "sb", label: "盗塁", cell: function (r) { return tdnum(r.c.sb); } },
+      { key: "cs", label: "盗塁死", cell: function (r) { return tdnum(r.c.cs); } },
       { key: "r", label: "得点", cell: function (r) { return tdnum(r.c.r); } },
       { key: "bb", label: "四球", cell: function (r) { return tdnum(r.c.bb, "stat-bb"); } },
       { key: "hbp", label: "死球", cell: function (r) { return tdnum(r.c.hbp); } },
@@ -7413,13 +7453,13 @@ function renderTitleRace(games, year) {
 /* ---------- 首位打者・最高出塁率シミュレーション ----------
    選んだ選手が「次の試合でいくつ打てば（出塁すれば）首位か」「そのときライバルはいくつ以下ならよいか」
    「残り何試合でどれだけ必要か」を、今の成績から計算する。
-   打率＝安打÷打数、出塁率＝（安打＋四死球）÷打席（タイトル争いと同じ式）。
+   打率＝安打÷打数、出塁率＝（安打＋四死球）÷（打数＋四死球＋犠飛）（タイトル争いと同じ式）。
    比べるときは割り算をせず掛け算で（x1/y1 > x2/y2 ⇔ x1*y2 > x2*y1）、端数の誤差を出さない */
 var TITLE_SIM_KIND = {
   avg: { title: "首位打者", rate: "打率", per: "打数", got: "安打", none: "ノーヒット",
     num: function (c) { return c.h; }, den: function (c) { return c.ab; } },
   obp: { title: "最高出塁率", rate: "出塁率", per: "打席", got: "出塁", none: "1度も出塁しない",
-    num: function (c) { return c.h + c.bb + c.hbp; }, den: function (c) { return c.ab + c.bb + c.hbp + c.sac + n0(c.sf); } }
+    num: function (c) { return c.h + c.bb + c.hbp; }, den: function (c) { return c.ab + c.bb + c.hbp + n0(c.sf); } }
 };
 function titleSimList(games, K) {
   return Array.from(computeBattingAgg(games).values())
@@ -7455,11 +7495,13 @@ function titleSimCompute(games, pid, n, kind) {
   for (var N = 1; N <= 5; N++) {
     var add = n * N, qual = (gp + N) * 2.5;
     var rv = list.filter(function (c) { return c.pid !== pid && c.pa + add >= qual; });
-    var need = function (rate) {
+    /* ライバルの見込みは整数の分数で持つ（端数の誤差で同率を見誤らないように）。
+       今のペース：率は今と同じなので x/y のまま。1試合1本：N試合で N本・add打数（打席）増える */
+    var need = function (slump) {
       var best = null;
       rv.forEach(function (r) {
-        var rx = r.x + (rate == null ? add * r.x / r.y : add * rate), ry = r.y + add;
-        if (!best || rx / ry > best.x / best.y) best = { x: rx, y: ry, pid: r.pid };
+        var rx = slump ? r.x + N : r.x, ry = slump ? r.y + add : r.y;
+        if (!best || rx * best.y > best.x * ry) best = { x: rx, y: ry, pid: r.pid };
       });
       if (me.pa + add < qual) return { short: true };
       if (!best) return { v: 0, of: add };
@@ -7467,7 +7509,7 @@ function titleSimCompute(games, pid, n, kind) {
       for (var v = 0; v <= add; v++) if ((me.x + v) * best.y > best.x * (me.y + add)) return Object.assign({ v: v, of: add }, topInfo);
       return Object.assign({ v: null, of: add }, topInfo);
     };
-    multi.push({ N: N, pace: need(null), slump: need(1 / n) });
+    multi.push({ N: N, pace: need(false), slump: need(true) });
   }
   var qualList = list.filter(function (c) { return c.pa >= gp * 2.5; });
   return { K: K, list: list, me: me, gp: gp, qualNow: gp * 2.5, meQualNow: me.pa >= gp * 2.5, meQualNext: meQualNext, next: next, multi: multi, leaders: qualList.slice(0, 4),
@@ -7546,7 +7588,7 @@ function renderTitleSimDialog() {
     + premise
     + '<table class="stat-table ts-table"><thead><tr><th>残り</th><th>ライバルが今の' + K.rate + "のままなら</th><th>ライバルが1試合1" + (ts.kind === "obp" ? "出塁" : "安打") + "なら</th></tr></thead><tbody>" + multiRows + "</tbody></table>"
     + '<p class="ts-note">' + (ts.kind === "obp"
-      ? "出塁率は「（安打＋四球＋死球）÷打席」です（このアプリのタイトル争いと同じ式で、犠打も打席に数えます）。"
+      ? "出塁率は「（安打＋四球＋死球）÷（打数＋四球＋死球＋犠飛）」です（プロ野球と同じ式。犠打は数えません）。次の試合の打席は、すべて犠打以外として計算しています。"
       : "打率は「安打÷打数」なので、四球・死球・犠打は打率に入りません。")
       + "同じ" + K.rate + "なら同率首位です。規定打席は「チームの試合数×2.5」で、ライバルは次の試合のあとに規定打席に届く人で計算しています。</p>"
     + '<div class="modal-actions"><button class="btn btn-primary" data-action="title-sim-close">閉じる</button></div>'
@@ -7593,7 +7635,7 @@ function renderTitleGamesDialog() {
       if (st.add) Object.keys(st.add).forEach(function (k) { c[k] += st.add[k]; });
       var sofar = t.rate
         ? (t.name === "首位打者" ? (c.ab ? "打率" + fmtRate(c.h / c.ab) : "")
-          : (c.ab + c.bb + c.hbp + c.sac + c.sf ? "出塁率" + fmtRate((c.h + c.bb + c.hbp) / (c.ab + c.bb + c.hbp + c.sac + c.sf)) : ""))
+          : (c.ab + c.bb + c.hbp + c.sf ? "出塁率" + fmtRate((c.h + c.bb + c.hbp) / (c.ab + c.bb + c.hbp + c.sf)) : ""))
         : "累計" + c.v + t.unit;
       return '<span class="tg-line' + (st.v > 0 ? " tg-hit" : "") + '">' + who + esc(st.txt) + '<span class="tg-sofar mono">' + sofar + "</span></span>";
     }).join("");
@@ -7664,7 +7706,7 @@ function renderPlayerDetail(pid) {
       }).join("") + "</div>"
       + '<div class="table-scroll" style="margin-top:10px;"><table class="stat-table"><tbody>'
       + "<tr><th>打席</th>" + tdnum(bAgg.pa) + "<th>打数</th>" + tdnum(bAgg.ab) + "<th>得点</th>" + tdnum(bAgg.r) + "</tr>"
-      + "<tr><th>二塁打</th>" + tdnum(bAgg.d2) + "<th>三塁打</th>" + tdnum(bAgg.d3) + "<th>盗塁</th>" + tdnum(bAgg.sb) + "</tr>"
+      + "<tr><th>二塁打</th>" + tdnum(bAgg.d2) + "<th>三塁打</th>" + tdnum(bAgg.d3) + "<th>盗塁</th>" + '<td class="num mono">' + n0(bAgg.sb) + (n0(bAgg.cs) ? '<span class="risp-sub">盗塁死' + bAgg.cs + "</span>" : "") + "</td></tr>"
       + "<tr><th>四球</th>" + tdnum(bAgg.bb) + "<th>死球</th>" + tdnum(bAgg.hbp) + "<th>三振</th>" + tdnum(bAgg.so) + "</tr>"
       + '<tr><th>犠打</th>' + tdnum(bAgg.sac) + '<th>犠飛</th>' + tdnum(bAgg.sf) + '<th>出塁率</th><td class="num mono">' + fmtRate(rt.obp) + "</td></tr>"
       + '<tr><th>長打率</th><td class="num mono">' + fmtRate(rt.slg) + "</td>"
@@ -8140,7 +8182,7 @@ function computePositionBatting(games, pid) {
           else if (c === "SACFLY") st.sf++;
           else {
             st.ab++;
-            if (c === "SO") st.so++;
+            if (c === "SO" || c === "KR") st.so++;
             if (c === "H1" || c === "H2" || c === "H3" || c === "HR") st.h++;
             if (c === "H2") st.d2++;
             if (c === "H3") st.d3++;
@@ -8966,6 +9008,9 @@ function onAppClick(e) {
     if (!liveGuardControl(UI.draftGame)) return;
     liveRetreatHalf();
     persistDraft(null);
+  } else if (action === "live-cs") {
+    if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
+    liveCaughtStealing(parseInt(el.getAttribute("data-base"), 10));
   } else if (action === "live-clear-base") {
     if (!UI.draftGame || UI.readOnly || !(UI.isNewUnsavedGame || UI.liveTakeover)) return;
     liveClearBaseOut(parseInt(el.getAttribute("data-base"), 10));
