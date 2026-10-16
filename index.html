@@ -7476,18 +7476,24 @@ function renderTitleSimDialog() {
   var games = gamesForYear(ts.year).filter(function (g) { return gameResult(g); });
   var cands = titleSimList(games, K);
   if (!cands.length) return "";
-  /* 最初は首位の選手（規定打席に届いた中で一番の人）から */
-  if (!cands.some(function (c) { return c.pid === ts.pid; })) {
-    var gp0 = computeTeamRecord(games).gp;
-    ts.pid = (cands.filter(function (c) { return c.pa >= gp0 * 2.5; })[0] || cands[0]).pid;
-  }
+  /* 選ぶ欄は「規定打席に届いた選手（順位順）」→「まだ届いていない選手」の順。
+     最初は規定打席に届いた中の1位から */
+  var gp0 = computeTeamRecord(games).gp;
+  var qualC = cands.filter(function (c) { return c.pa >= gp0 * 2.5; });
+  var unqualC = cands.filter(function (c) { return c.pa < gp0 * 2.5; });
+  if (!cands.some(function (c) { return c.pid === ts.pid; })) ts.pid = (qualC[0] || cands[0]).pid;
   var n = ts.ab || 3;
   var r = titleSimCompute(games, ts.pid, n, ts.kind);
   var nm = function (pid) { return esc(playerName(pid)); };
   var rateOf = function (x, y) { return y ? fmtRate(x / y) : "-"; };
-  var opts = cands.map(function (c) {
-    return '<option value="' + c.pid + '"' + (c.pid === ts.pid ? " selected" : "") + ">" + esc(playerName(c.pid)) + "（" + fmtRate(c.x / c.y) + "）</option>";
-  }).join("");
+  var opt = function (c, i) {
+    return '<option value="' + c.pid + '"' + (c.pid === ts.pid ? " selected" : "") + ">" + (i != null ? i + 1 + "位 " : "") + esc(playerName(c.pid)) + "（" + fmtRate(c.x / c.y) + "）</option>";
+  };
+  /* 同じ率なら同じ順位 */
+  var qRank = [];
+  qualC.forEach(function (c, i) { qRank[i] = i > 0 && c.x * qualC[i - 1].y === qualC[i - 1].x * c.y ? qRank[i - 1] : i; });
+  var opts = (qualC.length ? '<optgroup label="規定打席に到達">' + qualC.map(function (c, i) { return opt(c, qRank[i]); }).join("") + "</optgroup>" : "")
+    + (unqualC.length ? '<optgroup label="規定打席に未到達">' + unqualC.map(function (c) { return opt(c, null); }).join("") + "</optgroup>" : "");
   var abSeg = [3, 4, 5].map(function (v) { return '<button class="su-seg' + (v === n ? " on" : "") + '" data-action="title-sim-ab" data-n="' + v + '">' + v + K.per + "</button>"; }).join("");
   var standings = r.leaders.map(function (c, i) {
     return '<div class="ts-st' + (c.pid === ts.pid ? " me" : "") + '"><span>' + (i + 1) + "位 " + nm(c.pid) + '</span><span class="mono">' + rateOf(c.x, c.y) + "（" + c.x + "/" + c.y + "）</span></div>";
