@@ -1059,6 +1059,39 @@ window.FIREBASE_PATH = "scorebook/fighters";
   var clientId = Math.random().toString(36).slice(2) + Date.now().toString(36);
   var onRemote = function () {}, onStatus = function () {};
   var pushTimer = null, lastPushJson = null, started = false;
+  /* 差分だけを送るための「前回そろっていた内容」。この端末が送った内容か、画面に取り込んだサーバーの内容。
+     null のあいだ（起動直後・送信失敗のあと）は、今までどおり全体を送る */
+  var baseline = null;
+  /* チームの保存先と同じ見え方にそろえる：null・空の配列・空のオブジェクトは「ない」と同じ */
+  var norm = function (v) {
+    if (v === null || v === undefined) return undefined;
+    if (typeof v !== "object") return v;
+    var keys = Object.keys(v).filter(function (k) { return norm(v[k]) !== undefined; });
+    return keys.length ? v : undefined;
+  };
+  var MAX_PATHS = 400;
+  /* a（前回）と b（今）を比べ、変わった場所だけを out に {"games/3/batting/2/atbats/4": "中安"} の形で集める。
+     消えた場所は null（＝削除）。数が多すぎたら false を返して全体送信にまかせる */
+  var diff = function (a, b, path, out) {
+    var na = norm(a), nb = norm(b);
+    if (na === undefined && nb === undefined) return true;
+    if (nb === undefined) { out[path] = null; return Object.keys(out).length <= MAX_PATHS; }
+    var aObj = na !== undefined && typeof na === "object", bObj = typeof nb === "object";
+    if (aObj && bObj) {
+      var seen = {};
+      var keys = Object.keys(na).concat(Object.keys(nb)).filter(function (k) { if (seen[k]) return false; seen[k] = true; return true; });
+      for (var i = 0; i < keys.length; i++) {
+        if (!diff(na[keys[i]], nb[keys[i]], path + "/" + keys[i], out)) return false;
+      }
+      return true;
+    }
+    if (JSON.stringify(na) !== JSON.stringify(nb)) out[path] = JSON.parse(JSON.stringify(nb));
+    return Object.keys(out).length <= MAX_PATHS;
+  };
+  /* 画面にサーバーの内容を取り込んだとき（adoptState）に呼ぶ：ここからの差分を送る */
+  api.markSynced = function (state) {
+    try { baseline = JSON.parse(JSON.stringify(state)); } catch (e) { baseline = null; }
+  };
 
   api.start = function (opts) {
     if (started) return; started = true;
@@ -1099,10 +1132,26 @@ window.FIREBASE_PATH = "scorebook/fighters";
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(function () {
       pushTimer = null;
+      /* 送る直前の最新の内容で比べる（待っている間に別の端末の内容を取り込んでいたら、それも含めた最新） */
+      var sendJson = (window.STATE && typeof window.STATE === "object") ? JSON.stringify(window.STATE) : json;
+      lastPushJson = sendJson;
+      var next = JSON.parse(sendJson);
+      var changes = {};
+      var small = baseline !== null && diff(baseline, next, "", changes);
+      var paths = Object.keys(changes);
+      baseline = next;
+      if (small && paths.length === 0) { api.lastSync = Date.now(); onStatus(); return; }
       metaRef.set({ at: Date.now(), by: clientId }).catch(function () {});
-      stateRef.set(JSON.parse(json)).then(function () {
-        api.lastSync = Date.now(); onStatus();
-      }).catch(function (e) { console.error("[FBSync] 保存失敗", e); });
+      var done = function () { api.lastSync = Date.now(); api.lastPushPaths = small ? paths.length : -1; onStatus(); };
+      var fail = function (e) { baseline = null; console.error("[FBSync] 保存失敗", e); };
+      if (small) {
+        /* 変わった場所だけを1回でまとめて書く（"/games/3/..." の先頭の / を外す） */
+        var upd = {};
+        paths.forEach(function (k) { upd[k.slice(1)] = changes[k]; });
+        stateRef.update(upd).then(done).catch(fail);
+      } else {
+        stateRef.set(next).then(done).catch(fail);
+      }
     }, 400);
   };
 })();
@@ -3008,6 +3057,8 @@ function applyRemoteState(remote) {
 function adoptState(remote) {
   window.__pendingRemote = null;
   if (!remote || typeof remote !== "object") return;
+  /* 差分送信の基準：サーバーにある内容（このあと端末側で直した分だけが次に送られる） */
+  if (window.FBSync && window.FBSync.markSynced) window.FBSync.markSynced(remote);
   var d = defaultState();
   var next = Object.assign(d, remote, {
     team: Object.assign({}, d.team, remote.team || {}),
