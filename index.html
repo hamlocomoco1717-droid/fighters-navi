@@ -791,6 +791,9 @@ body.lv-on #app::after { content: ""; display: block; height: 90px; }
 .lv-skip { flex: none; font-size: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-muted); }
 .lv-addp { display: flex; gap: 8px; align-items: center; }
 .lv-pick.lv-pick2 { grid-template-columns: repeat(2, 1fr); }
+.loading-ball { font-size: 34px; display: inline-block; animation: loading-spin 1.2s linear infinite; }
+@keyframes loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading-ball { animation: none; } }
 .title-sim-btn { display: block; width: 100%; margin-top: 8px; padding: 8px; border-radius: 8px; border: 1px dashed var(--border); background: var(--surface-2); color: var(--ink); font-size: 12.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
 .ts-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
 .ts-ctl select { flex: 1 1 160px; min-width: 0; font-size: 15px; }
@@ -3057,6 +3060,8 @@ function applyRemoteState(remote) {
 function adoptState(remote) {
   window.__pendingRemote = null;
   if (!remote || typeof remote !== "object") return;
+  UI.awaitingRemote = false;
+  UI.remoteLoadSlow = false;
   /* 差分送信の基準：サーバーにある内容（このあと端末側で直した分だけが次に送られる） */
   if (window.FBSync && window.FBSync.markSynced) window.FBSync.markSynced(remote);
   var d = defaultState();
@@ -3202,19 +3207,22 @@ function persistDraft(successMsg, skipRender) {
   persist(successMsg, skipRender);
 }
 
+/* この端末に前回保存した内容（＝前回見たチームのデータ）があれば、アプリに入っている控えのコピーより
+   新しいときはそちらから表示する（開いた瞬間に古い試合が出ないように）。使ったら true */
 function tryLocalRestore() {
-  if (STATE.players.length === 0 && STATE.games.length === 0) {
-    try {
-      var raw = localStorage.getItem("softball-scorebook-state-v1");
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (parsed && ((parsed.players || []).length + (parsed.games || []).length > 0)) {
-          var d = defaultState();
-          STATE = Object.assign(d, parsed, { team: Object.assign({}, d.team, parsed.team || {}) });
-        }
-      }
-    } catch (e) { /* ignore */ }
-  }
+  try {
+    var raw = localStorage.getItem("softball-scorebook-state-v1");
+    if (!raw) return false;
+    var parsed = JSON.parse(raw);
+    if (!parsed || ((parsed.players || []).length + (parsed.games || []).length) === 0) return false;
+    var seedEmpty = STATE.players.length === 0 && STATE.games.length === 0;
+    var newer = !STATE.updatedAt || (parsed.updatedAt && String(parsed.updatedAt) >= String(STATE.updatedAt));
+    if (!seedEmpty && !newer) return false;
+    var d = defaultState();
+    STATE = Object.assign(d, parsed, { team: Object.assign({}, d.team, parsed.team || {}) });
+    migrateState(STATE);
+    return true;
+  } catch (e) { return false; }
 }
 
 /* ---------- shell / nav ---------- */
@@ -3262,6 +3270,7 @@ function renderShell(contentHtml) {
     + "</div></div>"
     + "<main>"
     + (UI.readOnly ? '<div class="banner readonly">閲覧専用モードです。編集内容は保存されません。</div>' : "")
+    + (UI.remoteLoadSlow ? '<div class="banner">最新のデータをまだ読み込めていません（電波を確認してください）。いま表示しているのは少し前の内容です。つながりしだい自動で最新になります。</div>' : "")
     + (TEST_MODE ? '<div class="banner test-banner">🧪 <b>テストモード</b>：ここで入力した内容は、チームのデータにも、この端末にも保存されません（ページを閉じると消えます）。'
         + '<a href="' + location.pathname + '">テストを終わる</a></div>'
       : ((!UI.readOnly && !(window.FBSync && window.FBSync.enabled)) ? '<div class="banner">Firebase未設定のため、この端末のブラウザにのみ記録を保存します。</div>' : ""))
@@ -3287,7 +3296,10 @@ function renderApp() {
     UI.statsYear = availableYears()[0] || "all";
   }
   var content;
-  if (UI.viewPlayerId) content = renderPlayerDetail(UI.viewPlayerId);
+  if (UI.awaitingRemote && !UI.currentGameId) content = '<div class="card" style="text-align:center;padding:40px 16px;"><div class="loading-ball">⚾</div>'
+    + '<p style="margin:12px 0 0;font-weight:700;">最新のデータを読み込み中…</p>'
+    + '<p style="margin:6px 0 0;font-size:12.5px;color:var(--ink-muted);">チームの保存先から最新の試合を取り込んでいます</p></div>';
+  else if (UI.viewPlayerId) content = renderPlayerDetail(UI.viewPlayerId);
   else if (UI.tab === "games") content = renderGamesTab();
   else if (UI.tab === "roster") content = renderRosterTab();
   else if (UI.tab === "stats") content = renderPlayerStatsTab();
@@ -9819,15 +9831,23 @@ function showFallbackExport(data) {
 /* ---------- boot ---------- */
 function init() {
   applyThemePref(getThemePref());
+  /* まずこの端末に前回保存した内容を復元（アプリに入っている控えのコピーより新しければそちらを使う） */
+  var usedLocal = tryLocalRestore();
+  normalizeState(STATE);
+  /* この端末に前回の内容がなく、チームの保存先につながるときは、控えのコピー（古い試合）を見せずに
+     最新のデータが届くまで「読み込み中」にする。届かなければ8秒で控えのコピーを表示する */
+  if (!usedLocal && window.FBSync && window.FBSync.enabled) {
+    UI.awaitingRemote = true;
+    setTimeout(function () {
+      if (!UI.awaitingRemote) return;
+      UI.awaitingRemote = false;
+      UI.remoteLoadSlow = true;
+      renderApp();
+    }, 8000);
+  }
   restoreViewState();
   renderApp();
   attachHandlers();
-
-  /* Firebase 未設定でも動くよう、まずローカル保存分を復元 */
-  tryLocalRestore();
-  normalizeState(STATE);
-  if (!UI.currentGameId) restoreViewState();
-  renderApp();
 
   /* この時点の内容を「サーバーが空だったときの初期データ」として控えておく */
   window.__seedState = clone(STATE);
