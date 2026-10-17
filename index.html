@@ -331,6 +331,10 @@ input[type="number"] { font-family: "Roboto Mono", monospace; }
 .field-row .field { flex: 1 1 140px; min-width: 110px; }
 
 /* tables */
+@media (hover: hover) and (pointer: fine) {
+  .table-scroll, .opp-pl-scroll { cursor: grab; }
+  .table-scroll.dragging, .opp-pl-scroll.dragging { cursor: grabbing; user-select: none; }
+}
 .table-scroll {
   overflow-x: auto;
   border-radius: 8px;
@@ -3306,7 +3310,18 @@ function renderApp() {
   else if (UI.tab === "team") content = renderTeamTab();
   else if (UI.tab === "addgame") content = renderAddGameTab();
   else content = renderSettingsTab();
-  document.getElementById("app").innerHTML = renderShell(content);
+  /* 表の横スクロール位置は、同じ画面を描き直すときは保つ（チームの保存先からの更新などで左端に戻らないように） */
+  var appEl = document.getElementById("app");
+  var hScrollSel = ".table-scroll, .opp-pl-scroll";
+  var scrollSig = [UI.tab, UI.statSubtab, UI.teamSubtab, UI.viewPlayerId, UI.currentGameId, UI.statsYear].join("|");
+  var keepLeft = [];
+  if (UI._scrollSig === scrollSig) appEl.querySelectorAll(hScrollSel).forEach(function (el) { keepLeft.push(el.scrollLeft); });
+  appEl.innerHTML = renderShell(content);
+  UI._scrollSig = scrollSig;
+  if (keepLeft.some(function (v) { return v > 0; })) {
+    var hEls = appEl.querySelectorAll(hScrollSel);
+    if (hEls.length === keepLeft.length) hEls.forEach(function (el, i) { if (keepLeft[i]) el.scrollLeft = keepLeft[i]; });
+  }
   document.body.classList.toggle("lv-on", !!document.querySelector(".lv-nav, .su-foot"));
   saveViewState();
   /* 横スクロールのサブタブは、選択中のボタンが隠れないよう横方向だけ寄せる */
@@ -8486,7 +8501,36 @@ function renderSettingsTab() {
 }
 
 /* ---------- event handling ---------- */
+/* PC（マウス）で、横に長い表をドラッグして横スクロールできるようにする。
+   少しでも動かしたらドラッグ扱いにして、そのあとのクリック（選手ページを開くなど）は起こさない */
+function attachTableDragScroll() {
+  var drag = null, suppressUntil = 0;
+  document.addEventListener("pointerdown", function (e) {
+    if (e.pointerType !== "mouse" || e.button !== 0 || !e.target.closest) return;
+    var sc = e.target.closest(".table-scroll, .opp-pl-scroll");
+    if (!sc || sc.scrollWidth <= sc.clientWidth + 2 || e.target.closest("input, select, textarea")) return;
+    drag = { el: sc, x: e.clientX, left: sc.scrollLeft, moved: false };
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < 6) return;
+    drag.moved = true;
+    drag.el.classList.add("dragging");
+    drag.el.scrollLeft = drag.left - dx;
+  });
+  var end = function () {
+    if (drag && drag.moved) { drag.el.classList.remove("dragging"); suppressUntil = Date.now() + 300; }
+    drag = null;
+  };
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+  document.addEventListener("click", function (e) {
+    if (Date.now() < suppressUntil) { e.stopPropagation(); e.preventDefault(); suppressUntil = 0; }
+  }, true);
+}
 function attachHandlers() {
+  attachTableDragScroll();
   var app = document.getElementById("app");
   app.addEventListener("click", onAppClick);
   app.addEventListener("input", onAppInput);
@@ -9855,7 +9899,13 @@ function init() {
   if (window.FBSync && typeof window.FBSync.start === "function") {
     window.FBSync.start({
       onRemote: applyRemoteState,
-      onStatus: function () { renderApp(); }
+      /* つながり具合の表示（右上）が変わったときだけ描き直す（毎回描き直すと表のスクロールなどが戻るため） */
+      onStatus: function () {
+        var pill = fbStatusPill();
+        if (pill === UI._lastPill) return;
+        UI._lastPill = pill;
+        renderApp();
+      }
     });
   }
 
