@@ -3316,7 +3316,14 @@ function renderApp() {
   var scrollSig = [UI.tab, UI.statSubtab, UI.teamSubtab, UI.viewPlayerId, UI.currentGameId, UI.statsYear].join("|");
   var keepLeft = [];
   if (UI._scrollSig === scrollSig) appEl.querySelectorAll(hScrollSel).forEach(function (el) { keepLeft.push(el.scrollLeft); });
+  /* 開け閉めできる欄（data-keep）は、描き直しても開いたままにする（試合中モードの「その他の操作」で＋を続けて押せるように） */
+  var keepOpen = {};
+  if (UI._scrollSig === scrollSig) appEl.querySelectorAll("details[data-keep]").forEach(function (el) { keepOpen[el.getAttribute("data-keep")] = el.open; });
   appEl.innerHTML = renderShell(content);
+  appEl.querySelectorAll("details[data-keep]").forEach(function (el) {
+    var k = el.getAttribute("data-keep");
+    if (Object.prototype.hasOwnProperty.call(keepOpen, k)) el.open = keepOpen[k];
+  });
   UI._scrollSig = scrollSig;
   if (keepLeft.some(function (v) { return v > 0; })) {
     var hEls = appEl.querySelectorAll(hScrollSel);
@@ -4493,7 +4500,7 @@ function renderGameDetail(g) {
           + "</div>"
           + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;">' + defResultBtns + "</div>"
           + advanceToggleHtml
-          + '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">投手を交代する</summary>'
+          + '<details data-keep="lv-def-pitcher" style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">投手を交代する</summary>'
             + '<div class="field-row" style="align-items:flex-end;gap:8px;margin-top:6px;">'
               + '<div class="field" style="flex:1 1 200px;"><label>新しい投手</label><select id="live-add-pitcher-select">' + '<option value="">選手を選択…</option>' + defAddPitcherOptions + "</select></div>"
               + '<button class="btn btn-sm" data-action="live-add-def-pitcher">＋ 登板</button>'
@@ -4568,7 +4575,7 @@ function renderGameDetail(g) {
           }
           lfSubHtml += dpHtml;
         }
-        defFieldSubHtml = '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">守備交代（' + lfCurInning + '回〜の守備位置を変更）</summary>'
+        defFieldSubHtml = '<details data-keep="lv-def-field" style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">守備交代（' + lfCurInning + '回〜の守備位置を変更）</summary>'
           + '<div style="margin-top:6px;">' + lfRows + lfSubHtml + "</div></details>";
       }
       var undoN = (UI.liveLog && UI.liveLog.length) ? UI.liveLog.length : 0;
@@ -4907,7 +4914,7 @@ function renderGameDetail(g) {
         : "<b>" + esc(liveHolder.name || "他の人") + "</b>")
       + (UI.liveTakeover && iHoldLive ? '<button class="btn btn-sm" data-action="exit-live-takeover" style="margin-left:auto;">終了</button>' : "")
       + "</div>";
-    var lvMore = iHoldLive ? '<details class="lv-more"><summary>その他の操作（得点の直接修正・投手交代・守備交代・回の移動）</summary>'
+    var lvMore = iHoldLive ? '<details class="lv-more" data-keep="lv-more"><summary>その他の操作（得点の直接修正・投手交代・守備交代・回の移動）</summary>'
         + '<div class="lv-more-body">'
           + '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + (lvOnTop ? liveSideBlock("top", topLabel, liTop, lvAway) : liveSideBlock("bottom", bottomLabel, liBot, !lvAway)) + "</div>"
           + (d.pitching.length ? '<div class="field-row" style="align-items:flex-end;gap:8px;margin-top:10px;"><div class="field" style="flex:1 1 200px;"><label>投手交代（新しい投手）</label><select id="live-add-pitcher-select"><option value="">選手を選択…</option>' + (defAddPitcherOptions || "") + "</select></div>"
