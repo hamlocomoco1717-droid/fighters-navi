@@ -634,7 +634,7 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .pv-row:last-child { border-bottom: none; }
 .pv-val { color: var(--ink-muted); font-size: 12.5px; text-align: right; }
 .ms-list { display: flex; flex-direction: column; gap: 6px; }
-/* ホーム（試合一覧の上）：自分の成績・今日のトピック */
+/* ホーム（試合一覧の上）：自分の成績・今週のトピック */
 .home-k { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--ink-muted); }
 .home-me-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .home-me-name { font-size: 18px; font-weight: 800; }
@@ -3606,7 +3606,7 @@ function renderGamesTab() {
   return renderGamesList();
 }
 
-/* ---------- ホーム（試合一覧の上）：自分の成績・今日のトピック ----------
+/* ---------- ホーム（試合一覧の上）：自分の成績・今週のトピック ----------
    「自分」はこの端末だけに覚える（チームのデータには入れない）。テストモードではページを閉じると消える */
 var MY_PLAYER_KEY = "fighters-navi-me-v1";
 var MY_HINT_OFF_KEY = "fighters-navi-me-hint-off-v1";
@@ -3748,7 +3748,7 @@ function renderHomeTopics() {
   });
   if (best) topic("🔥", "<b>連続試合安打</b>：" + esc(playerName(best.pid)) + " " + best.cur + "試合継続中", "view-player", ' data-id="' + esc(best.pid) + '"');
   if (!items.length) return "";
-  return '<div class="card"><div class="section-title" style="margin-top:0;">今日のトピック</div>' + items.join("") + "</div>";
+  return '<div class="card"><div class="section-title" style="margin-top:0;">今週のトピック</div>' + items.join("") + "</div>";
 }
 
 function renderGamesList() {
