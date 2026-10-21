@@ -650,7 +650,10 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .home-me-pick select { flex: 1 1 160px; min-width: 0; }
 .home-x { margin-left: auto; background: none; border: 0; color: var(--ink-muted); font-size: 18px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 .home-topic { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--border); background: none; color: var(--ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
-.home-topic:first-of-type { border-top: 0; padding-top: 4px; }
+.section-title + .home-topic { border-top: 0; padding-top: 4px; }
+.home-topic-group { cursor: default; }
+.ht-rec { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 7px 10px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ht-rec span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .home-topic .ht-ic { flex: 0 0 22px; text-align: center; }
 .home-topic .ht-tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .home-topic .ht-go { flex: 0 0 auto; color: var(--ink-muted); }
@@ -3712,10 +3715,18 @@ function renderHomeTopics() {
       wkItems.push(byPid[it.pid]);
     });
   });
-  wkItems.sort(function (a, b) { return b.w - a.w; }).slice(0, 3).forEach(function (it) {
-    topic("🎉", "<b>今週の記録</b>：" + esc(it.text)
-      + '<span class="ht-sub">' + esc(fmtDate(it.g.date).slice(5)) + " " + esc(it.g.opponent || "相手未設定") + "戦</span>", "view-player", ' data-id="' + esc(it.pid) + '"');
-  });
+  /* 見出しは1つにまとめ、その下に選手ごとの記録を並べる（押すと選手ページ） */
+  var wkTop = wkItems.sort(function (a, b) { return b.w - a.w; }).slice(0, 3);
+  if (wkTop.length) {
+    var wkGameLbl = function (g) { return fmtDate(g.date).slice(5) + " " + (g.opponent || "相手未設定") + "戦"; };
+    var wkOneGame = wkTop.every(function (it) { return it.g === wkTop[0].g; });
+    items.push('<div class="home-topic home-topic-group"><span class="ht-ic">🎉</span><span class="ht-tx"><b>今週の記録</b>'
+      + (wkOneGame ? '<span class="ht-sub">' + esc(wkGameLbl(wkTop[0].g)) + "</span>" : "")
+      + wkTop.map(function (it) {
+        return '<button class="ht-rec" data-action="view-player" data-id="' + esc(it.pid) + '"><span>' + esc(it.text)
+          + (wkOneGame ? "" : "（" + esc(fmtDate(it.g.date).slice(5)) + "）") + "</span>›</button>";
+      }).join("") + "</span></div>");
+  }
   /* いま試合中モードで入力している試合（見に行く・引き継ぐ） */
   STATE.games.forEach(function (g) {
     var lc = liveControlHolder(g);
@@ -5251,7 +5262,7 @@ function renderGameDetail(g) {
     '<div class="game-hero">'
     + '<div class="game-hero-tag">' + esc(fmtDate(g.date)) + (g.ground ? " · " + esc(g.ground) : "") + "</div>"
     + '<div class="game-hero-score"><span class="us mono">' + ourScore + '</span><span class="vs">' + esc(STATE.team.name || "自チーム") + '</span><span class="them mono">' + theirScore + '</span><span class="vs">' + esc(g.opponent || "相手") + "</span></div>"
-    + '<span class="badge ' + (heroRes === "W" ? "badge-win" : heroRes === "L" ? "badge-loss" : "badge-tie") + '">' + (heroRes === "W" ? "WIN" : heroRes === "L" ? "LOSE" : "TIE") + "</span>"
+    + '<span class="badge ' + (heroRes === "W" ? "badge-win" : heroRes === "L" ? "badge-loss" : "badge-tie") + '">' + (heroRes === "W" ? "WIN" : heroRes === "L" ? "LOSE" : "DRAW") + "</span>"
     + "</div>"
   ) : "";
   var gameMilestones = computeGameMilestones(d);
