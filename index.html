@@ -2006,6 +2006,7 @@ function computeGameMilestones(d) {
   });
   items.sort(function (a, b2) { return b2.w - a.w; });
   var picked = items.slice(0, 4);
+  res.items = picked;
   res.bullets = picked.map(function (it) { return it.text; });
   res.top = picked.length ? picked[0].text + "。" : null;
   return res;
@@ -3695,6 +3696,26 @@ function renderHomeTopics() {
   var topic = function (ic, html, action, attrs) {
     items.push('<button class="home-topic" data-action="' + action + '"' + (attrs || "") + '><span class="ht-ic">' + ic + '</span><span class="ht-tx">' + html + '</span><span class="ht-go">›</span></button>');
   };
+  /* 今週（今日を含む直近7日）の試合で達成した記録：重い（珍しい）順に3件まで、一番上に */
+  var wk = new Date(); wk.setDate(wk.getDate() - 6);
+  var wkFrom = wk.getFullYear() + "-" + String(wk.getMonth() + 1).padStart(2, "0") + "-" + String(wk.getDate()).padStart(2, "0");
+  var wkToday = todayStr();
+  /* 同じ試合の同じ選手の記録は1行に（「設楽が初本塁打、初安打」） */
+  var wkItems = [], wkStreakPid = {};
+  homeGamesWithResult().filter(function (g) { return g.date && g.date >= wkFrom && g.date <= wkToday; }).forEach(function (g) {
+    var byPid = {};
+    (computeGameMilestones(g).items || []).forEach(function (it) {
+      if (/試合連続安打/.test(it.text)) wkStreakPid[it.pid] = true;
+      var prefix = playerName(it.pid) + "が";
+      if (byPid[it.pid]) { byPid[it.pid].text += "、" + (it.text.indexOf(prefix) === 0 ? it.text.slice(prefix.length) : it.text); return; }
+      byPid[it.pid] = { w: it.w, text: it.text, pid: it.pid, g: g };
+      wkItems.push(byPid[it.pid]);
+    });
+  });
+  wkItems.sort(function (a, b) { return b.w - a.w; }).slice(0, 3).forEach(function (it) {
+    topic("🎉", "<b>今週の記録</b>：" + esc(it.text)
+      + '<span class="ht-sub">' + esc(fmtDate(it.g.date).slice(5)) + " " + esc(it.g.opponent || "相手未設定") + "戦</span>", "view-player", ' data-id="' + esc(it.pid) + '"');
+  });
   /* いま試合中モードで入力している試合（見に行く・引き継ぐ） */
   STATE.games.forEach(function (g) {
     var lc = liveControlHolder(g);
@@ -3744,7 +3765,7 @@ function renderHomeTopics() {
   /* 連続試合安打（3試合以上継続中の最長） */
   var best = null;
   computeHitStreaks(STATE.games).forEach(function (st, pid) {
-    if (active[pid] && n0(st.cur) >= 3 && (!best || st.cur > best.cur)) best = { pid: pid, cur: st.cur };
+    if (active[pid] && !wkStreakPid[pid] && n0(st.cur) >= 3 && (!best || st.cur > best.cur)) best = { pid: pid, cur: st.cur };
   });
   if (best) topic("🔥", "<b>連続試合安打</b>：" + esc(playerName(best.pid)) + " " + best.cur + "試合継続中", "view-player", ' data-id="' + esc(best.pid) + '"');
   if (!items.length) return "";
