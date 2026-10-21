@@ -5251,7 +5251,7 @@ function renderGameDetail(g) {
     '<div class="game-hero">'
     + '<div class="game-hero-tag">' + esc(fmtDate(g.date)) + (g.ground ? " · " + esc(g.ground) : "") + "</div>"
     + '<div class="game-hero-score"><span class="us mono">' + ourScore + '</span><span class="vs">' + esc(STATE.team.name || "自チーム") + '</span><span class="them mono">' + theirScore + '</span><span class="vs">' + esc(g.opponent || "相手") + "</span></div>"
-    + '<span class="badge ' + (heroRes === "W" ? "badge-win" : heroRes === "L" ? "badge-loss" : "badge-tie") + '">' + (heroRes === "W" ? "WIN" : heroRes === "L" ? "LOSS" : "TIE") + "</span>"
+    + '<span class="badge ' + (heroRes === "W" ? "badge-win" : heroRes === "L" ? "badge-loss" : "badge-tie") + '">' + (heroRes === "W" ? "WIN" : heroRes === "L" ? "LOSE" : "TIE") + "</span>"
     + "</div>"
   ) : "";
   var gameMilestones = computeGameMilestones(d);
