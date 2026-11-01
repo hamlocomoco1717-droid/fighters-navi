@@ -3657,7 +3657,10 @@ function renderHomeMe() {
       + '<p style="font-size:12.5px;color:var(--ink-muted);margin:4px 0 8px;">自分の選手を選ぶと、開いてすぐここに自分の成績が出ます（この端末だけに覚えます）。</p>'
       + '<div class="home-me-pick"><select id="home-me-select"><option value="">自分の選手を選ぶ…</option>' + opts + "</select></div></div>";
   }
-  var year = availableYears()[0] || String(new Date().getFullYear());
+  /* 上の「シーズン」の選択に合わせる（全期間なら通算） */
+  var year = UI.statsYear || availableYears()[0] || String(new Date().getFullYear());
+  var yearLbl = year === "all" ? "通算" : year + "年";
+  var latestYear = availableYears()[0];
   var bAgg = computeBattingAgg(gamesForYear(year)).get(me);
   var pAgg = computePitchingAgg(gamesForYear(year)).get(me);
   var tile = function (k, v) { return "<div><span>" + k + "</span><b>" + v + "</b></div>"; };
@@ -3670,7 +3673,8 @@ function renderHomeMe() {
   } else stats = "";
   /* 自分が出た一番新しい試合 */
   var lastLine = "";
-  var gs = homeGamesWithResult();
+  var gs = homeGamesWithResult().filter(function (g) { return year === "all" || (g.date || "").slice(0, 4) === year; });
+  var lastLbl = year === "all" || year === latestYear ? "前の試合" : "最後の試合";
   for (var i = 0; i < gs.length && !lastLine; i++) {
     var g = gs[i];
     var bs = (g.batting || []).filter(function (b) { return b.playerId === me; });
@@ -3682,7 +3686,7 @@ function renderHomeMe() {
     ps.forEach(function (x) { parts.push("投手 " + pitchingSummaryLine(x)); });
     if (!parts.length) continue;
     var res = gameResult(g), tot = gameTotals(g);
-    lastLine = '<div class="home-line"><span class="home-k">前の試合</span>' + esc(fmtDate(g.date).slice(5)) + " " + esc(g.opponent || "相手未設定") + "戦（"
+    lastLine = '<div class="home-line"><span class="home-k">' + lastLbl + "</span>" + esc(year === latestYear ? fmtDate(g.date).slice(5) : fmtDate(g.date)) + " " + esc(g.opponent || "相手未設定") + "戦（"
       + (res === "W" ? "勝" : res === "L" ? "敗" : "分") + " " + tot.us + "-" + tot.them + "）" + esc(parts.join("、")) + "</div>";
   }
   var next = computeMilestoneCountdown().filter(function (it) { return it.pid === me && it.cur > 0; })[0];
@@ -3690,8 +3694,8 @@ function renderHomeMe() {
     + "まで あと<b>" + next.left + "</b>" + MILESTONE_UNIT[next.key] + "</div>" : "";
   return '<div class="card"><div class="home-me-head"><span class="home-k">自分の成績</span>'
     + '<span class="home-me-name">' + esc(playerNameNum(me)) + "</span>"
-    + '<span class="home-me-season">' + esc(year) + "年</span></div>"
-    + (stats ? '<div class="home-me-stats">' + stats + "</div>" : '<p style="font-size:12.5px;color:var(--ink-muted);margin:8px 0;">' + esc(year) + "年はまだ出場がありません。</p>")
+    + '<span class="home-me-season">' + esc(yearLbl) + "</span></div>"
+    + (stats ? '<div class="home-me-stats">' + stats + "</div>" : '<p style="font-size:12.5px;color:var(--ink-muted);margin:8px 0;">' + esc(yearLbl) + (year === "all" ? "の出場はまだありません。" : "は出場がありません。") + "</p>")
     + lastLine + nextLine
     + '<button class="btn btn-sm home-me-go" data-action="view-player" data-id="' + esc(me) + '">自分のページを見る ›</button></div>';
 }
