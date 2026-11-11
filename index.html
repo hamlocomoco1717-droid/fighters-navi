@@ -31,6 +31,8 @@ if ("serviceWorker" in navigator) {
   --bg: #F4F6FA;
   --surface: #FFFFFF;
   --surface-2: #EAEFF8;
+  --zebra: #F8FAFD;
+  --me-row: #FBF1D3;
   --border: #DEE4F0;
   --ink: #15213E;
   --ink-muted: #5B6585;
@@ -62,6 +64,8 @@ if ("serviceWorker" in navigator) {
     --bg: #0D1326;
     --surface: #151E38;
     --surface-2: #1E2A49;
+    --zebra: #182241;
+    --me-row: #3A3013;
     --border: #2E3B60;
     --ink: #E9ECF6;
     --ink-muted: #9AA4C2;
@@ -93,6 +97,8 @@ if ("serviceWorker" in navigator) {
   --bg: #0D1326;
   --surface: #151E38;
   --surface-2: #1E2A49;
+  --zebra: #182241;
+  --me-row: #3A3013;
   --border: #2E3B60;
   --ink: #E9ECF6;
   --ink-muted: #9AA4C2;
@@ -434,7 +440,7 @@ input[type="number"] { font-family: "Roboto Mono", monospace; }
 }
 table { border-collapse: collapse; width: 100%; }
 table.stat-table th, table.stat-table td {
-  padding: 7px 10px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   white-space: nowrap;
@@ -457,11 +463,20 @@ table.stat-table th:first-child,
 table.stat-table td:first-child:not([colspan]) {
   position: sticky;
   left: 0;
-  background: var(--surface);
+  background: var(--row-bg, var(--surface));
   box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.15);
 }
 table.stat-table th:first-child { background: var(--surface-2); z-index: 3; }
 table.stat-table tbody tr:hover td:first-child { background: var(--surface-2); }
+/* 選手名を探しやすく：名前は大きく太く、行はしま模様、自分の行は金色。
+   行の色は --row-bg で持ち、横スクロールで左に固定される名前の列にも同じ色を使う */
+table.stat-table tbody tr { background: var(--row-bg, transparent); }
+:where(table.stat-table tbody tr:nth-child(even)) { --row-bg: var(--zebra); }
+table.stat-table tbody tr.me-row { --row-bg: var(--me-row); }
+table.stat-table tbody tr.me-row > td:first-child { box-shadow: inset 4px 0 0 var(--scoreboard-text), 2px 0 4px -2px rgba(0, 0, 0, 0.15); }
+table.stat-table td .link-btn[data-action="view-player"] { font-size: 15px; font-weight: 700; text-decoration: none; color: var(--link); }
+table.stat-table td .link-btn[data-action="view-player"]:hover { text-decoration: underline; }
+table.stat-table td.player-name-cell { font-size: 15px; font-weight: 700; }
 table.stat-table td.cell-input-wrap { padding: 4px 6px; }
 .roster-name-cell { display: flex; align-items: baseline; gap: 3px; flex-wrap: wrap; }
 .roster-name-cell .roster-position { color: var(--ink-muted); font-size: 12px; }
@@ -3460,6 +3475,17 @@ function renderShell(contentHtml) {
     + renderTitleSimDialog();
 }
 
+/* 「自分」に設定した選手の行に目印を付ける（どの表でも自分の位置がすぐわかるように） */
+function markMyRows(root) {
+  var me = getMyPlayerId();
+  if (!me) return;
+  root.querySelectorAll('table.stat-table tbody button[data-action="view-player"], table.stat-table tbody td[data-pid]').forEach(function (el) {
+    if ((el.getAttribute("data-id") || el.getAttribute("data-pid")) !== me) return;
+    var tr = el.closest("tr");
+    if (tr) tr.classList.add("me-row");
+  });
+}
+
 function renderApp() {
   /* 対戦相手別は年をまたいだ対戦成績を見るものなので、開いたときだけ通算（全期間）にし、
      ほかの画面に移ったら一番新しいシーズンに戻す（対戦相手別の中で年を選び直すのは自由） */
@@ -3502,6 +3528,7 @@ function renderApp() {
     var hEls = appEl.querySelectorAll(hScrollSel);
     if (hEls.length === keepLeft.length) hEls.forEach(function (el, i) { if (keepLeft[i]) el.scrollLeft = keepLeft[i]; });
   }
+  markMyRows(appEl);
   document.body.classList.toggle("lv-on", !!document.querySelector(".lv-nav, .su-foot"));
   saveViewState();
   /* 横スクロールのサブタブは、選択中のボタンが隠れないよう横方向だけ寄せる */
@@ -5479,7 +5506,7 @@ function renderGameDetail(g) {
       }).join("");
       var isEditingThisRow = canEditAtbats && UI.editingAtbatsRow === b._rid;
       var row = "<tr" + (isEditingThisRow ? ' class="atbat-editing-row"' : "") + ">"
-        + '<td class="player-name-cell">' + battingSubTag(d.batting, b) + esc(playerNameNum(b.playerId))
+        + '<td class="player-name-cell" data-pid="' + esc(b.playerId) + '">' + battingSubTag(d.batting, b) + esc(playerNameNum(b.playerId))
           + (!canEditAtbats ? "" :
               ' <button class="icon-btn" data-action="move-brow" data-rid="' + b._rid + '" data-dir="-1"' + (bIdx === 0 ? " disabled" : "") + ' title="打順を1つ上げる">▲</button>'
             + ' <button class="icon-btn" data-action="move-brow" data-rid="' + b._rid + '" data-dir="1"' + (bIdx === d.batting.length - 1 ? " disabled" : "") + ' title="打順を1つ下げる">▼</button>'
@@ -5554,7 +5581,7 @@ function renderGameDetail(g) {
     ? '<tr><td colspan="2" style="color:var(--ink-muted);text-align:center;padding:16px;">出場選手がまだ登録されていません</td></tr>'
     : d.batting.map(function (b) {
       return "<tr>"
-        + '<td class="player-name-cell">' + esc(playerNameNum(b.playerId)) + "</td>"
+        + '<td class="player-name-cell" data-pid="' + esc(b.playerId) + '">' + esc(playerNameNum(b.playerId)) + "</td>"
         + battingPositionCell(b, battingInningCount, canEditPosition)
         + "</tr>";
     }).join("");
@@ -5571,7 +5598,7 @@ function renderGameDetail(g) {
     ? '<tr><td colspan="8" style="color:var(--ink-muted);text-align:center;padding:16px;">投手がまだ登録されていません</td></tr>'
     : d.pitching.map(function (p, pIdx) {
       return "<tr>"
-        + '<td class="player-name-cell">' + esc(playerNameNum(p.playerId)) + (!canEditPitching ? "" :
+        + '<td class="player-name-cell" data-pid="' + esc(p.playerId) + '">' + esc(playerNameNum(p.playerId)) + (!canEditPitching ? "" :
             ' <button class="icon-btn" data-action="move-prow" data-rid="' + p._rid + '" data-dir="-1"' + (pIdx === 0 ? " disabled" : "") + ' title="登板順を1つ上げる">▲</button>'
           + ' <button class="icon-btn" data-action="move-prow" data-rid="' + p._rid + '" data-dir="1"' + (pIdx === d.pitching.length - 1 ? " disabled" : "") + ' title="登板順を1つ下げる">▼</button>'
           + ' <button class="icon-btn" data-action="rm-prow" data-rid="' + p._rid + '" title="削除">×</button>') + "</td>"
