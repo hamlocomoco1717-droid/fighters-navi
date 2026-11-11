@@ -661,6 +661,9 @@ input.cell-input.wide { width: 66px; }
 .tile-value { font-family: "Oswald", "Roboto Mono", monospace; font-size: 28px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .tile-value.win { color: var(--win); }
 .tile-value.loss { color: var(--loss); }
+table.stat-table td.sort-col, table.stat-table th.sort-col { background: var(--accent-soft); }
+table.stat-table th.sort-col { color: var(--ink); }
+table.stat-table tbody tr:hover td.sort-col { background: var(--accent-soft); }
 .stat-headline { font-family: "Oswald", "Roboto Mono", monospace !important; font-size: 16px; font-weight: 700; color: var(--accent-strong); }
 .roster-number { font-family: "Oswald", sans-serif; font-size: 17px; font-weight: 700; color: var(--accent-strong); }
 .tile-sub { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
@@ -7401,7 +7404,7 @@ function sortRows(rows, sortState, getVal) {
 function statHeader(label, key, sortState, numeric) {
   var active = sortState.key === key;
   var arrow = active ? (sortState.dir === "asc" ? "▲" : "▼") : "";
-  return '<th class="sortable' + (numeric ? " num" : "") + '" data-action="sort" data-sortkey="' + key + '">' + esc(label) + (arrow ? ' <span class="arrow">' + arrow + "</span>" : "") + "</th>";
+  return '<th class="sortable' + (numeric ? " num" : "") + (active && key !== "name" ? " sort-col" : "") + '" data-action="sort" data-sortkey="' + key + '">' + esc(label) + (arrow ? ' <span class="arrow">' + arrow + "</span>" : "") + "</th>";
 }
 
 function renderPlayerStatsTab() {
@@ -7462,7 +7465,7 @@ function renderPlayerStatsTab() {
     };
     var qualBattingRows = sortRows(rows.filter(function (r) { return r.qualified; }), UI.battingSort, battingSortVal);
     var unqualBattingRows = sortRows(rows.filter(function (r) { return !r.qualified; }), UI.battingSort, battingSortVal);
-    /* 列定義。ソート中の列は「選手」の右隣（＝左端）に移動する */
+    /* 列定義。並べ替えても列の位置は動かさない（選手名が左に固定されているので、押した場所で順番だけ入れ替わる）。並べ替え中の列には色を付ける */
     var battingCols = [
       { key: "avg", label: "打率", cell: function (r) { return '<td class="num mono stat-headline">' + fmtRate(r.rates.avg) + "</td>"; } },
       { key: "rbi", label: "打点", cell: function (r) { return tdnum(r.c.rbi, "stat-rbi"); } },
@@ -7504,17 +7507,10 @@ function renderPlayerStatsTab() {
         .sort(function (a, b) { return (BAT_SIMPLE.indexOf(a.key) + 99) % 99 - (BAT_SIMPLE.indexOf(b.key) + 99) % 99; });
     }
     var orderedBattingCols = battingCols.slice();
-    if (bSortKey && bSortKey !== "name") {
-      var bMoveIdx = -1;
-      for (var bci = 0; bci < orderedBattingCols.length; bci++) {
-        if (orderedBattingCols[bci].key === bSortKey) { bMoveIdx = bci; break; }
-      }
-      if (bMoveIdx > 0) orderedBattingCols.unshift(orderedBattingCols.splice(bMoveIdx, 1)[0]);
-    }
     var battingColCount = orderedBattingCols.length + 1;
     var renderBattingRow = function (r) {
       return '<tr><td><button class="link-btn" data-action="view-player" data-id="' + r.c.playerId + '">' + esc(playerName(r.c.playerId)) + "</button></td>"
-        + orderedBattingCols.map(function (col) { return col.cell(r); }).join("") + "</tr>";
+        + orderedBattingCols.map(function (col) { return markSortCol(col.cell(r), col.key === bSortKey); }).join("") + "</tr>";
     };
     var body;
     if (qualBattingRows.length === 0 && unqualBattingRows.length === 0) {
@@ -7550,7 +7546,7 @@ function renderPlayerStatsTab() {
     };
     var qualPitchingRows = sortRows(prows.filter(function (r) { return r.qualified; }), UI.pitchingSort, pitchingSortVal);
     var unqualPitchingRows = sortRows(prows.filter(function (r) { return !r.qualified; }), UI.pitchingSort, pitchingSortVal);
-    /* 列定義。ソート中の列は「選手」の右隣（＝左端）に移動する */
+    /* 列定義。並べ替えても列の位置は動かさない（選手名が左に固定されているので、押した場所で順番だけ入れ替わる）。並べ替え中の列には色を付ける */
     var pitchingCols = [
       { key: "era", label: "防御率", cell: function (r) { return '<td class="num mono stat-headline">' + fmtEra(r.rates.era) + "</td>"; } },
       { key: "g", label: "登板", cell: function (r) { return tdnum(r.c.g); } },
@@ -7572,17 +7568,10 @@ function renderPlayerStatsTab() {
         .sort(function (a, b) { return (PIT_SIMPLE.indexOf(a.key) + 99) % 99 - (PIT_SIMPLE.indexOf(b.key) + 99) % 99; });
     }
     var orderedPitchingCols = pitchingCols.slice();
-    if (pSortKey && pSortKey !== "name") {
-      var pMoveIdx = -1;
-      for (var pci = 0; pci < orderedPitchingCols.length; pci++) {
-        if (orderedPitchingCols[pci].key === pSortKey) { pMoveIdx = pci; break; }
-      }
-      if (pMoveIdx > 0) orderedPitchingCols.unshift(orderedPitchingCols.splice(pMoveIdx, 1)[0]);
-    }
     var pitchingColCount = orderedPitchingCols.length + 1;
     var renderPitchingRow = function (r) {
       return '<tr><td><button class="link-btn" data-action="view-player" data-id="' + r.c.playerId + '">' + esc(playerName(r.c.playerId)) + "</button></td>"
-        + orderedPitchingCols.map(function (col) { return col.cell(r); }).join("") + "</tr>";
+        + orderedPitchingCols.map(function (col) { return markSortCol(col.cell(r), col.key === pSortKey); }).join("") + "</tr>";
     };
     var pbody;
     if (qualPitchingRows.length === 0 && unqualPitchingRows.length === 0) {
@@ -8217,6 +8206,8 @@ function renderTitleHistory() {
     + (top ? '<div class="th-counts"><span class="th-counts-label">受賞回数</span>' + top + "</div>" : "")
     + blocks + "</div>";
 }
+/* 並べ替え中の列のセルに目印のクラスを付ける */
+function markSortCol(tdHtml, on) { return on ? tdHtml.replace('<td class="', '<td class="sort-col ') : tdHtml; }
 function tdnum(v, cls) { return '<td class="num mono' + (cls ? " " + cls : "") + '">' + n0(v) + "</td>"; }
 
 /* ---------- 選手 個人ページ ---------- */
