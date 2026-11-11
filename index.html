@@ -275,9 +275,35 @@ body.lv-on .bottom-nav { display: none; }
 .me-picker-title { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
 .me-pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
 .me-pick-btn { justify-content: flex-start; min-height: 46px; font-size: 14.5px; font-weight: 600; }
+/* 表の「かんたん／くわしく」の切り替え */
+.stat-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.detail-toggle { display: inline-flex; gap: 0; flex: 0 0 auto; }
+.detail-toggle .btn { border-radius: 0; font-weight: 600; padding: 6px 12px; font-size: 12.5px; text-transform: none; letter-spacing: 0; }
+.detail-toggle .btn:first-child { border-radius: 10px 0 0 10px; }
+.detail-toggle .btn:last-child { border-radius: 0 10px 10px 0; margin-left: -1px; }
+/* 試合の打撃成績（かんたん）：打席の結果のあとは 打数・安打・打点 だけ見せる。右から数えて隠す列を決めている
+   （右から 犠飛1 犠打2 盗塁死3 盗塁4 三振5 死球6 四球7 打点8 本塁打9 三塁打10 二塁打11 安打12 得点13 打数14 打席15） */
+.bat-compact tr > :not([colspan]):nth-last-child(-n+7),
+.bat-compact tr > :not([colspan]):nth-last-child(9),
+.bat-compact tr > :not([colspan]):nth-last-child(10),
+.bat-compact tr > :not([colspan]):nth-last-child(11),
+.bat-compact tr > :not([colspan]):nth-last-child(13),
+.bat-compact tr > :not([colspan]):nth-last-child(15) { display: none; }
+/* 選手ページなどの折りたたみ（押すと開く） */
+.fold { margin-bottom: 14px; }
+.fold > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow);
+  padding: 14px 18px; font-weight: 700; font-size: 14.5px;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: "＋ 開く"; color: var(--ink-muted); font-weight: 500; font-size: 12.5px; white-space: nowrap; }
+.fold[open] > summary::after { content: "－ 閉じる"; }
+.fold[open] > summary { margin-bottom: 10px; }
+.fold > .card:last-child { margin-bottom: 0; }
 
 @media (max-width: 959px) {
-  #toast-wrap { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  body #toast-wrap { bottom: calc(86px + env(safe-area-inset-bottom)); }
 }
 @media (min-width: 960px) {
   .topbar, .bottom-nav { display: none; }
@@ -3401,15 +3427,17 @@ function renderShell(contentHtml) {
   var statusHtml = TEST_MODE ? '<span class="status-pill">🧪 テスト中</span>' : UI.readOnly
     ? '<span class="status-pill readonly">閲覧専用</span>'
     : fbStatusPill();
+  /* 「試合を追加」は記録係モードの端末だけに出す */
+  var scorer = isScorerDevice();
   var brandHtml = '<button class="brand-btn" data-action="tab" data-tab="games" aria-label="試合一覧へ">'
     + '<span class="team-name">Fighters</span>'
     + '<span class="team-sub"><span class="brand-navi">navi</span></span></button>';
   return ""
     + '<nav class="side-nav" aria-label="メニュー">' + brandHtml
     + '<div class="side-list">' + sideItem("games") + sideMe + sideItem("stats") + sideItem("team") + sideItem("roster") + "</div>"
-    + '<div class="side-foot">' + statusHtml + '<div class="side-list side-sub">' + sideItem("addgame") + sideItem("settings") + "</div></div>"
+    + '<div class="side-foot">' + statusHtml + '<div class="side-list side-sub">' + (scorer ? sideItem("addgame") : "") + sideItem("settings") + "</div></div>"
     + "</nav>"
-    + '<header class="topbar">' + brandHtml + statusHtml + topIcon("addgame") + topIcon("settings") + "</header>"
+    + '<header class="topbar">' + brandHtml + statusHtml + (scorer ? topIcon("addgame") : "") + topIcon("settings") + "</header>"
     + '<div class="app-main">'
     + "<main>"
     + (UI.readOnly ? '<div class="banner readonly">閲覧専用モードです。編集内容は保存されません。</div>' : "")
@@ -3736,6 +3764,42 @@ function setMyPlayerId(id) {
   if (TEST_MODE) { UI.testMyPlayerId = id || null; return; }
   try { if (id) localStorage.setItem(MY_PLAYER_KEY, id); else localStorage.removeItem(MY_PLAYER_KEY); }
   catch (e) { showToast("この端末では覚えられませんでした", true); }
+}
+/* 記録係モード：スコアを入力・修正する人の端末だけオンにする。オフの端末では
+   「試合を追加」「✎ 編集」「試合中モード」などの入力用ボタンを出さない（暗証番号とは別。見た目を減らすだけ）。
+   まだ選んでいない端末は、試合中モード用の名前が入っていれば記録係とみなす（これまで入力していた人が困らないように） */
+var SCORER_MODE_KEY = "fighters-navi-scorer-mode-v1";
+function isScorerDevice() {
+  if (UI.readOnly) return false;
+  if (TEST_MODE) return UI.testScorerMode !== false;
+  try {
+    var v = localStorage.getItem(SCORER_MODE_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch (e) { return true; }
+  return !!getScorerName();
+}
+function setScorerDevice(on) {
+  if (TEST_MODE) { UI.testScorerMode = !!on; return; }
+  try { localStorage.setItem(SCORER_MODE_KEY, on ? "1" : "0"); }
+  catch (e) { showToast("この端末では覚えられませんでした", true); }
+}
+/* 表の「かんたん／くわしく」：個人成績と試合の打撃成績で共通。この端末だけに覚える */
+var DETAIL_KEY = "fighters-navi-detail-v1";
+function wantDetail() {
+  if (TEST_MODE) return !!UI.testDetail;
+  try { return localStorage.getItem(DETAIL_KEY) === "1"; } catch (e) { return !!UI.testDetail; }
+}
+function setWantDetail(on) {
+  UI.testDetail = !!on;
+  if (TEST_MODE) return;
+  try { localStorage.setItem(DETAIL_KEY, on ? "1" : "0"); } catch (e) { /* 覚えられなければこの画面の間だけ */ }
+}
+function detailToggleHtml() {
+  var on = wantDetail();
+  return '<span class="detail-toggle" role="group" aria-label="表示する項目の量">'
+    + '<button type="button" class="btn btn-sm' + (on ? "" : " btn-primary") + '" data-action="set-detail" data-on="0">かんたん</button>'
+    + '<button type="button" class="btn btn-sm' + (on ? " btn-primary" : "") + '" data-action="set-detail" data-on="1">くわしく</button></span>';
 }
 /* 結果の入った試合を新しい順に */
 function homeGamesWithResult() {
@@ -5348,11 +5412,13 @@ function renderGameDetail(g) {
   var topPerformers = computeTopPerformers(d, 3, keyPointsResult.originIds);
   var highlightLines = buildGameHighlightLines(d, weAreAway, ourScore, theirScore, d.opponent);
   var highlightText = heroRes ? buildGameShareText(d, weAreAway, ourScore, theirScore, highlightLines, gameMilestones, topPerformers) : highlightLines.join("\n");
+  /* 画面では、活躍した選手の一文は下の「活躍選手」と重なるので出さない（共有する文章はそのまま） */
+  var shownHighlightLines = topPerformers.length > 0 ? buildGameHighlightLines(d, weAreAway, ourScore, theirScore, d.opponent, true) : highlightLines;
   var highlightBlock = highlightLines.length > 0 ? (
     '<div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">ハイライト'
     + '<button class="btn btn-sm" data-action="share-text" data-src="highlight-copy-src" style="font-weight:400;">📤 共有</button>'
     + '<button class="btn btn-sm" data-action="copy-highlight" style="font-weight:400;">コピー</button></div>'
-    + '<div style="font-size:13.5px;line-height:1.75;">' + highlightLines.map(function (l) { return esc(l); }).join("<br>") + "</div>"
+    + '<div style="font-size:13.5px;line-height:1.75;">' + shownHighlightLines.map(function (l) { return esc(l); }).join("<br>") + "</div>"
     + (heroRes ? '<details class="form-table"><summary>共有する文章を見る</summary><pre class="share-preview">' + esc(highlightText) + "</pre></details>" : "")
     + '<textarea id="highlight-copy-src" readonly aria-hidden="true" tabindex="-1" class="share-src">' + esc(highlightText) + "</textarea>"
   ) : "";
@@ -5466,8 +5532,10 @@ function renderGameDetail(g) {
       + "</details>";
   }
 
-  var battingHtml = '<div class="section-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">打撃成績' + atbatEditToggleHtml + battingTotalsEditToggleHtml + '</div>'
-    + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
+  var battingHtml = '<div class="section-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">打撃成績' + atbatEditToggleHtml + battingTotalsEditToggleHtml
+      /* 見るだけのときは「かんたん」（打席の結果＋打数・安打・打点）を基本にする。編集中はいつも全部の列 */
+      + (canEditAtbats || canEditBattingTotals ? "" : '<span style="margin-left:auto;">' + detailToggleHtml() + "</span>") + '</div>'
+    + '<div class="table-scroll"><table class="stat-table' + (canEditAtbats || canEditBattingTotals || wantDetail() ? "" : " bat-compact") + '"><thead><tr>'
     + "<th>選手</th>" + abHead + "<th class=\"num\">打席</th><th class=\"num\">打数</th><th class=\"num\">得点</th><th class=\"num\">安打</th><th class=\"num\">二塁打</th>"
     + "<th class=\"num\">三塁打</th><th class=\"num\">本塁打</th><th class=\"num\">打点</th><th class=\"num\">四球</th>"
     + "<th class=\"num\">死球</th><th class=\"num\">三振</th><th class=\"num\">盗塁</th><th class=\"num\">盗塁死</th><th class=\"num\">犠打</th><th class=\"num\">犠飛</th>"
@@ -5557,15 +5625,17 @@ function renderGameDetail(g) {
 
   /* 保存済みの試合を「試合中モード」で開くための入口（一覧から開いた時だけ） */
   var liveEntryHtml = "";
+  var scorer = isScorerDevice();
   if (!UI.readOnly && !UI.isNewUnsavedGame && !UI.liveTakeover) {
     var entryHolder = liveControlHolder(d);
     if (entryHolder && entryHolder.deviceId !== getDeviceId()) {
       var eh = new Date(entryHolder.ts || Date.now());
+      /* 見るだけの端末には「入力中」のお知らせだけ出し、引き継ぐボタンは記録係モードの端末だけ */
       liveEntryHtml = '<div class="section-title">⚾ 試合中モード</div>'
-        + '<div class="banner readonly" style="margin:0 0 10px;">🔒 ' + esc(entryHolder.name || "他の人")
+        + '<div class="banner readonly" style="margin:0' + (scorer ? " 0 10px" : "") + ';">🔒 ' + esc(entryHolder.name || "他の人")
           + " さんが入力中です（" + ("0" + eh.getHours()).slice(-2) + ":" + ("0" + eh.getMinutes()).slice(-2) + " 更新）</div>"
-        + '<button class="btn btn-primary btn-sm" data-action="enter-live-takeover" style="width:100%;">入力を引き継ぐ</button>';
-    } else {
+        + (scorer ? '<button class="btn btn-primary btn-sm" data-action="enter-live-takeover" style="width:100%;">入力を引き継ぐ</button>' : "");
+    } else if (scorer) {
       liveEntryHtml = '<div class="section-title">⚾ 試合中モード</div>'
         + '<p style="color:var(--ink-muted);font-size:12px;margin:0 0 10px;">この試合を、スマホ向けの打席ワンタップ入力で記録・修正します。</p>'
         + '<button class="btn btn-sm" data-action="enter-live-takeover" style="width:100%;">⚾ 試合中モードで入力する</button>';
@@ -5573,7 +5643,7 @@ function renderGameDetail(g) {
   }
 
   var editMenuHtml = "";
-  if (!UI.readOnly && !isAdding) {
+  if (!UI.readOnly && !isAdding && scorer) {
     var editItems = [
       { label: "試合情報（日付・相手・会場）", on: UI.gameMetaEditMode, req: "request-game-meta-edit", off: "disable-game-meta-edit", sec: "sec-meta", mode: "gameMetaEditMode" },
       { label: "打席内容", on: UI.atbatEditMode, req: "request-atbat-edit", off: "disable-atbat-edit", sec: "sec-batting", mode: "atbatEditMode" },
@@ -5602,8 +5672,8 @@ function renderGameDetail(g) {
       + "</div>";
   }
 
-  var footer = UI.readOnly ? "" : ('<div class="field-row game-footer" style="justify-content:space-between;margin-top:20px;">'
-    + '<button class="btn btn-danger" data-action="' + (isAdding ? "discard-new-game" : "delete-game") + '">' + (isAdding ? "破棄する" : "試合を削除") + "</button>"
+  var footer = UI.readOnly ? "" : ('<div class="field-row game-footer" style="justify-content:' + (isAdding || scorer ? "space-between" : "flex-end") + ';margin-top:20px;">'
+    + (isAdding || scorer ? '<button class="btn btn-danger" data-action="' + (isAdding ? "discard-new-game" : "delete-game") + '">' + (isAdding ? "破棄する" : "試合を削除") + "</button>" : "")
     + '<div class="game-footer-actions" style="display:flex;gap:8px;">'
       + (isAdding
         ? '<button class="btn btn-primary" data-action="finish-new-game">入力を終了</button>'
@@ -7303,7 +7373,7 @@ function renderRosterTab() {
   /* 編集ボタンはページ下部。編集中は上にも「編集を終了」を出す */
   var editToggle = (UI.readOnly || !editable) ? ""
     : '<button class="btn btn-sm btn-primary" data-action="disable-roster-edit">編集を終了</button>';
-  var bottomEdit = UI.readOnly ? "" : '<div class="card edit-menu">' + (editable
+  var bottomEdit = (UI.readOnly || !(editable || isScorerDevice())) ? "" : '<div class="card edit-menu">' + (editable
     ? '<button type="button" class="btn btn-primary edit-menu-toggle" data-action="disable-roster-edit">✓ 編集を終了</button>'
     : '<button type="button" class="btn edit-menu-toggle" data-action="request-roster-edit">✎ 選手情報を編集</button>'
       + '<p class="edit-menu-note">背番号・氏名・守備位置の変更、選手の追加には暗証番号が必要です。</p>') + "</div>";
@@ -7425,8 +7495,15 @@ function renderPlayerStatsTab() {
       { key: "slg", label: "長打率", cell: function (r) { return '<td class="num mono">' + fmtRate(r.rates.slg) + "</td>"; } },
       { key: "ops", label: "OPS", cell: function (r) { return '<td class="num mono">' + fmtRate(r.rates.ops) + "</td>"; } }
     ];
-    var orderedBattingCols = battingCols.slice();
     var bSortKey = UI.battingSort && UI.battingSort.key;
+    /* 「かんたん」のときは、よく見る項目だけに絞る（並べ替え中の項目は消さない） */
+    var statDetail = wantDetail();
+    if (!statDetail) {
+      var BAT_SIMPLE = ["avg", "g", "ab", "h", "hr", "rbi", "sb", "ops"];
+      battingCols = battingCols.filter(function (col) { return BAT_SIMPLE.indexOf(col.key) !== -1 || col.key === bSortKey; })
+        .sort(function (a, b) { return (BAT_SIMPLE.indexOf(a.key) + 99) % 99 - (BAT_SIMPLE.indexOf(b.key) + 99) % 99; });
+    }
+    var orderedBattingCols = battingCols.slice();
     if (bSortKey && bSortKey !== "name") {
       var bMoveIdx = -1;
       for (var bci = 0; bci < orderedBattingCols.length; bci++) {
@@ -7449,8 +7526,8 @@ function renderPlayerStatsTab() {
       }
       body += unqualBattingRows.map(renderBattingRow).join("");
     }
-    content = '<div class="page-lede" style="margin-bottom:8px;">規定打席: ' + Math.round(qualPA) + '打席（チーム' + computeTeamRecord(games).gp + '試合 × 2.5）</div>'
-      + '<div class="page-lede" style="margin-bottom:8px;font-size:12px;">' + RISP_NOTE + "</div>"
+    content = '<div class="stat-tools"><span class="page-lede" style="margin:0;">規定打席: ' + Math.round(qualPA) + '打席（チーム' + computeTeamRecord(games).gp + '試合 × 2.5）</span>' + detailToggleHtml() + "</div>"
+      + (statDetail ? '<div class="page-lede" style="margin-bottom:8px;font-size:12px;">' + RISP_NOTE + "</div>" : "")
       + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
       + statHeader("選手", "name", UI.battingSort)
       + orderedBattingCols.map(function (col) { return statHeader(col.label, col.key, UI.battingSort, true); }).join("")
@@ -7488,8 +7565,13 @@ function renderPlayerStatsTab() {
       { key: "s", label: "S", cell: function (r) { return tdnum(r.c.s); } },
       { key: "whip", label: "WHIP", cell: function (r) { return '<td class="num mono">' + (r.rates.whip == null ? "-" : r.rates.whip.toFixed(2)) + "</td>"; } }
     ];
-    var orderedPitchingCols = pitchingCols.slice();
     var pSortKey = UI.pitchingSort && UI.pitchingSort.key;
+    if (!wantDetail()) {
+      var PIT_SIMPLE = ["era", "g", "ip", "w", "l", "so", "r"];
+      pitchingCols = pitchingCols.filter(function (col) { return PIT_SIMPLE.indexOf(col.key) !== -1 || col.key === pSortKey; })
+        .sort(function (a, b) { return (PIT_SIMPLE.indexOf(a.key) + 99) % 99 - (PIT_SIMPLE.indexOf(b.key) + 99) % 99; });
+    }
+    var orderedPitchingCols = pitchingCols.slice();
     if (pSortKey && pSortKey !== "name") {
       var pMoveIdx = -1;
       for (var pci = 0; pci < orderedPitchingCols.length; pci++) {
@@ -7512,7 +7594,7 @@ function renderPlayerStatsTab() {
       }
       pbody += unqualPitchingRows.map(renderPitchingRow).join("");
     }
-    content = '<div class="page-lede" style="margin-bottom:8px;">規定投球回: ' + Math.round(qualIP) + '回（チーム' + computeTeamRecord(games).gp + '試合 × 1）</div>'
+    content = '<div class="stat-tools"><span class="page-lede" style="margin:0;">規定投球回: ' + Math.round(qualIP) + '回（チーム' + computeTeamRecord(games).gp + '試合 × 1）</span>' + detailToggleHtml() + "</div>"
       + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
       + statHeader("選手", "name", UI.pitchingSort)
       + orderedPitchingCols.map(function (col) { return statHeader(col.label, col.key, UI.pitchingSort, true); }).join("")
@@ -8157,7 +8239,7 @@ function renderPlayerDetail(pid) {
       : '<button class="me-toggle" data-action="set-me" data-id="' + esc(pid) + '">☆ これは自分（「自分」ボタンで開けるようにする）</button>')
     + "</div>" + yearSelectHtml() + "</div>";
 
-  var batHtml;
+  var batHtml, batDetailHtml = "", sprayHtml = "";
   if (bAgg && bAgg.pa > 0) {
     var rt = battingRates(bAgg);
     var pStreak = computeHitStreaks(games).get(pid) || { multi: 0, g3h: 0, cur: 0, best: 0 };
@@ -8166,7 +8248,11 @@ function renderPlayerDetail(pid) {
       + '<div class="tile-grid">' + tiles.map(function (t) {
         return '<div class="tile"><div class="tile-label">' + t[0] + '</div><div class="tile-value">' + t[1] + "</div></div>";
       }).join("") + "</div>"
-      + '<div class="table-scroll" style="margin-top:10px;"><table class="stat-table"><tbody>'
+      + '<div class="section-title" style="margin-top:16px;">調子（打率の推移）</div>'
+      + renderFormChart(games, pid, rt.avg)
+      + renderPlayerNextMilestones(pid);
+    /* くわしい数字と打球方向は、下の折りたたみに分ける */
+    batDetailHtml = '<div class="table-scroll"><table class="stat-table"><tbody>'
       + "<tr><th>打席</th>" + tdnum(bAgg.pa) + "<th>打数</th>" + tdnum(bAgg.ab) + "<th>得点</th>" + tdnum(bAgg.r) + "</tr>"
       + "<tr><th>二塁打</th>" + tdnum(bAgg.d2) + "<th>三塁打</th>" + tdnum(bAgg.d3) + "<th>盗塁</th>" + '<td class="num mono">' + n0(bAgg.sb) + (n0(bAgg.cs) ? '<span class="risp-sub">盗塁死' + bAgg.cs + "</span>" : "") + "</td></tr>"
       + "<tr><th>四球</th>" + tdnum(bAgg.bb) + "<th>死球</th>" + tdnum(bAgg.hbp) + "<th>三振</th>" + tdnum(bAgg.so) + "</tr>"
@@ -8176,11 +8262,8 @@ function renderPlayerDetail(pid) {
       + '<tr><th>連続試合安打</th><td class="num mono">' + (pStreak.cur > 0 ? pStreak.cur + "試合継続中" : "-") + "</td>"
         + '<th>最長</th><td class="num mono">' + pStreak.best + "試合</td></tr>"
       + "</tbody></table></div>"
-      + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>"
-      + '<div class="section-title" style="margin-top:16px;">調子（打率の推移）</div>'
-      + renderFormChart(games, pid, rt.avg)
-      + renderPlayerNextMilestones(pid)
-      + '<div class="section-title" style="margin-top:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">打球方向'
+      + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>";
+    sprayHtml = '<div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">表示する打球'
         + '<span class="spray-modes"><button class="btn btn-sm' + (UI.sprayRisp ? "" : " btn-primary") + '" data-action="spray-mode" data-risp="0">すべて</button>'
         + '<button class="btn btn-sm' + (UI.sprayRisp ? " btn-primary" : "") + '" data-action="spray-mode" data-risp="1">得点圏</button></span></div>'
       + (UI.sprayRisp ? '<div class="page-lede" style="font-size:12px;margin-bottom:6px;">2塁か3塁に走者がいる場面（得点圏）の打球だけを表示しています。'
@@ -8238,11 +8321,17 @@ function renderPlayerDetail(pid) {
     + '<div class="table-scroll"><table class="stat-table"><thead><tr><th>日付</th><th>相手</th><th>守備</th><th>打-安-点</th><th>投球</th></tr></thead><tbody>'
     + perGameRows + "</tbody></table></div>";
 
+  /* 上に「主な数字・調子・試合別」を置き、じっくり見る項目は折りたたむ（開いた状態は描き直しても保つ） */
+  var fold = function (key, title, inner) {
+    return inner ? '<details class="fold" data-keep="pd-' + key + '"><summary>' + title + "</summary>" + inner + "</details>" : "";
+  };
   return head
     + '<div class="card">' + batHtml + pitHtml + fldHtml + "</div>"
-    + renderPlayerYearly(pid)
-    + renderPlayerPositionBatting(games, pid)
-    + '<div class="card">' + perGameHtml + "</div>";
+    + '<div class="card">' + perGameHtml + "</div>"
+    + fold("bat", "打撃のくわしい数字", batDetailHtml ? '<div class="card">' + batDetailHtml + "</div>" : "")
+    + fold("spray", "打球方向", sprayHtml ? '<div class="card">' + sprayHtml + "</div>" : "")
+    + fold("year", "年度別成績", renderPlayerYearly(pid))
+    + fold("pos", "守備位置別の打撃", renderPlayerPositionBatting(games, pid));
 }
 
 /* 選手ページ：年度別成績（上で選んだシーズンに関係なく全年度＋通算）。
@@ -8851,8 +8940,31 @@ function renderSettingsTab() {
     + '<input type="text" id="settings-scorer-name" maxlength="20" placeholder="例：大内" value="' + esc(getScorerName()) + '"' + (UI.readOnly ? " disabled" : "") + ">"
     + '<p style="color:var(--ink-muted);font-size:12.5px;margin-top:6px;">試合中モードで入力しているとき、他のメンバーの画面に「◯◯さんが入力中」と表示されます。この端末にのみ保存されます。</p>';
 
-  return '<div class="page-head page-head-stadium"><div><h1>設定</h1><div class="page-lede">チームの基本情報を管理します。</div></div></div>'
+  /* みんな向け（表示・自分の選手・ホーム画面）を上に、記録係向けは「記録係モード」をオンにした端末だけに出す */
+  var me = getMyPlayerId();
+  var meHtml = '<div class="section-title">自分の選手</div>'
+    + (me
+      ? '<p style="font-size:14px;margin:0 0 10px;"><b>' + esc(playerNameNum(me)) + '</b><span style="color:var(--ink-muted);font-size:12.5px;">　「自分」ボタンで開くページです</span></p>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm" data-action="me-change">変える</button>'
+        + '<button class="btn btn-sm" data-action="unset-me">設定をやめる</button></div>'
+      : '<p style="color:var(--ink-muted);font-size:13px;margin:0 0 10px;">選んでおくと、「自分」ボタンで自分の成績がすぐ開きます。</p>'
+        + '<button class="btn btn-sm btn-primary" data-action="me-change">自分の選手を選ぶ</button>')
+    + '<p style="color:var(--ink-muted);font-size:12.5px;margin-top:8px;">この端末だけに覚えます。</p>';
+  var scorer = isScorerDevice();
+  var scorerModeHtml = UI.readOnly ? "" : '<div class="card"><div class="section-title">記録係モード</div>'
+    + '<p style="color:var(--ink-muted);font-size:13px;margin:0 0 10px;">スコアを入力したり直したりする人だけ、オンにしてください。オンにすると「試合を追加」や「✎ 編集」などの入力用のボタンが出ます（編集には今までどおり暗証番号が必要です）。</p>'
+    + '<div class="subtabs" style="margin-bottom:0;">'
+    + '<button class="btn btn-sm' + (scorer ? "" : " btn-primary") + '" data-action="set-scorer-mode" data-on="0">オフ（見るだけ）</button>'
+    + '<button class="btn btn-sm' + (scorer ? " btn-primary" : "") + '" data-action="set-scorer-mode" data-on="1">オン（記録係）</button>'
+    + "</div></div>";
+
+  return '<div class="page-head page-head-stadium"><div><h1>設定</h1><div class="page-lede">この端末での見え方を変えられます。</div></div></div>'
     + '<div class="card">' + themeHtml + "</div>"
+    + '<div class="card">' + meHtml + "</div>"
+    + '<div class="card"><div class="section-title">スマホのホーム画面に追加する</div>'
+    + '<p style="color:var(--ink-muted);font-size:13px;white-space:pre-wrap;line-height:1.7;">' + esc(installHelpText()) + '</p></div>'
+    + scorerModeHtml
+    + (!scorer ? "" : '<div class="section-title" style="margin:22px 4px 10px;">ここから下は記録係向け</div>'
     + '<div class="card">' + scorerHtml + "</div>"
     + '<div class="card"><div class="section-title">チーム情報</div>'
     + '<div class="field-row">'
@@ -8865,10 +8977,8 @@ function renderSettingsTab() {
         + '<option value="full"' + (STATE.team.oppModeDefault === "full" ? " selected" : "") + ">名前まで記録</option></select>"
       + '<p style="color:var(--ink-muted);font-size:12.5px;margin-top:6px;">新しい試合を作るとき、最初からこちらが選ばれた状態になります。試合ごとに「試合設定」で変えることもできます。</p></div></div>'
     + "</div>"
-    + '<div class="card"><div class="section-title">スマホのホーム画面に追加する</div>'
-    + '<p style="color:var(--ink-muted);font-size:13px;white-space:pre-wrap;line-height:1.7;">' + esc(installHelpText()) + '</p></div>'
     + '<div class="card">' + exportHtml + "</div>"
-    + (UI.readOnly ? "" : '<div class="card"><div class="section-title" style="color:var(--loss);">危険な操作</div>'
+    + '<div class="card"><div class="section-title" style="color:var(--loss);">危険な操作</div>'
       + '<p style="color:var(--ink-muted);font-size:13px;">すべての選手・試合データを削除します。この操作は元に戻せません。</p>'
       + '<button class="btn btn-danger" data-action="reset-data">全データをリセット</button></div>');
 }
@@ -8968,11 +9078,24 @@ function onAppClick(e) {
     else openPlayerView(navMeId);
   } else if (action === "me-pick") {
     var pickId = el.getAttribute("data-id");
+    /* 設定から選び直したときは設定のまま、「自分」ボタンから選んだときはそのページを開く */
+    var pickStay = UI.mePicker === "stay";
     setMyPlayerId(pickId);
     UI.mePicker = false;
-    if (UI.viewPlayerId === pickId) renderApp(); else openPlayerView(pickId);
+    if (pickStay || UI.viewPlayerId === pickId) renderApp(); else openPlayerView(pickId);
   } else if (action === "me-picker-close") {
     UI.mePicker = false;
+    renderApp();
+  } else if (action === "me-change") {
+    UI.mePicker = "stay";
+    renderApp();
+  } else if (action === "set-scorer-mode") {
+    var scorerOn = el.getAttribute("data-on") === "1";
+    setScorerDevice(scorerOn);
+    showToast(scorerOn ? "記録係モードをオンにしました。入力用のボタンが出ます" : "記録係モードをオフにしました");
+    renderApp();
+  } else if (action === "set-detail") {
+    setWantDetail(el.getAttribute("data-on") === "1");
     renderApp();
   } else if (action === "home-go-titles") {
     UI.tab = "stats"; UI.statSubtab = "titles"; UI.statsYear = el.getAttribute("data-year") || UI.statsYear;
