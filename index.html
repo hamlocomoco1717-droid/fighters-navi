@@ -692,19 +692,8 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .ms-list { display: flex; flex-direction: column; gap: 6px; }
 /* ホーム（試合一覧の上）：自分の成績・今週のトピック */
 .home-k { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--ink-muted); }
-.home-me-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.home-me-name { font-size: 18px; font-weight: 800; }
-.home-me-season { font-size: 12px; color: var(--ink-muted); }
-.home-me-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 8px; }
-.home-me-stats div { background: var(--surface-2); border-radius: 8px; padding: 6px 2px; text-align: center; min-width: 0; }
-.home-me-stats span { display: block; font-size: 10.5px; color: var(--ink-muted); }
-.home-me-stats b { font-family: 'Roboto Mono', monospace; font-size: 17px; }
 .home-line { font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
 .home-line .home-k { margin-right: 6px; }
-.home-me-go { margin-top: 10px; width: 100%; justify-content: center; }
-.home-me-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.home-me-pick select { flex: 1 1 160px; min-width: 0; }
-.home-x { margin-left: auto; background: none; border: 0; color: var(--ink-muted); font-size: 18px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 .home-topic { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--border); background: none; color: var(--ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
 .section-title + .home-topic { border-top: 0; padding-top: 4px; }
 .home-topic-group { cursor: default; }
@@ -1091,6 +1080,12 @@ body.lv-on #toast-wrap { bottom: calc(84px + env(safe-area-inset-bottom)); z-ind
 .subtabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
 .subtabs::-webkit-scrollbar { display: none; }
 .subtabs .btn { flex: 0 0 auto; white-space: nowrap; }
+/* 数が多い小タブは横に流さず折り返して、全部が一度に見えるようにする */
+.subtabs-wrap { flex-wrap: wrap; overflow-x: visible; }
+@media (max-width: 720px) {
+  .subtabs-wrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .subtabs-wrap .btn { justify-content: center; padding: 9px 2px; font-size: 12.5px; }
+}
 .link-btn { background: none; border: none; color: var(--link); cursor: pointer; font-size: 13px; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
 hr.rule { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 </style>
@@ -3564,7 +3559,7 @@ function describeView(v) {
   if (v.viewPlayerId) return playerName(v.viewPlayerId) + "のページ";
   if (v.tab === "team") return "チーム成績・" + (TEAM_SUB_LABEL[v.teamSubtab || "summary"] || "");
   if (v.tab === "stats") return "個人成績・" + (STAT_SUB_LABEL[v.statSubtab || "batting"] || "");
-  if (v.tab === "roster") return "選手管理";
+  if (v.tab === "roster") return "選手";
   if (v.tab === "addgame") return "試合を追加";
   if (v.tab === "settings") return "設定";
   return "試合一覧";
@@ -3731,7 +3726,6 @@ function renderGamesTab() {
 /* ---------- ホーム（試合一覧の上）：自分の成績・今週のトピック ----------
    「自分」はこの端末だけに覚える（チームのデータには入れない）。テストモードではページを閉じると消える */
 var MY_PLAYER_KEY = "fighters-navi-me-v1";
-var MY_HINT_OFF_KEY = "fighters-navi-me-hint-off-v1";
 function getMyPlayerId() {
   var id = null;
   if (TEST_MODE) id = UI.testMyPlayerId || null;
@@ -3742,10 +3736,6 @@ function setMyPlayerId(id) {
   if (TEST_MODE) { UI.testMyPlayerId = id || null; return; }
   try { if (id) localStorage.setItem(MY_PLAYER_KEY, id); else localStorage.removeItem(MY_PLAYER_KEY); }
   catch (e) { showToast("この端末では覚えられませんでした", true); }
-}
-function myHintOff() {
-  if (TEST_MODE) return !!UI.testMyHintOff;
-  try { return localStorage.getItem(MY_HINT_OFF_KEY) === "1"; } catch (e) { return true; }
 }
 /* 結果の入った試合を新しい順に */
 function homeGamesWithResult() {
@@ -3760,61 +3750,6 @@ function homeActivePlayerIds() {
   var ok = {};
   STATE.players.forEach(function (pl) { if (pl.active !== false && lastPlayed[pl.id] && lastPlayed[pl.id] >= cutoff) ok[pl.id] = true; });
   return ok;
-}
-function renderHomeMe() {
-  var me = getMyPlayerId();
-  if (!me) {
-    if (UI.readOnly || myHintOff()) return "";
-    var opts = STATE.players.filter(function (pl) { return pl.active !== false; }).map(function (pl) {
-      return '<option value="' + esc(pl.id) + '">' + esc(playerNameNum(pl.id)) + "</option>";
-    }).join("");
-    if (!opts) return "";
-    return '<div class="card"><div class="home-me-head"><span class="home-k">自分の成績</span>'
-      + '<button class="home-x" data-action="home-me-hint-off" aria-label="この案内を閉じる">×</button></div>'
-      + '<p style="font-size:12.5px;color:var(--ink-muted);margin:4px 0 8px;">自分の選手を選ぶと、開いてすぐここに自分の成績が出ます（この端末だけに覚えます）。</p>'
-      + '<div class="home-me-pick"><select id="home-me-select"><option value="">自分の選手を選ぶ…</option>' + opts + "</select></div></div>";
-  }
-  /* 上の「シーズン」の選択に合わせる（全期間なら通算） */
-  var year = UI.statsYear || availableYears()[0] || String(new Date().getFullYear());
-  var yearLbl = year === "all" ? "通算" : year + "年";
-  var latestYear = availableYears()[0];
-  var bAgg = computeBattingAgg(gamesForYear(year)).get(me);
-  var pAgg = computePitchingAgg(gamesForYear(year)).get(me);
-  var tile = function (k, v) { return "<div><span>" + k + "</span><b>" + v + "</b></div>"; };
-  var stats;
-  if (bAgg && bAgg.pa > 0) {
-    var rt = battingRates(bAgg);
-    stats = tile("打率", fmtRate(rt.avg)) + tile("安打", n0(bAgg.h)) + tile("本塁打", n0(bAgg.hr)) + tile("打点", n0(bAgg.rbi));
-  } else if (pAgg && n0(pAgg.g) > 0) {
-    stats = tile("登板", n0(pAgg.g)) + tile("投球回", outsToIpStr(pAgg.outs)) + tile("勝", n0(pAgg.w)) + tile("奪三振", n0(pAgg.so));
-  } else stats = "";
-  /* 自分が出た一番新しい試合 */
-  var lastLine = "";
-  var gs = homeGamesWithResult().filter(function (g) { return year === "all" || (g.date || "").slice(0, 4) === year; });
-  var lastLbl = year === "all" || year === latestYear ? "前の試合" : "最後の試合";
-  for (var i = 0; i < gs.length && !lastLine; i++) {
-    var g = gs[i];
-    var bs = (g.batting || []).filter(function (b) { return b.playerId === me; });
-    var ps = (g.pitching || []).filter(function (x) { return x.playerId === me; });
-    var parts = [];
-    var ab = 0, h = 0, hr = 0, rbi = 0, bb = 0, pa = 0;
-    bs.forEach(function (b) { ab += n0(b.ab); h += n0(b.h); hr += n0(b.hr); rbi += n0(b.rbi); bb += n0(b.bb) + n0(b.hbp); pa += n0(b.ab) + n0(b.bb) + n0(b.hbp) + n0(b.sac) + n0(b.sf); });
-    if (pa > 0) parts.push(ab + "打数" + h + "安打" + (hr ? " " + hr + "本塁打" : "") + (rbi ? " " + rbi + "打点" : "") + (bb ? " " + bb + "四死球" : ""));
-    ps.forEach(function (x) { parts.push("投手 " + pitchingSummaryLine(x)); });
-    if (!parts.length) continue;
-    var res = gameResult(g), tot = gameTotals(g);
-    lastLine = '<div class="home-line"><span class="home-k">' + lastLbl + "</span>" + esc(year === latestYear ? fmtDate(g.date).slice(5) : fmtDate(g.date)) + " " + esc(g.opponent || "相手未設定") + "戦（"
-      + (res === "W" ? "勝" : res === "L" ? "敗" : "分") + " " + tot.us + "-" + tot.them + "）" + esc(parts.join("、")) + "</div>";
-  }
-  var next = computeMilestoneCountdown().filter(function (it) { return it.pid === me && it.cur > 0; })[0];
-  var nextLine = next ? '<div class="home-line"><span class="home-k">次の記録</span>通算' + next.target + MILESTONE_LABEL[next.key]
-    + "まで あと<b>" + next.left + "</b>" + MILESTONE_UNIT[next.key] + "</div>" : "";
-  return '<div class="card"><div class="home-me-head"><span class="home-k">自分の成績</span>'
-    + '<span class="home-me-name">' + esc(playerNameNum(me)) + "</span>"
-    + '<span class="home-me-season">' + esc(yearLbl) + "</span></div>"
-    + (stats ? '<div class="home-me-stats">' + stats + "</div>" : '<p style="font-size:12.5px;color:var(--ink-muted);margin:8px 0;">' + esc(yearLbl) + (year === "all" ? "の出場はまだありません。" : "は出場がありません。") + "</p>")
-    + lastLine + nextLine
-    + '<button class="btn btn-sm home-me-go" data-action="view-player" data-id="' + esc(me) + '">自分のページを見る ›</button></div>';
 }
 function renderHomeTopics() {
   var items = [];
@@ -3868,13 +3803,6 @@ function renderHomeTopics() {
         topic("📝", "<b>結果がまだ入っていません</b>：" + esc(fmtDate(g.date).slice(5)) + " " + esc(g.opponent || "相手未設定") + "戦"
           + '<span class="ht-sub">紙のスコアシートの写真からも取り込めます（「試合を追加」タブ）</span>', "open-game", ' data-id="' + esc(g.id) + '"');
       });
-  }
-  /* 最新の試合 */
-  var last = homeGamesWithResult()[0];
-  if (last) {
-    var lr = gameResult(last), lt = gameTotals(last);
-    topic("⚾", "<b>最新の試合</b>：" + esc(fmtDate(last.date).slice(5)) + " " + esc(last.opponent || "相手未設定") + "戦 " + lt.us + "-" + lt.them
-      + (lr === "W" ? "で勝利" : lr === "L" ? "で敗戦" : "で引き分け"), "open-game", ' data-id="' + esc(last.id) + '"');
   }
   /* タイトル争い（一番新しいシーズン）：首位打者。規定打席に届いた人がいなければ最多安打 */
   var year = availableYears()[0];
@@ -3934,10 +3862,9 @@ function renderGamesList() {
     }).join("");
     body = '<div class="card" style="padding:0 18px;">' + body + "</div>";
   }
-  return '<div class="page-head page-head-stadium"><div><h1>試合一覧</h1><div class="page-lede">' + (UI.statsYear === "all" ? "試合ごとのスコアと成績を記録します。" : UI.statsYear + "年の試合ごとのスコアと成績を記録します。") + "</div></div>"
+  return '<div class="page-head page-head-stadium"><div><h1>試合一覧</h1></div>'
     + yearSelectHtml()
     + "</div>"
-    + renderHomeMe()
     + renderHomeTopics()
     + body
     + '<p style="text-align:center;margin-top:22px;color:var(--ink-muted);font-size:12.5px;">'
@@ -5402,7 +5329,8 @@ function renderGameDetail(g) {
     + '<tr><td class="team-label" id="team-label-top">' + esc(topLabel) + '</td>' + inningCells("top") + '<td class="total mono" id="total-top">' + tot.top + "</td></tr>"
     + '<tr><td class="team-label" id="team-label-bottom">' + esc(bottomLabel) + '</td>' + inningCells("bottom") + '<td class="total mono" id="total-bottom">' + tot.bottom + "</td></tr>"
     + "</table></div>"
-    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">会場が「アウェイ」の場合は自チームが上段（先攻）、「ホーム」の場合は下段（後攻）になります。</p>';
+    /* 入力用の注意書きは、スコアを直せるときだけ出す */
+    + (canEditInnings ? '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">会場が「アウェイ」の場合は自チームが上段（先攻）、「ホーム」の場合は下段（後攻）になります。</p>' : "");
 
   var ourScore = weAreAway ? tot.top : tot.bottom;
   var theirScore = weAreAway ? tot.bottom : tot.top;
@@ -5623,7 +5551,7 @@ function renderGameDetail(g) {
       ? '<input type="text" data-draft="tournament" value="' + esc(d.tournament || "") + '" placeholder="(任意)"' + (UI.readOnly ? " disabled" : "") + ">"
       : esc(d.tournament || "-")) + "</div>"
     + "</div>"
-    + '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">先攻の場合は上段、後攻の場合は下段に自チームの成績が入ります。スコアボードに得点を入力すると、自動的に「試合結果」としてチーム成績・個人成績に反映されます。</p>';
+    + (canEditMeta ? '<p style="color:var(--ink-muted);font-size:12px;margin-top:8px;">先攻の場合は上段、後攻の場合は下段に自チームの成績が入ります。スコアボードに得点を入力すると、自動的に「試合結果」としてチーム成績・個人成績に反映されます。</p>' : "");
 
   var isAdding = UI.isNewUnsavedGame;
 
@@ -7379,8 +7307,8 @@ function renderRosterTab() {
     ? '<button type="button" class="btn btn-primary edit-menu-toggle" data-action="disable-roster-edit">✓ 編集を終了</button>'
     : '<button type="button" class="btn edit-menu-toggle" data-action="request-roster-edit">✎ 選手情報を編集</button>'
       + '<p class="edit-menu-note">背番号・氏名・守備位置の変更、選手の追加には暗証番号が必要です。</p>') + "</div>";
-  var lede = editable ? "選手情報を編集できます。" : "チームの選手名簿です。背番号・氏名・守備位置の変更には暗証番号が必要です。";
-  return '<div class="page-head page-head-stadium"><div><h1>選手管理</h1><div class="page-lede">' + lede + "</div></div>" + editToggle + "</div>"
+  var lede = editable ? "選手情報を編集できます。" : "名前を押すと、その選手の成績が見られます。";
+  return '<div class="page-head page-head-stadium"><div><h1>選手</h1><div class="page-lede">' + lede + "</div></div>" + editToggle + "</div>"
     + sortBar
     + '<div class="card">' + rows + addForm + "</div>"
     + bottomEdit;
@@ -8226,7 +8154,7 @@ function renderPlayerDetail(pid) {
     + '<div class="page-lede">' + (p.position ? esc(p.position) + "・" : "") + (UI.statsYear === "all" ? "通算" : esc(UI.statsYear) + "年") + "の成績</div>"
     + (getMyPlayerId() === pid
       ? '<button class="me-toggle on" data-action="unset-me" title="押すと解除">★ 自分に設定中（解除）</button>'
-      : '<button class="me-toggle" data-action="set-me" data-id="' + esc(pid) + '">☆ これは自分（試合一覧の上に成績を出す）</button>')
+      : '<button class="me-toggle" data-action="set-me" data-id="' + esc(pid) + '">☆ これは自分（「自分」ボタンで開けるようにする）</button>')
     + "</div>" + yearSelectHtml() + "</div>";
 
   var batHtml;
@@ -8398,20 +8326,10 @@ function renderTeamTab() {
     + '<div class="tile"><div class="tile-label">チーム防御率</div><div class="tile-value">' + fmtEra(teamEra) + "</div></div>"
     + "</div>";
 
-  var recent = games.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || "") || (b._seq || 0) - (a._seq || 0); }).slice(0, 5);
-  var recentHtml = recent.length === 0 ? '<p style="color:var(--ink-muted);">まだ試合がありません。</p>'
-    : recent.map(function (g) {
-      var tot = gameTotals(g); var res = gameResult(g);
-      var badge = res === "W" ? '<span class="badge badge-win">勝</span>' : res === "L" ? '<span class="badge badge-loss">敗</span>' : res === "T" ? '<span class="badge badge-tie">分</span>' : '<span class="badge badge-scheduled">予定</span>';
-      return '<div class="game-row game-row-stadium" data-action="open-game" data-id="' + g.id + '">'
-        + '<div class="game-date">' + esc(fmtDate(g.date)) + "</div>"
-        + '<div class="game-main"><div class="game-opp">' + esc(g.opponent || "(相手未設定)") + "</div></div>"
-        + '<div class="game-score mono">' + (res ? tot.us + " - " + tot.them : "―") + "</div>" + badge + "</div>";
-    }).join("");
 
   var tsub = UI.teamSubtab || "summary";
-  var teamSubtabs = '<div class="subtabs">'
-    + [["summary", "シーズン成績"], ["period", "時期別"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"], ["records", "歴代記録"]].map(function (o) {
+  var teamSubtabs = '<div class="subtabs subtabs-wrap">'
+    + [["summary", "シーズン"], ["period", "時期別"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"], ["records", "歴代記録"]].map(function (o) {
       return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
     }).join("") + "</div>";
   var teamHead = '<div class="page-head page-head-stadium"><div><h1>チーム成績</h1><div class="page-lede">' + (UI.statsYear === "all" ? "シーズン全体" : UI.statsYear + "年") + 'の成績です。</div></div>' + yearSelectHtml() + "</div>"
@@ -8425,8 +8343,7 @@ function renderTeamTab() {
 
   return teamHead
     + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
-    + '<div class="card"><div class="section-title">チーム全体の打率・防御率</div>' + teamTiles + "</div>"
-    + '<div class="card"><div class="section-title">直近の試合</div>' + recentHtml + "</div>";
+    + '<div class="card"><div class="section-title">チーム全体の打率・防御率</div>' + teamTiles + "</div>";
 }
 
 /* 対戦相手ごとの勝敗・得失点・チーム打率。相手名は空白の有無を無視して
@@ -9038,7 +8955,7 @@ function onAppClick(e) {
     openPlayerView(el.getAttribute("data-id"));
   } else if (action === "set-me") {
     setMyPlayerId(el.getAttribute("data-id"));
-    showToast("自分に設定しました。試合一覧の上に成績が出ます");
+    showToast("自分に設定しました。「自分」ボタンでこのページが開きます");
     renderApp();
   } else if (action === "unset-me") {
     setMyPlayerId(null);
@@ -9056,11 +8973,6 @@ function onAppClick(e) {
     if (UI.viewPlayerId === pickId) renderApp(); else openPlayerView(pickId);
   } else if (action === "me-picker-close") {
     UI.mePicker = false;
-    renderApp();
-  } else if (action === "home-me-hint-off") {
-    if (TEST_MODE) UI.testMyHintOff = true;
-    else { try { localStorage.setItem(MY_HINT_OFF_KEY, "1"); } catch (e) { /* 覚えられなければ次回また出るだけ */ } }
-    showToast("あとから選手のページの「☆ これは自分」でも設定できます");
     renderApp();
   } else if (action === "home-go-titles") {
     UI.tab = "stats"; UI.statSubtab = "titles"; UI.statsYear = el.getAttribute("data-year") || UI.statsYear;
@@ -10358,8 +10270,6 @@ function onAppChange(e) {
   } else if (t.id === "stats-year-select") {
     UI.statsYear = t.value;
     renderApp();
-  } else if (t.id === "home-me-select") {
-    if (t.value) { setMyPlayerId(t.value); renderApp(); }
   }
 }
 
