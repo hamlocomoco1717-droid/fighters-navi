@@ -31,7 +31,7 @@ if ("serviceWorker" in navigator) {
   --bg: #F4F6FA;
   --surface: #FFFFFF;
   --surface-2: #EAEFF8;
-  --border: #D5DCEB;
+  --border: #DEE4F0;
   --ink: #15213E;
   --ink-muted: #5B6585;
   --accent: #1D2E58;
@@ -55,7 +55,7 @@ if ("serviceWorker" in navigator) {
   --scoreboard-text: #E8C56C;
   --scoreboard-text-dim: #98884F;
   --focus: #C7A24C;
-  --shadow: 0 1px 2px rgba(21, 34, 74, 0.06), 0 4px 14px rgba(21, 34, 74, 0.09);
+  --shadow: 0 1px 2px rgba(21, 34, 74, 0.04), 0 6px 20px rgba(21, 34, 74, 0.07);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -151,27 +151,8 @@ button { font-family: inherit; }
 }
 
 /* ---------- shell ---------- */
-.scoreboard-band {
-  background: var(--scoreboard-bg);
-  border-bottom: 3px solid var(--scoreboard-text);
-  color: #E9EDF7;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-.band-inner {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 14px 20px 0;
-}
-.band-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-bottom: 10px;
-}
+/* 画面の移動ボタン：PCは左の横メニュー（.side-nav）、スマホは上の細い帯（.topbar）＋下のバー（.bottom-nav） */
+:root { --side-w: 240px; }
 .brand-btn {
   background: none; border: none; padding: 0; margin: 0;
   cursor: pointer; text-align: left; display: block; line-height: 1.05;
@@ -195,53 +176,123 @@ button { font-family: inherit; }
 }
 .brand-navi { font-family: "Kaushan Script", cursive; color: var(--scoreboard-text); font-weight: 400; font-size: 19px; }
 .status-pill {
-  font-family: "Roboto Mono", monospace;
+  display: inline-flex; align-items: center; gap: 6px;
   font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 3px;
-  border: 1px solid var(--scoreboard-line);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--scoreboard-text);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
-.status-pill.readonly { color: #E8776D; border-color: #E8776D; }
-.tabs {
-  display: flex;
-  gap: 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  background-repeat: no-repeat;
-  background-color: var(--scoreboard-bg);
-  background-image:
-    linear-gradient(to right, var(--scoreboard-bg) 40%, rgba(0, 0, 0, 0) 100%),
-    linear-gradient(to left, var(--scoreboard-bg) 40%, rgba(0, 0, 0, 0) 100%),
-    linear-gradient(to right, rgba(232, 197, 108, 0.55) 0%, rgba(232, 197, 108, 0) 100%),
-    linear-gradient(to left, rgba(232, 197, 108, 0.55) 0%, rgba(232, 197, 108, 0) 100%);
-  background-position: left center, right center, left center, right center;
-  background-size: 20px 100%, 20px 100%, 10px 100%, 10px 100%;
-  background-attachment: local, local, scroll, scroll;
+.status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.status-pill.readonly { color: #F0958C; }
+
+/* スマホ：上の帯 */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 14px;
+  background: var(--scoreboard-bg);
+  border-bottom: 2px solid var(--scoreboard-text);
+  color: #E9EDF7;
 }
-.tabs::-webkit-scrollbar { display: none; }
-.tab-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: #9EA9C7;
-  font-family: "Oswald", sans-serif;
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 9px 14px 10px;
-  cursor: pointer;
-  white-space: nowrap;
+.topbar .brand-btn { display: flex; align-items: baseline; gap: 6px; margin-right: auto; flex: 0 0 auto; }
+.topbar .brand-btn > span { display: inline; }
+.topbar .team-name { font-size: 23px; }
+.topbar .team-sub { margin: 0; }
+.topbar .brand-navi { font-size: 16px; }
+.top-gear {
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: none; border: 0; color: #C5CDE3; cursor: pointer;
 }
-.tab-btn:hover { color: #FFFFFF; }
-.tab-btn.active { color: var(--scoreboard-text); border-bottom-color: var(--scoreboard-text); }
+.top-gear svg { width: 23px; height: 23px; }
+.top-gear:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+.top-gear.active { background: rgba(232, 197, 108, 0.18); color: var(--scoreboard-text); }
+
+/* スマホ：下のバー（親指で押しやすい位置に全ページを並べる） */
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 18px rgba(21, 34, 74, 0.08);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.nav-item {
+  background: none; border: 0; cursor: pointer; font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-height: 54px; padding: 2px 0 0;
+  color: var(--ink-muted); font-size: 11px; font-weight: 600; line-height: 1.3;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-ic { display: grid; place-items: center; width: 56px; height: 30px; border-radius: 15px; transition: background 0.15s; }
+.nav-ic svg { width: 23px; height: 23px; }
+.nav-item.active { color: var(--accent-strong); font-weight: 700; }
+.nav-item.active .nav-ic { background: var(--accent-soft); }
+.nav-item.nav-add .nav-ic {
+  width: 52px; height: 52px; border-radius: 50%; margin-top: -24px;
+  background: var(--scoreboard-text); color: #15224A;
+  border: 4px solid var(--surface);
+  box-shadow: 0 4px 12px rgba(21, 34, 74, 0.25);
+}
+.nav-item.nav-add .nav-ic svg { width: 26px; height: 26px; }
+.nav-item.nav-add.active .nav-ic { background: var(--scoreboard-text); outline: 2px solid var(--accent-strong); }
+body.lv-on .bottom-nav { display: none; }
+
+/* PC：左の横メニュー */
+.side-nav { display: none; }
+.side-list { display: flex; flex-direction: column; gap: 4px; }
+.side-item {
+  position: relative;
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: none; border: 0; border-radius: 12px; padding: 10px 12px;
+  color: #B9C2DC; cursor: pointer; font-family: inherit; text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.side-item svg { width: 24px; height: 24px; flex: 0 0 auto; }
+.side-text { display: flex; flex-direction: column; min-width: 0; }
+.side-label { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.side-hint { font-size: 11.5px; line-height: 1.35; opacity: 0.75; }
+.side-item:hover { background: rgba(255, 255, 255, 0.07); color: #FFFFFF; }
+.side-item.active { background: rgba(232, 197, 108, 0.16); color: var(--scoreboard-text); }
+.side-item.active::before {
+  content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 4px;
+  border-radius: 0 4px 4px 0; background: var(--scoreboard-text);
+}
+.side-item.side-add { margin-top: 12px; background: var(--scoreboard-text); color: #15224A; }
+.side-item.side-add:hover { filter: brightness(1.07); color: #15224A; }
+.side-item.side-add.active { outline: 2px solid #FFFFFF; outline-offset: 2px; }
+.side-item.side-add.active::before { display: none; }
+.side-foot { margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.side-foot .status-pill { align-self: flex-start; margin-left: 10px; }
+
+@media (max-width: 959px) {
+  #toast-wrap { bottom: calc(86px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 960px) {
+  .topbar, .bottom-nav { display: none; }
+  .side-nav {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; top: 0; bottom: 0; width: var(--side-w); z-index: 20;
+    background: var(--scoreboard-bg); color: #E9EDF7;
+    border-right: 3px solid var(--scoreboard-text);
+    padding: 24px 14px 18px; overflow-y: auto;
+  }
+  .side-nav .brand-btn { padding: 0 12px 22px; }
+  .app-main { padding-left: var(--side-w); }
+  .lv-nav, .su-foot, .lv-sheet { left: var(--side-w); }
+  .lv-undo-bar, #toast-wrap { left: calc(50% + var(--side-w) / 2); }
+}
 
 main {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 24px 20px 80px;
+  padding: 28px 24px 80px;
 }
 .page-head {
   display: flex;
@@ -251,13 +302,13 @@ main {
   flex-wrap: wrap;
   margin-bottom: 18px;
 }
-.page-head h1 { font-size: 21px; }
+.page-head h1 { font-size: 24px; }
 .page-lede { color: var(--ink-muted); font-size: 13.5px; margin-top: 4px; }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 18px;
   margin-bottom: 18px;
@@ -289,7 +340,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 6px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink);
@@ -319,7 +370,7 @@ input[type="text"], input[type="date"], input[type="number"], select, textarea {
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 7px 9px;
   color: var(--ink);
   font-size: 13.5px;
@@ -1009,8 +1060,8 @@ body.lv-on #toast-wrap { bottom: calc(84px + env(safe-area-inset-bottom)); z-ind
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 @media (max-width: 720px) {
   .two-col { grid-template-columns: 1fr; }
-  .team-name { font-size: 18px; }
-  main { padding: 18px 14px 70px; }
+  .page-head h1 { font-size: 21px; }
+  main { padding: 18px 14px calc(104px + env(safe-area-inset-bottom)); }
   .card { padding: 14px; }
   .field-row .field { flex: 1 1 100%; min-width: 0; }
   input[type="text"], input[type="date"], input[type="number"], select, textarea {
@@ -3260,14 +3311,26 @@ function tryLocalRestore() {
 }
 
 /* ---------- shell / nav ---------- */
+/* short = スマホの下バー用の短い名前、hint = PCの横メニューに出すひとこと説明 */
 var TABS = [
-  { id: "games", label: "試合" },
-  { id: "stats", label: "個人成績" },
-  { id: "team", label: "チーム成績" },
-  { id: "roster", label: "選手" },
-  { id: "addgame", label: "試合を追加" },
-  { id: "settings", label: "設定" }
+  { id: "games", label: "試合", short: "試合", hint: "スコアと結果を見る" },
+  { id: "stats", label: "個人成績", short: "個人", hint: "打率やホームランの数" },
+  { id: "team", label: "チーム成績", short: "チーム", hint: "チーム全体の成績" },
+  { id: "roster", label: "選手", short: "選手", hint: "メンバーの一覧" },
+  { id: "addgame", label: "試合を追加", short: "追加", hint: "新しい試合を記録する" },
+  { id: "settings", label: "設定", short: "設定", hint: "画面の色や保存先" }
 ];
+var NAV_ICON_PATHS = {
+  games: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.7c2.6 3.5 2.6 9.1 0 12.6M18.4 5.7c-2.6 3.5-2.6 9.1 0 12.6"/>',
+  stats: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/>',
+  team: '<path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/>',
+  roster: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.7-3.3 3.2-5 6.5-5s5.8 1.7 6.5 5"/><circle cx="17.5" cy="9.5" r="2.5"/><path d="M17.8 15.2c2.1.3 3.5 1.7 4 4.3"/>',
+  addgame: '<path d="M12 5v14M5 12h14"/>',
+  settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>'
+};
+function navIcon(id) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + NAV_ICON_PATHS[id] + "</svg>";
+}
 
 var GAME_EDIT_PIN = "1008";
 
@@ -3289,19 +3352,37 @@ function renderConfirmDialog() {
 }
 
 function renderShell(contentHtml) {
-  var tabsHtml = TABS.map(function (t) {
-    return '<button class="tab-btn' + (UI.tab === t.id ? " active" : "") + '" data-action="tab" data-tab="' + t.id + '">' + esc(t.label) + "</button>";
-  }).join("");
+  var tabById = {};
+  TABS.forEach(function (t) { tabById[t.id] = t; });
+  var navAttrs = function (t, cls) {
+    var on = UI.tab === t.id;
+    return 'class="' + cls + (on ? " active" : "") + '" data-action="tab" data-tab="' + t.id + '"' + (on ? ' aria-current="page"' : "");
+  };
+  /* PC：左の横メニュー。名前の下に、何が見られるページかをひとことで添える */
+  var sideItem = function (id, extra) {
+    var t = tabById[id];
+    return "<button " + navAttrs(t, "side-item" + (extra || "")) + ">" + navIcon(id)
+      + '<span class="side-text"><span class="side-label">' + esc(t.label) + '</span><span class="side-hint">' + esc(t.hint) + "</span></span></button>";
+  };
+  /* スマホ：下のバー。真ん中の丸いボタンが「試合を追加」。設定は上の帯の歯車から */
+  var bottomItem = function (id, extra) {
+    var t = tabById[id];
+    return "<button " + navAttrs(t, "nav-item" + (extra || "")) + ' aria-label="' + esc(t.label) + '"><span class="nav-ic">' + navIcon(id) + "</span><span>" + esc(t.short) + "</span></button>";
+  };
   var statusHtml = TEST_MODE ? '<span class="status-pill">🧪 テスト中</span>' : UI.readOnly
     ? '<span class="status-pill readonly">閲覧専用</span>'
     : fbStatusPill();
-  return ""
-    + '<div class="scoreboard-band"><div class="band-inner">'
-    + '<div class="band-top"><button class="brand-btn" data-action="tab" data-tab="games" aria-label="試合一覧へ">'
+  var brandHtml = '<button class="brand-btn" data-action="tab" data-tab="games" aria-label="試合一覧へ">'
     + '<span class="team-name">Fighters</span>'
-    + '<span class="team-sub"><span class="brand-navi">navi</span></span></button>' + statusHtml + "</div>"
-    + '<div class="tabs">' + tabsHtml + "</div>"
-    + "</div></div>"
+    + '<span class="team-sub"><span class="brand-navi">navi</span></span></button>';
+  return ""
+    + '<nav class="side-nav" aria-label="メニュー">' + brandHtml
+    + '<div class="side-list">' + sideItem("games") + sideItem("stats") + sideItem("team") + sideItem("roster") + sideItem("addgame", " side-add") + "</div>"
+    + '<div class="side-foot">' + statusHtml + sideItem("settings") + "</div>"
+    + "</nav>"
+    + '<header class="topbar">' + brandHtml + statusHtml
+    + "<button " + navAttrs(tabById.settings, "top-gear") + ' aria-label="設定">' + navIcon("settings") + "</button></header>"
+    + '<div class="app-main">'
     + "<main>"
     + (UI.readOnly ? '<div class="banner readonly">閲覧専用モードです。編集内容は保存されません。</div>' : "")
     + (UI.remoteLoadSlow ? '<div class="banner">最新のデータをまだ読み込めていません（電波を確認してください）。いま表示しているのは少し前の内容です。つながりしだい自動で最新になります。</div>' : "")
@@ -3310,6 +3391,8 @@ function renderShell(contentHtml) {
       : ((!UI.readOnly && !(window.FBSync && window.FBSync.enabled)) ? '<div class="banner">Firebase未設定のため、この端末のブラウザにのみ記録を保存します。</div>' : ""))
     + contentHtml
     + "</main>"
+    + "</div>"
+    + '<nav class="bottom-nav" aria-label="メニュー">' + bottomItem("games") + bottomItem("stats") + bottomItem("addgame", " nav-add") + bottomItem("team") + bottomItem("roster") + "</nav>"
     + renderConfirmDialog()
     + renderMsAchieversDialog()
     + renderMvpMonthDialog()
