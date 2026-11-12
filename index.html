@@ -1,4 +1,4 @@
-<!doctype html><html lang="ja" translate="no"><head><meta charset=utf8><meta name="google" content="notranslate"><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#F4F6FA;color:#15213E}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style><title>Fighters navi</title>
+<!doctype html><html lang="ja" translate="no"><head><meta charset=utf8><meta name="google" content="notranslate"><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#FFFFFF;color:#15213E}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style><title>Fighters navi</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#15224A">
 <meta name="mobile-web-app-capable" content="yes">
@@ -29,7 +29,7 @@ if ("serviceWorker" in navigator) {
 /* ---------- tokens ---------- */
 /* チームカラー: 白 × 紺(navy) × 金(gold) */
 :root {
-  --bg: #F4F6FA;
+  --bg: #FFFFFF;
   --surface: #FFFFFF;
   --surface-2: #EAEFF8;
   --zebra: #F8FAFD;
@@ -62,8 +62,8 @@ if ("serviceWorker" in navigator) {
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0D1326;
-    --surface: #151E38;
+    --bg: #10182F;
+    --surface: #10182F;
     --surface-2: #1E2A49;
     --zebra: #182241;
     --me-row: #3A3013;
@@ -95,8 +95,8 @@ if ("serviceWorker" in navigator) {
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0D1326;
-  --surface: #151E38;
+  --bg: #10182F;
+  --surface: #10182F;
   --surface-2: #1E2A49;
   --zebra: #182241;
   --me-row: #3A3013;
@@ -1159,6 +1159,47 @@ html[data-text="large"] body:not(.lv-on) main { zoom: 1.15; }
   .top-gear { width: 44px; height: 44px; }
   label:has(> input[type="checkbox"]) { min-height: 40px; }
 }
+
+/* ---------- 平らなデザイン ----------
+   何でも箱（カード）に入れるのをやめ、見出しと細い線、余白で区切る。数字と名前を主役にする。
+   重なって出る窓（確認・用語の説明など）だけは箱のまま */
+.card { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; margin-bottom: 32px; }
+.section-title {
+  font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; text-transform: none;
+  color: var(--ink); border-left: 4px solid var(--scoreboard-text); padding: 1px 0 1px 10px; margin-bottom: 12px;
+}
+.modal-box .section-title { font-size: 13.5px; }
+/* 数字のタイル：箱をやめて、ラベルと大きな数字を線で区切るだけにする */
+.tile-grid { gap: 0; grid-template-columns: repeat(auto-fit, minmax(98px, 1fr)); border-top: 1px solid var(--border); }
+.tile { background: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 10px 8px 9px 2px; }
+.tile-label { font-family: inherit; text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+.tile-value { font-size: 27px; margin-top: 1px; }
+.mvp-card, .title-card { background: none; border-radius: 0; border: 0; border-top: 1px solid var(--border); padding: 10px 2px; }
+.mvp-grid { gap: 0 14px; }
+/* ページの中の切り替え（個人成績・チーム成績）：丸いボタンの列をやめて、文字の下に線が付く形にする */
+.page-tabs { gap: 0; border-bottom: 1px solid var(--border); padding-bottom: 0; margin-bottom: 20px; }
+.page-tabs .btn { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--ink-muted); font-weight: 600; padding: 10px 11px; margin-bottom: -1px; }
+.page-tabs .btn.btn-primary { background: none; color: var(--accent-strong); border-bottom-color: var(--accent-strong); font-weight: 800; filter: none; }
+@media (max-width: 720px) {
+  .page-tabs.subtabs-wrap { gap: 0; border-bottom: 0; }
+  .page-tabs.subtabs-wrap .btn { border-bottom: 1px solid var(--border); margin-bottom: 0; padding: 9px 2px; }
+  .page-tabs.subtabs-wrap .btn.btn-primary { border-bottom: 3px solid var(--accent-strong); }
+}
+/* 折りたたみ：箱ではなく、上下の線だけ */
+.fold { margin-bottom: 0; }
+.fold > summary { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; padding: 15px 2px; font-size: 15px; font-weight: 800; }
+.fold:last-of-type > summary { border-bottom: 1px solid var(--border); }
+.fold[open] > summary { margin-bottom: 14px; border-bottom: 0; }
+.fold[open] { margin-bottom: 24px; }
+/* 角丸は控えめに */
+.btn, input[type="text"], input[type="date"], input[type="number"], select, textarea { border-radius: 6px; }
+.detail-toggle .btn:first-child { border-radius: 6px 0 0 6px; }
+.detail-toggle .btn:last-child { border-radius: 0 6px 6px 0; }
+.badge { border-radius: 4px; }
+.banner { border-radius: 4px; }
+.table-scroll { border-radius: 0; }
+.game-hero { border-radius: 6px; }
+.edit-menu { border-top: 1px solid var(--border); padding-top: 18px; }
 </style>
 
 
@@ -4029,7 +4070,7 @@ function renderGamesList() {
         + badge
         + "</div>";
     }).join("");
-    body = '<div class="card" style="padding:0 18px;">' + body + "</div>";
+    body = '<div class="card">' + body + "</div>";
   }
   return '<div class="page-head page-head-stadium"><div><h1>試合一覧</h1></div>'
     + yearSelectHtml()
@@ -7511,7 +7552,7 @@ function statHeader(label, key, sortState, numeric) {
 
 function renderPlayerStatsTab() {
   var sub = UI.statSubtab || "batting";
-  var subtabs = '<div class="subtabs">'
+  var subtabs = '<div class="subtabs page-tabs">'
     + '<button class="btn btn-sm' + (sub === "batting" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="batting">打撃成績</button>'
     + '<button class="btn btn-sm' + (sub === "pitching" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="pitching">投手成績</button>'
     + '<button class="btn btn-sm' + (sub === "fielding" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="fielding">守備出場</button>'
@@ -8510,7 +8551,7 @@ function renderTeamTab() {
 
 
   var tsub = UI.teamSubtab || "summary";
-  var teamSubtabs = '<div class="subtabs subtabs-wrap">'
+  var teamSubtabs = '<div class="subtabs subtabs-wrap page-tabs">'
     + [["summary", "シーズン"], ["period", "時期別"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"], ["records", "歴代記録"]].map(function (o) {
       return '<button class="btn btn-sm' + (tsub === o[0] ? " btn-primary" : "") + '" data-action="team-subtab" data-sub="' + o[0] + '">' + o[1] + "</button>";
     }).join("") + "</div>";
