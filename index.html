@@ -10380,6 +10380,8 @@ function onAppClick(e) {
         if (Array.isArray(egD.innings.bottom) && egD.innings.bottom.length > egKeepLen) egD.innings.bottom.length = egKeepLen;
         /* 試合が終わったら、途中の状況（走者・アウト）は残さない */
         delete egD.liveState; delete egD.liveUndo; delete egD.liveUndoSig;
+        /* 試合を終えたら入力担当も手放す（残すと、ホームに「いま試合中」が2分ほど出たままになる） */
+        if (egD.liveControl && egD.liveControl.deviceId === getDeviceId()) egD.liveControl = null;
         UI.liveInning = null;
         persistDraft(null, true);
       }
