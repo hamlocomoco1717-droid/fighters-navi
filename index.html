@@ -3523,7 +3523,7 @@ var GAME_EDIT_PIN = "1008";
 function glossaryItems() {
   var perGame = n0(STATE.team.inningsPerGame) || 7;
   return [
-    ["打つほう", [
+    ["打撃", [
       ["打率", "ヒットを打った割合です。安打 ÷ 打数。10回打って3本ヒットなら .300（3割）。"],
       ["打席・打数", "打席はバッターボックスに立った回数。打数は、そこから四球・死球・犠打・犠飛をのぞいた回数です。"],
       ["出塁率", "アウトにならずに塁に出た割合です。ヒットのほか、四球と死球も数えます。"],
@@ -3535,7 +3535,7 @@ function glossaryItems() {
       ["盗塁死", "盗塁をしようとしてアウトになった回数です。"],
       ["規定打席", "打率のランキングに入るために必要な打席の数です（チームの試合数 × 2.5）。"]
     ]],
-    ["投げるほう", [
+    ["投手", [
       ["防御率", "1試合（" + perGame + "回）を1人で投げたら何点取られるか、の目安です。低いほどよい数字です。"],
       ["自責点", "投手の責任になる失点です。味方のエラーで入った点はのぞきます。"],
       ["WHIP", "1回あたりに出した走者（ヒットと四球）の数です。低いほどよい数字です。"],
@@ -8088,7 +8088,7 @@ function renderMvp(games) {
       : '<p style="color:var(--ink-muted);font-size:13px;">まだ試合がありません。</p>')
     /* 点数の計算のしかたは、知りたい人だけ開けるようにたたんでおく */
     + '<details class="form-table" style="margin-top:12px;"><summary>活躍点（pt）の計算のしかた</summary>'
-    + '<p class="title-gap" style="margin-top:8px;line-height:1.7;">打つほう：塁打＋打点＋四球×0.5＋盗塁×0.5<br>投げるほう：投球回＋奪三振×0.5−失点＋勝利2／セーブ1.5（マイナスの試合は0）<br>'
+    + '<p class="title-gap" style="margin-top:8px;line-height:1.7;">打撃：塁打＋打点＋四球×0.5＋盗塁×0.5<br>投手：投球回＋奪三振×0.5−失点＋勝利2／セーブ1.5（マイナスの試合は0）<br>'
     + "これを試合ごとに足し、さらに<b>出場1試合につき＋" + MVP_GAME_BONUS + "pt</b>の出場ボーナスを足しています。</p></details></div>";
   var byMonth = {};
   games.forEach(function (g) { var m = (g.date || "").slice(0, 7); if (m) (byMonth[m] = byMonth[m] || []).push(g); });
