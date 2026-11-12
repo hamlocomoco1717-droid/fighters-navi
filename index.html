@@ -1249,6 +1249,14 @@ html[data-text="large"] body:not(.lv-on) main { zoom: 1.15; }
 .jump-btn:hover { border-color: var(--accent); }
 /* 「分析」の中の切り替え */
 .sub-chips { margin-top: -8px; margin-bottom: 20px; flex-wrap: wrap; overflow-x: visible; }
+/* お知らせの帯：ダークモードでも文字が読める色にする */
+.banner { color: var(--accent-strong); }
+.banner.readonly { color: var(--loss); }
+.banner a { color: inherit; }
+/* スコア帯：ダークモードで背景に沈まないよう、細い枠を付ける */
+.game-hero { border: 1px solid var(--scoreboard-line); }
+/* 「記録まであと少し」の行も箱をやめて線で区切る */
+.ms-row { background: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 10px 2px; }
 .rf-row { display: grid; grid-template-columns: 44px 1fr 96px; align-items: center; gap: 10px; padding: 6px 0; }
 .rf-k { font-size: 13.5px; font-weight: 700; }
 .rf-track { height: 22px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
