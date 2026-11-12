@@ -852,6 +852,7 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .su-chip { font-size: 12.5px; padding: 5px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); cursor: pointer; font-family: inherit; }
 .su-segs { display: flex; gap: 8px; }
 .su-segs-wide { display: grid; grid-template-columns: repeat(5, 1fr); }
+.su-segs-2 { display: grid; grid-template-columns: 1fr 1fr; }
 .su-seg { min-width: 64px; min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-muted); font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; }
 .su-seg.on { border: 2px solid var(--lv-strong); background: var(--lv-strong); color: var(--lv-strong-ink); }
 .su-more summary { list-style: none; cursor: pointer; }
@@ -1200,6 +1201,34 @@ html[data-text="large"] body:not(.lv-on) main { zoom: 1.15; }
 .table-scroll { border-radius: 0; }
 .game-hero { border-radius: 6px; }
 .edit-menu { border-top: 1px solid var(--border); padding-top: 18px; }
+/* チーム成績の図：勝敗の帯・最近の勝ち負け・得点と失点の棒 */
+.wl-band { display: flex; height: 34px; border-radius: 4px; overflow: hidden; margin-bottom: 14px; gap: 2px; }
+.wl-seg { flex: 1 1 0; min-width: 44px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 14px; white-space: nowrap; }
+.wl-win { background: var(--win); }
+.wl-loss { background: var(--loss); }
+.wl-tie { background: var(--tie); }
+.recent-marks { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; max-width: 560px; }
+.recent-mark { border: 0; background: none; padding: 0; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--ink-muted); }
+.recent-mark b { width: 100%; max-width: 40px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font-size: 14px; font-weight: 800; }
+.recent-mark span { font-size: 12px; font-family: "Roboto Mono", monospace; letter-spacing: -0.04em; }
+.recent-mark.rm-win b { background: var(--win); color: #fff; }
+.recent-mark.rm-loss b { background: none; color: var(--loss); box-shadow: inset 0 0 0 2px var(--loss); }
+.recent-mark.rm-tie b { background: none; color: var(--tie); box-shadow: inset 0 0 0 2px var(--tie); }
+.recent-mark:hover b { filter: brightness(1.1); }
+.viz-note { font-size: 12.5px; color: var(--ink-muted); margin: 10px 0 0; }
+@media (max-width: 720px) {
+  /* 幅がせまいと日付が重なるので、一番古い試合と一番新しい試合だけ日付を出す */
+  .recent-mark span { visibility: hidden; }
+  .recent-mark:first-child span, .recent-mark:last-child span { visibility: visible; }
+}
+.rf-row { display: grid; grid-template-columns: 44px 1fr 96px; align-items: center; gap: 10px; padding: 6px 0; }
+.rf-k { font-size: 13.5px; font-weight: 700; }
+.rf-track { height: 22px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.rf-bar { display: block; height: 100%; border-radius: 3px; }
+.rf-us { background: var(--accent-strong); }
+.rf-them { background: var(--ink-muted); opacity: 0.55; }
+.rf-v { font-family: "Oswald", "Roboto Mono", monospace; font-size: 22px; font-weight: 700; line-height: 1.1; }
+.rf-v small { display: block; font-family: inherit; font-size: 12px; font-weight: 400; color: var(--ink-muted); }
 </style>
 
 
@@ -4778,7 +4807,7 @@ function renderGameSetup(d) {
         + '<div class="su-row"><div><span class="su-k">先攻・後攻</span><div class="su-note">メンバー登録のあとでも変えられます</div></div>'
           + '<div class="su-segs">' + seg("set-venue", "data-value", "away", away, "先攻") + seg("set-venue", "data-value", "home", !away, "後攻") + "</div></div>"
         + '<div class="su-row su-col"><span class="su-k">回数</span><div class="su-segs su-segs-wide">' + innBtns + "</div></div>"
-        + '<div class="su-row su-col"><span class="su-k">相手の記録</span><div class="su-segs su-segs-wide">'
+        + '<div class="su-row su-col"><span class="su-k">相手の記録</span><div class="su-segs su-segs-2">'
           + seg("su-oppmode", "data-value", "", d.oppMode !== "full", "打順の番号だけ") + seg("su-oppmode", "data-value", "full", d.oppMode === "full", "名前まで記録") + "</div>"
           + '<div class="su-note">「名前まで記録」にすると、相手の打者1人ずつの結果が残り、同じ相手との通算成績も見られます</div></div>'
       + "</div>"
@@ -8524,12 +8553,7 @@ function renderTeamTab() {
   var diffStr = (diff > 0 ? "+" : "") + diff;
   var tiles = [
     ["試合数", rec.gp, ""],
-    ["勝", rec.w, "win"],
-    ["敗", rec.l, "loss"],
-    ["分", rec.t, ""],
     ["勝率", rec.pct == null ? "-" : fmtRate(rec.pct), ""],
-    ["得点", rec.rf, ""],
-    ["失点", rec.ra, ""],
     ["得失点差", diffStr, diff > 0 ? "win" : (diff < 0 ? "loss" : "")]
   ];
   var tileHtml = '<div class="tile-grid">' + tiles.map(function (t) {
@@ -8550,6 +8574,33 @@ function renderTeamTab() {
     + "</div>";
 
 
+  /* ---- ひと目でわかる図（箱は使わず、線と面だけ） ---- */
+  /* 勝敗の帯：勝・分・敗の割合を1本の帯で */
+  var wlBand = rec.gp > 0 ? ('<div class="wl-band" role="img" aria-label="' + rec.w + "勝" + rec.l + "敗" + (rec.t ? rec.t + "分" : "") + '">'
+    + [["win", rec.w, "勝"], ["tie", rec.t, "分"], ["loss", rec.l, "敗"]].filter(function (s) { return s[1] > 0; }).map(function (s) {
+      return '<span class="wl-seg wl-' + s[0] + '" style="flex-grow:' + s[1] + ';">' + s[1] + s[2] + "</span>";
+    }).join("") + "</div>") : "";
+  /* 最近の勝ち負け：結果の出た試合を新しいものが右に来るように最大10試合 */
+  var recentGames = games.filter(function (g) { return gameResult(g); }).sort(function (a, b) {
+    return (a.date || "").localeCompare(b.date || "") || (a._seq || 0) - (b._seq || 0);
+  }).slice(-10);
+  var recentHtml = recentGames.length === 0 ? "" : ('<div class="card"><div class="section-title">最近の勝ち負け</div>'
+    + '<div class="recent-marks">' + recentGames.map(function (g) {
+      var r = gameResult(g), t = gameTotals(g);
+      var lbl = fmtDate(g.date) + " " + (g.opponent || "相手未設定") + "戦 " + t.us + "-" + t.them;
+      return '<button type="button" class="recent-mark rm-' + (r === "W" ? "win" : r === "L" ? "loss" : "tie") + '" data-action="open-game" data-id="' + esc(g.id) + '" title="' + esc(lbl) + '" aria-label="' + esc(lbl) + '">'
+        + '<b>' + (r === "W" ? "勝" : r === "L" ? "敗" : "分") + '</b><span>' + esc(fmtDate(g.date).slice(5)) + "</span></button>";
+    }).join("") + "</div>"
+    + '<p class="viz-note">左が古く、右が新しい試合です。押すとその試合が開きます。</p></div>');
+  /* 得点と失点：長さで比べる。1試合あたりの平均も添える */
+  var rfMax = Math.max(rec.rf, rec.ra, 1);
+  var rfRow = function (label, val, cls) {
+    return '<div class="rf-row"><span class="rf-k">' + label + '</span><span class="rf-track"><span class="rf-bar ' + cls + '" style="width:' + Math.max(2, Math.round(val / rfMax * 100)) + '%;"></span></span>'
+      + '<span class="rf-v">' + val + (rec.gp > 0 ? '<small>平均 ' + (val / rec.gp).toFixed(1) + "</small>" : "") + "</span></div>";
+  };
+  var rfHtml = rec.gp > 0 ? ('<div class="card"><div class="section-title">得点と失点</div>' + rfRow("得点", rec.rf, "rf-us") + rfRow("失点", rec.ra, "rf-them")
+    + '<p class="viz-note">' + (diff > 0 ? "取った点のほうが " + diff + " 点多い" : diff < 0 ? "取られた点のほうが " + (-diff) + " 点多い" : "得点と失点が同じ") + "（得失点差 " + diffStr + "）。平均は1試合あたりです。</p></div>") : "";
+
   var tsub = UI.teamSubtab || "summary";
   var teamSubtabs = '<div class="subtabs subtabs-wrap page-tabs">'
     + [["summary", "シーズン"], ["period", "時期別"], ["innings", "イニング別"], ["order", "打順別"], ["position", "守備位置別"], ["opponent", "対戦相手別"], ["records", "歴代記録"]].map(function (o) {
@@ -8565,7 +8616,9 @@ function renderTeamTab() {
   if (tsub === "period") return teamHead + renderPeriodAnalysis();
 
   return teamHead
-    + '<div class="card"><div class="section-title">シーズン成績</div>' + tileHtml + "</div>"
+    + '<div class="card"><div class="section-title">シーズン成績</div>' + wlBand + tileHtml + "</div>"
+    + recentHtml
+    + rfHtml
     + '<div class="card"><div class="section-title">チーム全体の打率・防御率</div>' + teamTiles + "</div>";
 }
 
