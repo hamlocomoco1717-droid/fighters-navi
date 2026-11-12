@@ -285,6 +285,14 @@ body.lv-on .bottom-nav { display: none; }
 /* 表の「かんたん／くわしく」の切り替え */
 .stat-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .detail-toggle { display: inline-flex; gap: 0; flex: 0 0 auto; }
+.stat-tools-btns { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gloss-btn { gap: 4px; font-weight: 600; }
+.gloss-btn svg { width: 16px; height: 16px; }
+.gloss-box { max-width: 460px; max-height: 86vh; overflow-y: auto; }
+.gloss-list { margin: 0; }
+.gloss-list dt { font-weight: 700; font-size: 14.5px; margin-top: 10px; }
+.gloss-list dd { margin: 2px 0 0; font-size: 13.5px; line-height: 1.65; color: var(--ink); }
+.gloss-actions { position: sticky; bottom: -20px; background: var(--surface); padding: 12px 0 4px; margin-top: 14px; }
 .detail-toggle .btn { border-radius: 0; font-weight: 600; padding: 6px 12px; font-size: 12.5px; text-transform: none; letter-spacing: 0; }
 .detail-toggle .btn:first-child { border-radius: 10px 0 0 10px; }
 .detail-toggle .btn:last-child { border-radius: 0 10px 10px 0; margin-left: -1px; }
@@ -746,7 +754,10 @@ table.stat-table tr.year-total td { border-top: 2px solid var(--border); backgro
 .home-topic-group { cursor: default; }
 .ht-rec { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 7px 10px; border: 0; border-radius: 8px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .ht-rec span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.home-topic .ht-ic { flex: 0 0 22px; text-align: center; }
+.home-topic .ht-ic { flex: 0 0 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-strong); }
+.home-topic .ht-ic svg { width: 17px; height: 17px; }
+.home-topic .ht-ic.ht-live { background: var(--loss-soft); }
+.home-topic .ht-ic.ht-live::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--loss); }
 .home-topic .ht-tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .home-topic .ht-go { flex: 0 0 auto; color: var(--ink-muted); }
 .home-topic .ht-sub { display: block; font-size: 12.5px; color: var(--ink-muted); margin-top: 1px; }
@@ -2795,14 +2806,14 @@ function renderGamePreview(d) {
   var row = function (who, val) { return '<div class="pv-row">' + who + '<span class="pv-val">' + val + "</span></div>"; };
   var shareText = buildPreviewShareText(d, pv);
   return '<div class="card pv-card"><div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">試合前プレビュー'
-      + '<button class="btn btn-sm" data-action="share-text" data-src="preview-share-src" style="font-weight:400;">📤 共有</button></div>'
+      + '<button class="btn btn-sm" data-action="share-text" data-src="preview-share-src" style="font-weight:400;">共有</button></div>'
     + '<div class="tile-grid"><div class="tile"><div class="tile-label">' + esc(d.opponent) + ' との対戦成績</div><div class="tile-value">'
       + (pv.vs.length ? pv.rec.w + "勝" + pv.rec.l + "敗" + (pv.rec.t ? pv.rec.t + "分" : "") : "初対戦") + "</div>"
       + '<div class="tile-sub">' + (pv.vs.length ? pv.vs.length + "試合・平均 " + (pv.rec.rf / pv.vs.length).toFixed(1) + "-" + (pv.rec.ra / pv.vs.length).toFixed(1) : "過去の対戦記録はありません") + "</div></div></div>"
     + (lastHtml ? '<div style="margin-top:8px;">' + lastHtml + "</div>" : "")
-    + block("💪 この相手に強い選手", pv.strong.map(function (c) { return row(nameBtn(c.playerId), c.ab + "打数" + c.h + "安打（" + fmtRate(c.h / c.ab) + "）"); }))
-    + block("🔥 好調な選手（直近5試合）", pv.hot.map(function (h) { return row(nameBtn(h.pid), fmtRate(h.avg) + (h.streak >= 3 ? "・" + h.streak + "試合連続安打中" : "")); }))
-    + block("🔜 もうすぐ届く記録", pv.soon.map(function (it) { return row(nameBtn(it.pid), "通算" + it.target + MILESTONE_LABEL[it.key] + "まで あと" + it.left + MILESTONE_UNIT[it.key]); }))
+    + block("この相手に強い選手", pv.strong.map(function (c) { return row(nameBtn(c.playerId), c.ab + "打数" + c.h + "安打（" + fmtRate(c.h / c.ab) + "）"); }))
+    + block("好調な選手（直近5試合）", pv.hot.map(function (h) { return row(nameBtn(h.pid), fmtRate(h.avg) + (h.streak >= 3 ? "・" + h.streak + "試合連続安打中" : "")); }))
+    + block("もうすぐ届く記録", pv.soon.map(function (it) { return row(nameBtn(it.pid), "通算" + it.target + MILESTONE_LABEL[it.key] + "まで あと" + it.left + MILESTONE_UNIT[it.key]); }))
     + '<textarea id="preview-share-src" readonly aria-hidden="true" tabindex="-1" class="share-src">' + esc(shareText) + "</textarea>"
     + "</div>";
 }
@@ -2994,7 +3005,6 @@ function renderSprayChart(d) {
       + (d.unknown > 0 ? "・方向不明 " + d.unknown + "本は除く" : "") + "。三振・四死球は含みません。</div>"
     + "</div>";
 }
-var RISP_NOTE = "※得点圏打率（下段は打数-安打）は参考値です。走者は打順と打点から推定しており、スコアの書き方によって実際と異なる場合があります。";
 function battingRates(c) {
   var singles = Math.max(0, c.h - c.d2 - c.d3 - c.hr);
   var tb = singles + c.d2 * 2 + c.d3 * 3 + c.hr * 4;
@@ -3388,13 +3398,60 @@ var NAV_ICON_PATHS = {
   team: '<path d="M3 17l5.5-5.5 4 3L20 7"/><path d="M15 7h5v5"/>',
   roster: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.7-3.3 3.2-5 6.5-5s5.8 1.7 6.5 5"/><circle cx="17.5" cy="9.5" r="2.5"/><path d="M17.8 15.2c2.1.3 3.5 1.7 4 4.3"/>',
   addgame: '<path d="M12 5v14M5 12h14"/>',
-  settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>'
+  settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>',
+  /* ホームのトピック用 */
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>',
+  pencil: '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.3 9.2a2.8 2.8 0 1 1 4.1 2.5c-.9.5-1.4 1.1-1.4 2.1M12 17h0"/>'
 };
 function navIcon(id) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + NAV_ICON_PATHS[id] + "</svg>";
 }
 
 var GAME_EDIT_PIN = "1008";
+
+/* ---------- 用語の説明（？ボタン） ----------
+   成績の言葉を、野球を始めたばかりの人にもわかる言い方で説明する。表の下に常に出していた注意書きもここにまとめる */
+function glossaryItems() {
+  var perGame = n0(STATE.team.inningsPerGame) || 7;
+  return [
+    ["打つほう", [
+      ["打率", "ヒットを打った割合です。安打 ÷ 打数。10回打って3本ヒットなら .300（3割）。"],
+      ["打席・打数", "打席はバッターボックスに立った回数。打数は、そこから四球・死球・犠打・犠飛をのぞいた回数です。"],
+      ["出塁率", "アウトにならずに塁に出た割合です。ヒットのほか、四球と死球も数えます。"],
+      ["長打率", "1打数あたりに進んだ塁の数です。二塁打やホームランが多いほど高くなります。"],
+      ["OPS", "出塁率と長打率を足した数字で、打者の総合力を表します。.800をこえるとかなり優秀です。"],
+      ["得点圏", "2塁か3塁に走者がいる、点が入りやすい場面のことです。得点圏打率は、その場面だけの打率です。走者は打順と打点から推定しているので、参考の数字です。"],
+      ["猛打賞・マルチ", "猛打賞は1試合で3安打以上、マルチは1試合で2安打以上のことです。"],
+      ["犠打・犠飛", "犠打は、バントで自分はアウトになって走者を進めること。犠飛は、外野フライで3塁の走者をホームにかえすことです。"],
+      ["盗塁死", "盗塁をしようとしてアウトになった回数です。"],
+      ["規定打席", "打率のランキングに入るために必要な打席の数です（チームの試合数 × 2.5）。"]
+    ]],
+    ["投げるほう", [
+      ["防御率", "1試合（" + perGame + "回）を1人で投げたら何点取られるか、の目安です。低いほどよい数字です。"],
+      ["自責点", "投手の責任になる失点です。味方のエラーで入った点はのぞきます。"],
+      ["WHIP", "1回あたりに出した走者（ヒットと四球）の数です。低いほどよい数字です。"],
+      ["S（セーブ）", "リードしている試合の最後を投げて、勝ちを守ったときに付きます。"],
+      ["規定投球回", "防御率のランキングに入るために必要な投球回です（チームの試合数 × 1）。"]
+    ]]
+  ];
+}
+function glossaryBtnHtml() {
+  return '<button type="button" class="btn btn-sm gloss-btn" data-action="glossary-open" aria-label="用語の説明を見る">' + navIcon("help") + "<span>用語</span></button>";
+}
+function renderGlossaryDialog() {
+  if (!UI.glossary) return "";
+  return '<div class="modal-overlay" data-action="glossary-close"><div class="modal-box gloss-box" data-action="ms-noop">'
+    + '<div class="me-picker-title">用語の説明</div>'
+    + glossaryItems().map(function (grp) {
+      return '<div class="section-title" style="margin-top:14px;">' + grp[0] + "</div><dl class=\"gloss-list\">"
+        + grp[1].map(function (it) { return "<dt>" + esc(it[0]) + "</dt><dd>" + esc(it[1]) + "</dd>"; }).join("") + "</dl>";
+    }).join("")
+    + '<div class="modal-actions gloss-actions"><button class="btn btn-primary" data-action="glossary-close">とじる</button></div>'
+    + "</div></div>";
+}
 
 /* 「自分」ボタンを初めて押したとき：自分の選手を選んでもらう（この端末だけに覚える） */
 function renderMePickerDialog() {
@@ -3484,6 +3541,7 @@ function renderShell(contentHtml) {
     + "</div>"
     + '<nav class="bottom-nav" aria-label="メニュー">' + bottomItem("games") + bottomItem("stats") + bottomMe + bottomItem("team") + bottomItem("roster") + "</nav>"
     + renderMePickerDialog()
+    + renderGlossaryDialog()
     + renderConfirmDialog()
     + renderMsAchieversDialog()
     + renderMvpMonthDialog()
@@ -3864,7 +3922,7 @@ function homeActivePlayerIds() {
 function renderHomeTopics() {
   var items = [];
   var topic = function (ic, html, action, attrs) {
-    items.push('<button class="home-topic" data-action="' + action + '"' + (attrs || "") + '><span class="ht-ic">' + ic + '</span><span class="ht-tx">' + html + '</span><span class="ht-go">›</span></button>');
+    items.push('<button class="home-topic" data-action="' + action + '"' + (attrs || "") + '><span class="ht-ic' + (ic === "live" ? " ht-live" : "") + '">' + (ic === "live" ? "" : navIcon(ic)) + '</span><span class="ht-tx">' + html + '</span><span class="ht-go">›</span></button>');
   };
   /* 今週（今日を含む直近7日）の試合で達成した記録：重い（珍しい）順に3件まで、一番上に */
   var wk = new Date(); wk.setDate(wk.getDate() - 6);
@@ -3887,7 +3945,7 @@ function renderHomeTopics() {
   if (wkTop.length) {
     var wkGameLbl = function (g) { return fmtDate(g.date).slice(5) + " " + (g.opponent || "相手未設定") + "戦"; };
     var wkOneGame = wkTop.every(function (it) { return it.g === wkTop[0].g; });
-    items.push('<div class="home-topic home-topic-group"><span class="ht-ic">🎉</span><span class="ht-tx"><b>今週の記録</b>'
+    items.push('<div class="home-topic home-topic-group"><span class="ht-ic">' + navIcon("star") + '</span><span class="ht-tx"><b>今週の記録</b>'
       + (wkOneGame ? '<span class="ht-sub">' + esc(wkGameLbl(wkTop[0].g)) + "</span>" : "")
       + wkTop.map(function (it) {
         return '<button class="ht-rec" data-action="view-player" data-id="' + esc(it.pid) + '"><span>' + esc(it.text)
@@ -3899,8 +3957,8 @@ function renderHomeTopics() {
     var lc = liveControlHolder(g);
     if (!lc) return;
     var tot = gameTotals(g);
-    topic("🔴", "<b>いま試合中</b>：" + esc(g.opponent || "相手未設定") + "戦 " + tot.us + "-" + tot.them
-      + '<span class="ht-sub">入力：' + esc(lc.name || "名前未設定") + "（記録係が抜けるときは、開いて「入力を引き継ぐ」）</span>", "open-game", ' data-id="' + esc(g.id) + '"');
+    topic("live", "<b>いま試合中</b>：" + esc(g.opponent || "相手未設定") + "戦 " + tot.us + "-" + tot.them
+      + '<span class="ht-sub">入力：' + esc(lc.name || "名前未設定") + (isScorerDevice() ? "（記録係が抜けるときは、開いて「入力を引き継ぐ」）" : "") + "</span>", "open-game", ' data-id="' + esc(g.id) + '"');
   });
   /* 日付が過ぎたのに結果が入っていない試合（直近30日、2件まで） */
   if (!UI.readOnly) {
@@ -3910,8 +3968,8 @@ function renderHomeTopics() {
     STATE.games.filter(function (g) { return !gameResult(g) && !liveControlHolder(g) && g.date && g.date < today && g.date >= from; })
       .sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).slice(0, 2)
       .forEach(function (g) {
-        topic("📝", "<b>結果がまだ入っていません</b>：" + esc(fmtDate(g.date).slice(5)) + " " + esc(g.opponent || "相手未設定") + "戦"
-          + '<span class="ht-sub">紙のスコアシートの写真からも取り込めます（「試合を追加」タブ）</span>', "open-game", ' data-id="' + esc(g.id) + '"');
+        topic("pencil", "<b>結果がまだ入っていません</b>：" + esc(fmtDate(g.date).slice(5)) + " " + esc(g.opponent || "相手未設定") + "戦"
+          + (isScorerDevice() ? '<span class="ht-sub">紙のスコアシートの写真からも取り込めます（「試合を追加」）</span>' : ""), "open-game", ' data-id="' + esc(g.id) + '"');
       });
   }
   /* タイトル争い（一番新しいシーズン）：首位打者。規定打席に届いた人がいなければ最多安打 */
@@ -3925,20 +3983,20 @@ function renderHomeTopics() {
       var who = board.leaders.map(function (r) { return esc(playerName(r.pid)); }).join("・");
       var gap = board.leaders.length > 1 ? board.leaders.length + "人が並ぶ"
         : !board.next ? "独走" : "2位と" + (t.rate ? Math.round((board.rows[0].v - board.next.v) * 1000) + "厘" : (board.rows[0].v - board.next.v) + t.unit) + "差";
-      topic("🏆", "<b>" + (final ? esc(year) + "年の" + t.name : t.name + "争い") + "</b>：" + who + " " + fmtTitleVal(t, board.leaders[0].v) + "（" + gap + "）", "home-go-titles", ' data-year="' + esc(year) + '"');
+      topic("trophy", "<b>" + (final ? esc(year) + "年の" + t.name : t.name + "争い") + "</b>：" + who + " " + fmtTitleVal(t, board.leaders[0].v) + "（" + gap + "）", "home-go-titles", ' data-year="' + esc(year) + '"');
     }
   }
   /* 記録まであと少し（一番近いもの） */
   var active = homeActivePlayerIds();
   var ms = computeMilestoneCountdown().filter(function (it) { return it.near && active[it.pid]; })[0];
-  if (ms) topic("🎯", "<b>記録まであと少し</b>：" + esc(playerName(ms.pid)) + " 通算" + ms.target + MILESTONE_LABEL[ms.key] + "まで あと" + ms.left + MILESTONE_UNIT[ms.key]
+  if (ms) topic("target", "<b>記録まであと少し</b>：" + esc(playerName(ms.pid)) + " 通算" + ms.target + MILESTONE_LABEL[ms.key] + "まで あと" + ms.left + MILESTONE_UNIT[ms.key]
     + (ms.achievers === 0 ? "（チーム初）" : ""), "view-player", ' data-id="' + esc(ms.pid) + '"');
   /* 連続試合安打（3試合以上継続中の最長） */
   var best = null;
   computeHitStreaks(STATE.games).forEach(function (st, pid) {
     if (active[pid] && !wkStreakPid[pid] && n0(st.cur) >= 3 && (!best || st.cur > best.cur)) best = { pid: pid, cur: st.cur };
   });
-  if (best) topic("🔥", "<b>連続試合安打</b>：" + esc(playerName(best.pid)) + " " + best.cur + "試合継続中", "view-player", ' data-id="' + esc(best.pid) + '"');
+  if (best) topic("team", "<b>連続試合安打</b>：" + esc(playerName(best.pid)) + " " + best.cur + "試合継続中", "view-player", ' data-id="' + esc(best.pid) + '"');
   if (!items.length) return "";
   return '<div class="card"><div class="section-title" style="margin-top:0;">今週のトピック</div>' + items.join("") + "</div>";
 }
@@ -3963,7 +4021,8 @@ function renderGamesList() {
       return '<div class="game-row game-row-stadium" data-action="open-game" data-id="' + g.id + '">'
         + '<div class="game-date">' + esc(fmtDate(g.date)) + "</div>"
         + '<div class="game-main"><div class="game-opp">' + esc(g.opponent || "(相手未設定)") + "</div>"
-        + '<div class="game-meta"><span class="badge ' + (g.venue === "away" ? "badge-venue-away" : "badge-venue-home") + '">' + (g.venue === "away" ? "先攻" : "後攻") + "</span>"
+        /* 先攻・後攻は試合の詳細に任せ、一覧には出さない */
+        + '<div class="game-meta">'
         + (g.tournament ? "<span>" + esc(g.tournament) + "</span>" : "")
         + "</div></div>"
         + '<div class="game-score mono">' + esc(scoreText) + "</div>"
@@ -3978,7 +4037,7 @@ function renderGamesList() {
     + renderHomeTopics()
     + body
     + '<p style="text-align:center;margin-top:22px;color:var(--ink-muted);font-size:12.5px;">'
-    + '📱 <button type="button" class="link-btn" data-action="show-install-help">ホーム画面に追加してアプリのように使う</button></p>';
+    + '<button type="button" class="link-btn" data-action="show-install-help">ホーム画面に追加してアプリのように使う</button></p>';
 }
 
 /* ---------- add-game tab ---------- */
@@ -5462,7 +5521,7 @@ function renderGameDetail(g) {
   var shownHighlightLines = topPerformers.length > 0 ? buildGameHighlightLines(d, weAreAway, ourScore, theirScore, d.opponent, true) : highlightLines;
   var highlightBlock = highlightLines.length > 0 ? (
     '<div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">ハイライト'
-    + '<button class="btn btn-sm" data-action="share-text" data-src="highlight-copy-src" style="font-weight:400;">📤 共有</button>'
+    + '<button class="btn btn-sm" data-action="share-text" data-src="highlight-copy-src" style="font-weight:400;">共有</button>'
     + '<button class="btn btn-sm" data-action="copy-highlight" style="font-weight:400;">コピー</button></div>'
     + '<div style="font-size:13.5px;line-height:1.75;">' + shownHighlightLines.map(function (l) { return esc(l); }).join("<br>") + "</div>"
     + (heroRes ? '<details class="form-table"><summary>共有する文章を見る</summary><pre class="share-preview">' + esc(highlightText) + "</pre></details>" : "")
@@ -5472,7 +5531,7 @@ function renderGameDetail(g) {
   var recapVisible = !UI.readOnly && (UI.isNewUnsavedGame || UI.recapOpen === d.id);
   var recapText = (heroRes && recapVisible) ? ((UI.recapEdit && UI.recapEdit.id === d.id) ? UI.recapEdit.text : buildGameRecap(d)) : "";
   var recapHtml = recapText ? ('<div class="card" id="sec-recap"><div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">試合レポート（チームLINE用）'
-      + '<button class="btn btn-sm btn-primary" data-action="share-text" data-src="recap-text" style="font-weight:400;">📤 共有</button>'
+      + '<button class="btn btn-sm btn-primary" data-action="share-text" data-src="recap-text" style="font-weight:400;">共有</button>'
       + '<button class="btn btn-sm" data-action="copy-recap" style="font-weight:400;">コピー</button>'
       + (UI.recapEdit && UI.recapEdit.id === d.id ? '<button class="btn btn-sm" data-action="reset-recap" style="font-weight:400;">書き直す前に戻す</button>' : "") + "</div>"
     + '<div class="field" style="max-width:260px;margin-bottom:8px;"><label>書く人（自分の名前には「さん」を付けません）</label><select id="recap-author-select"><option value="">指定しない</option>'
@@ -7456,8 +7515,8 @@ function renderPlayerStatsTab() {
     + '<button class="btn btn-sm' + (sub === "batting" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="batting">打撃成績</button>'
     + '<button class="btn btn-sm' + (sub === "pitching" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="pitching">投手成績</button>'
     + '<button class="btn btn-sm' + (sub === "fielding" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="fielding">守備出場</button>'
-    + '<button class="btn btn-sm' + (sub === "titles" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="titles">🏆 タイトル</button>'
-    + '<button class="btn btn-sm' + (sub === "mvp" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="mvp">👑 MVP</button>'
+    + '<button class="btn btn-sm' + (sub === "titles" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="titles">タイトル</button>'
+    + '<button class="btn btn-sm' + (sub === "mvp" ? " btn-primary" : "") + '" data-action="stat-subtab" data-sub="mvp">MVP</button>'
     + "</div>";
   var games = gamesForYear(UI.statsYear);
 
@@ -7565,8 +7624,8 @@ function renderPlayerStatsTab() {
       }
       body += unqualBattingRows.map(renderBattingRow).join("");
     }
-    content = '<div class="stat-tools"><span class="page-lede" style="margin:0;">規定打席: ' + Math.round(qualPA) + '打席（チーム' + computeTeamRecord(games).gp + '試合 × 2.5）</span>' + detailToggleHtml() + "</div>"
-      + (statDetail ? '<div class="page-lede" style="margin-bottom:8px;font-size:12px;">' + RISP_NOTE + "</div>" : "")
+    content = '<div class="stat-tools"><span class="page-lede" style="margin:0;">規定打席: ' + Math.round(qualPA) + '打席（チーム' + computeTeamRecord(games).gp + '試合 × 2.5）</span><span class="stat-tools-btns">' + glossaryBtnHtml() + detailToggleHtml() + "</span></div>"
+      /* 得点圏などの注意書きは「用語」の説明の中に入れた */
       + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
       + statHeader("選手", "name", UI.battingSort)
       + orderedBattingCols.map(function (col) { return statHeader(col.label, col.key, UI.battingSort, true); }).join("")
@@ -7626,7 +7685,7 @@ function renderPlayerStatsTab() {
       }
       pbody += unqualPitchingRows.map(renderPitchingRow).join("");
     }
-    content = '<div class="stat-tools"><span class="page-lede" style="margin:0;">規定投球回: ' + Math.round(qualIP) + '回（チーム' + computeTeamRecord(games).gp + '試合 × 1）</span>' + detailToggleHtml() + "</div>"
+    content = '<div class="stat-tools"><span class="page-lede" style="margin:0;">規定投球回: ' + Math.round(qualIP) + '回（チーム' + computeTeamRecord(games).gp + '試合 × 1）</span><span class="stat-tools-btns">' + glossaryBtnHtml() + detailToggleHtml() + "</span></div>"
       + '<div class="table-scroll"><table class="stat-table"><thead><tr>'
       + statHeader("選手", "name", UI.pitchingSort)
       + orderedPitchingCols.map(function (col) { return statHeader(col.label, col.key, UI.pitchingSort, true); }).join("")
@@ -8296,7 +8355,7 @@ function renderPlayerDetail(pid) {
       + '<tr><th>連続試合安打</th><td class="num mono">' + (pStreak.cur > 0 ? pStreak.cur + "試合継続中" : "-") + "</td>"
         + '<th>最長</th><td class="num mono">' + pStreak.best + "試合</td></tr>"
       + "</tbody></table></div>"
-      + '<div class="page-lede" style="margin-top:8px;font-size:12px;">' + RISP_NOTE + "</div>";
+      + '<div style="margin-top:10px;">' + glossaryBtnHtml() + "</div>";
     sprayHtml = '<div class="section-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">表示する打球'
         + '<span class="spray-modes"><button class="btn btn-sm' + (UI.sprayRisp ? "" : " btn-primary") + '" data-action="spray-mode" data-risp="0">すべて</button>'
         + '<button class="btn btn-sm' + (UI.sprayRisp ? " btn-primary" : "") + '" data-action="spray-mode" data-risp="1">得点圏</button></span></div>'
@@ -9137,6 +9196,12 @@ function onAppClick(e) {
     if (pickStay || UI.viewPlayerId === pickId) renderApp(); else openPlayerView(pickId);
   } else if (action === "me-picker-close") {
     UI.mePicker = false;
+    renderApp();
+  } else if (action === "glossary-open") {
+    UI.glossary = true;
+    renderApp();
+  } else if (action === "glossary-close") {
+    UI.glossary = false;
     renderApp();
   } else if (action === "me-change") {
     UI.mePicker = "stay";
