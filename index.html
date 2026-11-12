@@ -1257,6 +1257,36 @@ html[data-text="large"] body:not(.lv-on) main { zoom: 1.15; }
 .game-hero { border: 1px solid var(--scoreboard-line); }
 /* 「記録まであと少し」の行も箱をやめて線で区切る */
 .ms-row { background: none; border-radius: 0; border-bottom: 1px solid var(--border); padding: 10px 2px; }
+/* ---------- 試合中モードの仕上げ ---------- */
+/* 走者がいないときは図を小さく */
+.lv-field.lv-field-empty { max-width: 190px; }
+/* 記録直後のお知らせは1行に収めて、上の帯の中だけに出す */
+.lv-undo-bar { top: 6px; align-items: center; }
+.lv-undo-bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 下バーのアイコン */
+.lv-nav .lv-ic { display: grid; place-items: center; height: 24px; }
+.lv-nav .lv-ic svg { width: 22px; height: 22px; }
+.lv-nav button { font-size: 12px; }
+/* 指で押す場所を大きく */
+.lv-opp-step { width: 44px; height: 44px; }
+.lv-opp-size select { min-height: 40px; min-width: 72px; }
+.lv-opp-link { padding: 12px 0; margin: -2px 0 6px; font-size: 13.5px; }
+.lv-control { font-size: 13px; }
+.lv-control input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 15px; font-family: inherit; }
+.lv-more summary { padding: 10px 0; font-size: 13.5px; }
+/* 薄くて読みにくかった結果ボタンを、少し濃くする */
+.lv-c-h3 { background: #7FC79A; color: #0B2E1B; }
+.lv-c-o3 { background: #7CC3C9; color: #083A3F; }
+.lv-c-a3 { background: #EB9990; color: #5A130D; }
+.lv-c-k2 { background: #F7D9B4; color: #6A3A08; }
+.lv-btn:disabled { opacity: 0.45; }
+/* 打順の表（編集中）：名前の下の段に操作ボタンを回す */
+table.stat-table td.player-name-cell.pn-edit { flex-wrap: wrap; row-gap: 0; column-gap: 0; min-width: 176px; }
+.pn-edit .pn-name { flex: 1 0 100%; display: flex; align-items: center; gap: 6px; }
+.pn-edit .icon-btn { min-width: 28px; min-height: 36px; padding: 4px 3px; font-size: 13.5px; font-weight: 400; white-space: nowrap; }
+/* たたんである欄の見出しの補足 */
+.fold > summary small { display: block; font-size: 12.5px; font-weight: 400; color: var(--ink-muted); margin-top: 2px; }
+.fold > summary { align-items: center; }
 .rf-row { display: grid; grid-template-columns: 44px 1fr 96px; align-items: center; gap: 10px; padding: 6px 0; }
 .rf-k { font-size: 13.5px; font-weight: 700; }
 .rf-track { height: 22px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
@@ -3505,6 +3535,12 @@ var NAV_ICON_PATHS = {
   roster: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20c.7-3.3 3.2-5 6.5-5s5.8 1.7 6.5 5"/><circle cx="17.5" cy="9.5" r="2.5"/><path d="M17.8 15.2c2.1.3 3.5 1.7 4 4.3"/>',
   addgame: '<path d="M12 5v14M5 12h14"/>',
   settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>',
+  /* 試合中モードの下バー用 */
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h0M4.5 12h0M4.5 18h0"/>',
+  swap: '<path d="M4 8h15l-3.5-3.5M20 16H5l3.5 3.5"/>',
+  flag: '<path d="M5 21V4M5 4h12l-2.5 4 2.5 4H5"/>',
   /* ホームのトピック用 */
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6"/>',
   target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8"/>',
@@ -5395,7 +5431,7 @@ function renderGameDetail(g) {
             + '<div class="lv-sheet lv-sheet-big" role="dialog">'
               + '<div class="lv-sheet-head"><div><b>' + esc({ H1: "ヒット", H2: "二塁打", H3: "三塁打", HR: "本塁打", GO: "ゴロ", FLY: "フライ", LINE: "ライナー", ROE: "エラー", SAC: "犠打", KR: "振り逃げ" }[sh.key] || sh.key) + "</b>"
                 + (shOc.tokenKey !== sh.key ? '<span class="lv-sheet-as">→ ' + esc(liveResultShort(shOc.tokenKey)) + "として記録</span>" : "")
-                + '<div class="lv-sheet-sub">' + outsNow + "アウト → <b class=\"lv-em\">" + shAfterOuts + "アウト</b>" + (shAfterOuts >= 3 ? "（チェンジ）" : "")
+                + '<div class="lv-sheet-sub">' + (shAfterOuts === outsNow ? outsNow + "アウトのまま" : outsNow + "アウト → <b class=\"lv-em\">" + shAfterOuts + "アウト</b>") + (shAfterOuts >= 3 ? "（チェンジ）" : "")
                   + (shOc.runs ? "・<b class=\"lv-em\">" + shOc.runs + "点</b>" : "") + "</div></div>"
                 + '<button class="lv-sheet-x" data-action="live-sheet-cancel">キャンセル</button></div>'
               + '<div class="lv-sheet-field">' + liveFieldSvg(shPreview, d, false) + "</div>"
@@ -5505,7 +5541,7 @@ function renderGameDetail(g) {
         var lgList = (UI.liveLog || []).slice().reverse();
         liveBatterHtml += '<div class="lv-sheet-bg" data-action="live-log-close"></div>'
           + '<div class="lv-sheet" role="dialog">'
-            + '<div class="lv-sheet-head"><div><b>経過</b><div class="lv-sheet-sub">新しい順。いちばん上だけ「取消」で戻せます</div></div>'
+            + '<div class="lv-sheet-head"><div><b>経過</b><div class="lv-sheet-sub">新しい順。いちばん上だけ「取り消す」で戻せます</div></div>'
               + '<button class="lv-sheet-x" data-action="live-log-close">閉じる</button></div>'
             + '<div class="lv-log">' + (lgList.length ? lgList.map(function (e) {
                 return '<div class="lv-log-row"><span class="lv-log-inn">' + esc(liveLogInning(d, e)) + "</span><span>" + esc(liveLogText(d, e)) + "</span></div>";
@@ -5550,8 +5586,10 @@ function renderGameDetail(g) {
     var lvUndoBar = "";
     if (iHoldLive && lvLast && Date.now() - lvLast.ts < 6000) {
       var lvChanged = lvLast.snapInning !== li || !!lvLast.snapHalfDone !== !!UI.liveHalfDone;
-      lvUndoBar = '<div class="lv-undo-bar"><span>' + esc(liveLogText(d, lvLast)) + " → "
-        + (lvChanged ? "チェンジ（" + esc(liveInningLabel(d, li)) + "へ）" : esc(liveBasesLabel()) + "・" + lvOuts + "アウト") + "</span>"
+      /* 手動のチェンジのときは「チェンジ → チェンジ」と重ならないようにする */
+      var lvLastText = liveLogText(d, lvLast);
+      lvUndoBar = '<div class="lv-undo-bar"><span>' + esc(lvLastText) + (lvChanged && lvLastText.indexOf("チェンジ") !== -1 ? "" : " → ")
+        + (lvChanged ? (lvLastText.indexOf("チェンジ") !== -1 ? "" : "チェンジ") + "（" + esc(liveInningLabel(d, li)) + "へ）" : esc(liveBasesLabel()) + "・" + lvOuts + "アウト") + "</span>"
         + '<button data-action="live-undo">取り消す</button></div>';
       clearTimeout(UI._lvBarTimer);
       UI._lvBarTimer = setTimeout(function () { UI._lvBarTimer = null; if (document.querySelector(".lv-undo-bar")) renderApp(); }, 6000 - (Date.now() - lvLast.ts) + 50);
@@ -5569,23 +5607,23 @@ function renderGameDetail(g) {
             + '<button class="btn btn-sm" data-action="live-add-def-pitcher">＋ 登板</button></div>' : "")
           + (defFieldSubHtml || "")
           + '<div style="display:flex;gap:6px;margin-top:10px;">'
-            + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + (li <= 0 && lvOnTop ? " disabled" : "") + ' style="flex:1;">◀ 前の半回へ</button>'
-            + '<button class="btn btn-sm" data-action="live-inning" data-delta="1" style="flex:1;">次の半回へ ▶</button></div>'
+            + '<button class="btn btn-sm" data-action="live-inning" data-delta="-1"' + (li <= 0 && lvOnTop ? " disabled" : "") + ' style="flex:1;">◀ 前の表・裏へ</button>'
+            + '<button class="btn btn-sm" data-action="live-inning" data-delta="1" style="flex:1;">次の表・裏へ ▶</button></div>'
           + '<p style="color:var(--ink-muted);font-size:12.5px;margin:8px 0 0;">スコアボードの数字を押しても、その回へ移動できます。記録はすべて即保存・全員に同期されます。</p>'
         + "</div></details>" : "";
     var lvNav = iHoldLive ? '<nav class="lv-nav">'
-        + '<button data-action="live-undo"' + (lvLog.length ? "" : " disabled") + '><span class="lv-ic">↶</span>取消</button>'
-        + '<button data-action="live-log-open"><span class="lv-ic">◷</span>経過</button>'
-        + '<button data-action="live-goto-order"><span class="lv-ic">☰</span>オーダー</button>'
-        + '<button data-action="live-end-half"><span class="lv-ic">»</span>チェンジ</button>'
-        + '<button data-action="live-request-end-game" class="lv-nav-end"><span class="lv-ic">⚑</span>試合終了</button>'
+        + '<button data-action="live-undo"' + (lvLog.length ? "" : " disabled") + '><span class="lv-ic">' + navIcon("undo") + '</span>取り消す</button>'
+        + '<button data-action="live-log-open"><span class="lv-ic">' + navIcon("clock") + '</span>経過</button>'
+        + '<button data-action="live-goto-order"><span class="lv-ic">' + navIcon("list") + '</span>オーダー</button>'
+        + '<button data-action="live-end-half"><span class="lv-ic">' + navIcon("swap") + '</span>チェンジ</button>'
+        + '<button data-action="live-request-end-game" class="lv-nav-end"><span class="lv-ic">' + navIcon("flag") + '</span>試合終了</button>'
       + "</nav>" : "";
     if (!(d.batting || []).length && !UI.liveHalfDone) {
       liveBatterHtml = '<div class="banner" style="margin:10px 0;">先に打順（出場選手）を登録すると、ここで打席の結果をタップで記録できます。</div>'
         + '<button class="btn btn-primary" data-action="live-goto-order" style="width:100%;justify-content:center;">打順を登録する</button>';
     }
     liveHtml = '<div class="lv-wrap">'
-      + '<div class="section-title" style="margin-top:0;">⚾ 試合中モード' + (UI.liveTakeover ? '<span style="font-weight:400;font-size:12px;color:var(--ink-muted);">　保存済みの試合を編集中</span>' : "") + "</div>"
+      + '<div class="section-title" style="margin-top:0;">試合中モード' + (UI.liveTakeover ? '<span style="font-weight:400;font-size:12px;color:var(--ink-muted);">　保存済みの試合を編集中</span>' : "") + "</div>"
       + lvControl + lvUndoBar + lvBoard + lvField + liveBatterHtml + lvMore + lvNav
       + "</div>";
   }
@@ -5702,7 +5740,8 @@ function renderGameDetail(g) {
       }).join("");
       var isEditingThisRow = canEditAtbats && UI.editingAtbatsRow === b._rid;
       var row = "<tr" + (isEditingThisRow ? ' class="atbat-editing-row"' : "") + ">"
-        + '<td class="player-name-cell" data-pid="' + esc(b.playerId) + '">' + battingSubTag(d.batting, b) + esc(playerNameNum(b.playerId))
+        /* 編集中は、名前の下の段に操作ボタンを回して、打席の列が隠れないようにする */
+        + '<td class="player-name-cell' + (canEditAtbats ? " pn-edit" : "") + '" data-pid="' + esc(b.playerId) + '"><span class="pn-name">' + battingSubTag(d.batting, b) + esc(playerNameNum(b.playerId)) + "</span>"
           + (!canEditAtbats ? "" :
               ' <button class="icon-btn" data-action="move-brow" data-rid="' + b._rid + '" data-dir="-1"' + (bIdx === 0 ? " disabled" : "") + ' title="打順を1つ上げる">▲</button>'
             + ' <button class="icon-btn" data-action="move-brow" data-rid="' + b._rid + '" data-dir="1"' + (bIdx === d.batting.length - 1 ? " disabled" : "") + ' title="打順を1つ下げる">▼</button>'
@@ -5872,12 +5911,12 @@ function renderGameDetail(g) {
     if (entryHolder && entryHolder.deviceId !== getDeviceId()) {
       var eh = new Date(entryHolder.ts || Date.now());
       /* 見るだけの端末には「入力中」のお知らせだけ出し、引き継ぐボタンは記録係モードの端末だけ */
-      liveEntryHtml = '<div class="section-title">⚾ 試合中モード</div>'
+      liveEntryHtml = '<div class="section-title">試合中モード</div>'
         + '<div class="banner readonly" style="margin:0' + (scorer ? " 0 10px" : "") + ';">🔒 ' + esc(entryHolder.name || "他の人")
           + " さんが入力中です（" + ("0" + eh.getHours()).slice(-2) + ":" + ("0" + eh.getMinutes()).slice(-2) + " 更新）</div>"
         + (scorer ? '<button class="btn btn-primary btn-sm" data-action="enter-live-takeover" style="width:100%;">入力を引き継ぐ</button>' : "");
     } else if (scorer) {
-      liveEntryHtml = '<div class="section-title">⚾ 試合中モード</div>'
+      liveEntryHtml = '<div class="section-title">試合中モード</div>'
         + '<p style="color:var(--ink-muted);font-size:12px;margin:0 0 10px;">この試合を、スマホ向けの打席ワンタップ入力で記録・修正します。</p>'
         + '<button class="btn btn-sm" data-action="enter-live-takeover" style="width:100%;">⚾ 試合中モードで入力する</button>';
     }
@@ -5925,8 +5964,12 @@ function renderGameDetail(g) {
   return '<div class="page-head"><div><button class="link-btn" data-action="back-to-games">' + (isAdding ? "← 入力を終了して一覧へ" : (UI.gameReturn ? "← " + esc(describeView(UI.gameReturn)) + "へ戻る" : (UI.tab === "addgame" ? "← 試合一覧へ" : "← 試合一覧へ戻る"))) + "</button></div></div>"
     + scoreHeroHtml
     + renderGamePreview(d)
+    + (liveHtml ? '<div class="card">' + liveHtml + "</div>" : "")
+    /* 試合中モードの間は、入力パネルより下（スコアの直接入力・試合情報・成績の表）をたたんでおく。
+       下バーの「オーダー」を押したときは自動で開く */
+    + (liveHtml ? '<details class="fold" data-keep="lv-rest"><summary>記録を確認・直す<small>スコア・試合情報・打順・守備・投手</small></summary>' : "")
     + (liveHtml
-        ? ('<div class="card">' + liveHtml + "</div>" + '<div class="card" id="sec-score">' + scoreboardHtml + "</div>" + '<div class="card" id="sec-meta">' + metaHtml + "</div>")
+        ? ('<div class="card" id="sec-score">' + scoreboardHtml + "</div>" + '<div class="card" id="sec-meta">' + metaHtml + "</div>")
         : ('<div class="card" id="sec-meta">' + metaHtml + "</div>" + jumpNavHtml + '<div class="card" id="sec-score">' + scoreboardHtml + "</div>"))
     + (UI.reconcileMode && !UI.readOnly ? '<div class="card" id="sec-reconcile">' + renderReconcile(d) + "</div>" : "")
     + (highlightsHtml ? '<div class="card" id="sec-highlight">' + highlightsHtml + "</div>" : "")
@@ -5934,6 +5977,7 @@ function renderGameDetail(g) {
     + '<div class="card" id="sec-position">' + posHtml + "</div>"
     + '<div class="card" id="sec-pitching">' + pitchingHtml + "</div>"
     + recapHtml
+    + (liveHtml ? "</details>" : "")
     + (liveEntryHtml ? '<div class="card">' + liveEntryHtml + "</div>" : "")
     + editMenuHtml
     + footer;
@@ -6520,7 +6564,8 @@ function liveFieldSvg(bases, d, canTap) {
       + '<text x="' + (lx + lw / 2) + '" y="' + (y + 26) + '" class="lv-rn-name">' + (no ? no + "番 " : "") + esc(nm) + "</text></g>";
   };
   var base = function (x, y) { return '<rect x="' + (x - 7) + '" y="' + (y - 7) + '" width="14" height="14" class="lv-base" transform="rotate(45 ' + x + " " + y + ')"/>'; };
-  return '<div class="lv-field"><svg viewBox="0 36 320 222" role="img" aria-label="塁上の走者">'
+  /* 走者がいないときは図を小さくして、結果のボタンが一画面に入るようにする */
+  return '<div class="lv-field' + ((bases || []).some(function (b) { return !!b; }) ? "" : " lv-field-empty") + '"><svg viewBox="0 36 320 222" role="img" aria-label="塁上の走者">'
     + '<defs><pattern id="lvMow" width="28" height="28" patternUnits="userSpaceOnUse"><rect width="14" height="28" fill="#3F8F3F"/><rect x="14" width="14" height="28" fill="#4A9C47"/></pattern></defs>'
     + '<path d="M160 262 L8 110 A215 215 0 0 1 312 110 Z" style="fill:url(#lvMow)"/>'
     + '<polygon points="160,92 236,168 160,244 84,168" class="lv-dirt" stroke-linejoin="round"/>'
@@ -6642,7 +6687,6 @@ function liveCaughtStealing(baseIdx) {
   UI.liveLog.push(entry);
   if (UI.liveOuts >= 3) {
     liveAdvanceHalf();
-    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
   persistDraft();
 }
@@ -6675,7 +6719,6 @@ function liveClearBaseOut(baseIdx) {
   UI.liveLog.push(entry);
   if (UI.liveOuts >= 3) {
     liveAdvanceHalf();
-    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
   persistDraft();
 }
@@ -7095,7 +7138,6 @@ function liveCommitAtbat(resultKey, dirCode, goOutSpec, sacAdvSpec, sheetOutcome
   UI.liveOuts = snapOuts + play.outs;
   if (UI.liveOuts >= 3) {
     liveAdvanceHalf();
-    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
@@ -7165,7 +7207,6 @@ function liveCommitDefAtbat(resultKey) {
   UI.liveOuts = snapOuts + play.outs;
   if (UI.liveOuts >= 3) {
     liveAdvanceHalf();
-    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
 
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
@@ -7190,7 +7231,6 @@ function liveManualOut() {
   UI.liveOuts = (UI.liveOuts || 0) + 1;
   if (UI.liveOuts >= 3) {
     liveAdvanceHalf();
-    showToast("3アウト・チェンジ → " + liveInningLabel(d, UI.liveInning));
   }
   if (!Array.isArray(UI.liveLog)) UI.liveLog = [];
   UI.liveLog.push(entry);
@@ -9820,6 +9860,9 @@ function onAppClick(e) {
     UI.liveLogOpen = true;
     renderApp();
   } else if (action === "live-goto-order") {
+    /* たたんである「記録を確認・直す」を開いてから、打順の表へ移動する */
+    var lvRest = document.querySelector('details[data-keep="lv-rest"]');
+    if (lvRest) lvRest.open = true;
     var ordCard = document.getElementById("sec-batting");
     if (ordCard) ordCard.scrollIntoView({ block: "start", behavior: "smooth" });
   } else if (action === "live-run") {
